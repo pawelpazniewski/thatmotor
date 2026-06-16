@@ -13,6 +13,7 @@ void run_rc_validity_tests(void);
 void run_settings_validate_tests(void);
 void run_blob_codec_tests(void);
 void run_commit_debounce_tests(void);
+void run_nvs_provenance_tests(void);
 void run_ramp_tests(void);
 void run_throttle_chain_tests(void);
 void run_servo_chain_tests(void);
@@ -30,6 +31,7 @@ int main(void)
     run_settings_validate_tests();
     run_blob_codec_tests();
     run_commit_debounce_tests();
+    run_nvs_provenance_tests();
     run_ramp_tests();
     run_throttle_chain_tests();
     run_servo_chain_tests();

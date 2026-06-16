@@ -7,6 +7,7 @@
 #include "esp_log.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "nvs_provenance.h"
 #include "settings_model.h"
 #include "settings_validate.h"
 
@@ -52,25 +53,38 @@ static esp_err_t read_blob(uint8_t *buf, size_t *out_len)
     return err;
 }
 
-/* Decode + validate the read blob into out/result. has_stored is true only when
- * the blob length+CRC+schema all pass, so the Unit 4 validation always runs and
- * a corrupt store can never yield a value outside the sanity window. */
+/* Map a raw NVS read error onto the pure read-status the decision logic wants. */
+static nvs_read_status map_read_status(esp_err_t read_err)
+{
+    if (read_err == ESP_OK) {
+        return NVS_READ_OK;
+    }
+    if (read_err == ESP_ERR_NVS_NOT_FOUND) {
+        return NVS_READ_NOT_FOUND;
+    }
+    return NVS_READ_ERROR;
+}
+
+/* Decode the read bytes (when present) and delegate the alert/corrupt/empty/valid
+ * decision to the pure resolve_provenance. The HAL only supplies raw facts; the
+ * Unit 4 validation always runs there, so a corrupt store can never yield a value
+ * outside the sanity window. */
 static void resolve_params(const uint8_t *buf, size_t len, esp_err_t read_err,
                            settings_params *out,
                            settings_validation_result *result)
 {
+    nvs_read_status read_status = map_read_status(read_err);
     settings_params decoded;
-    bool has_stored = false;
-    if (read_err == ESP_OK) {
-        blob_codec_result decode = blob_codec_decode(buf, len, &decoded);
-        has_stored = (decode == BLOB_CODEC_OK);
-        if (!has_stored) {
+    blob_codec_result decode = BLOB_CODEC_ERR_ARG;
+    if (read_status == NVS_READ_OK) {
+        decode = blob_codec_decode(buf, len, &decoded);
+        if (decode != BLOB_CODEC_OK) {
             ESP_LOGW(TAG, "stored blob rejected (code %d) -> defaults", decode);
         }
-    } else if (read_err != ESP_ERR_NVS_NOT_FOUND) {
+    } else if (read_status == NVS_READ_ERROR) {
         ESP_LOGW(TAG, "blob read error 0x%x -> defaults", read_err);
     }
-    *result = settings_validate(has_stored ? &decoded : NULL, has_stored, out);
+    *result = resolve_provenance(read_status, decode, &decoded, out);
 }
 
 esp_err_t nvs_store_load(settings_params *out,

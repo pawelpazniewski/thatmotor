@@ -310,6 +310,19 @@ Severity gate: ✅ CZYSTE (P1=0, P2=0, P3=4). Raport: `review-faza-3.md`. Testy 
 
 ---
 
+## Do poprawy po review fazy 4
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=1, P3=5). Raport: `review-faza-4.md`. Testy hosta 124/124 PASS; build idf.py set-target esp32 EXIT=0 — oba na żywo. E2E: N/A (Unit 8 pure+HAL, brak UI; persystencja = [HW] odroczone). Deserializacja: BEZPIECZNA (length→CRC→schema, brak OOB, CRC-before-use, fail→defaulty w oknie sanity). CRC32 known-answer zweryfikowany na żywo: CRC("123456789")==0xCBF43926, empty==0. Regresje cross-phase: brak (124/124).
+
+- [x] 🟠 [important] **components/settings/src/nvs_store.c (resolve_params/read_blob)** — ROZWIĄZANE (cykl 1): wyekstrahowano czystą funkcję decyzyjną `resolve_provenance(read_status, decode, decoded, out)` do nowego pure modułu `components/settings/{include/nvs_provenance.h, src/nvs_provenance.c}` (zero include IDF, host-testowalna). HAL `nvs_store.c` mapuje surowy `esp_err_t`→`nvs_read_status`, dekoduje i deleguje decyzję. Pokrycie: 7 testów hosta (empty→defaults/!nvs_error; bad CRC→nvs_error+sanity; bad length→nvs_error; schema→alert/!nvs_error; valid→source=NVS+params; out-of-range→MIXED_RECOVERED/!nvs_error; read error→nvs_error). 124→131 PASS.
+- [x] 🟡 [nit] **components/settings/src/nvs_store.c:73 + settings_validate.c** — ROZWIĄZANE (naturalnie z ekstrakcji P2): `resolve_provenance` ustawia `nvs_error=true` przy realnej korupcji (CRC/length) oraz przy błędzie odczytu blobu; empty (NOT_FOUND) i alert-schema (nowsza wersja, ≠ korupcja) → `nvs_error=false`. Pole nie jest już zawsze false — rozróżnienie pusty vs skorumpowany trafia do telemetrii R16.
+- [ ] 🟡 [nit] **components/settings/src/nvs_store.c:31** — `ESP_ERROR_CHECK(nvs_flash_erase_partition(...))` abortuje przy błędzie erase, gdy reszta `init_partition` zwraca `esp_err_t`. Niespójna obsługa błędu (abort vs return). Rozważyć return dla spójności kontraktu.
+- [ ] 🟡 [nit] **components/control_loop/src/control_loop.c:34** — `now_ms` = `esp_timer_get_time()/1000` rzutowane do uint32 zawija co ~49.7 dnia; debounce wrap-safe (poprawnie) ale truncation int64→uint32 warta komentarza o świadomym/bezpiecznym wrapie (analogicznie do epoch w rc_capture).
+- [ ] 🟡 [nit] **components/control_loop/src/control_loop.c (`maybe_commit_params`)** — orkiestracja commit (gate DISARMED + debounce + retry-on-fail/dirty-zostaje) HAL-only, niepokryta host-testem; czyste składniki pokryte osobno. Kontynuacja nitu z Fazy 3. Domknąć przy Unit 10.
+- [ ] 🟡 [nit] **components/settings/include/commit_debounce.h:27** — `COMMIT_DEBOUNCE_DEFAULT_MS 3000` na sztywno w `control_loop_init`; okno nie konfigurowalne z `settings_params`. Świadoma stała w oknie 2–5 s; odnotować jeśli ma być tunowalne z panelu.
+
+---
+
 ## Źródła
 - Requirements doc: docs/requirements/2026-06-16-kayak-motor-firmware-v1-requirements-v2.md
 - Plan techniczny: docs/plans/2026-06-16-001-feat-kayak-motor-firmware-v1-plan.md
