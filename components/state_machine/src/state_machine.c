@@ -8,11 +8,24 @@ static bool can_arm(const sm_inputs *inputs)
            !inputs->settings_apply_in_progress;
 }
 
-/* Next state from DISARMED. RC loss dominates; otherwise the arm guard. */
+/* ESC calibration entry guard (R15/SI-5): every condition must hold, including
+ * an explicit request AND a confirmed warning. NEVER starts automatically. */
+static bool can_enter_calibration(const sm_inputs *inputs)
+{
+    return inputs->rc_valid && inputs->throttle_neutral &&
+           inputs->ui_calib_request && inputs->ui_calib_confirm &&
+           !inputs->settings_apply_in_progress;
+}
+
+/* Next state from DISARMED. RC loss dominates; then the explicit calibration
+ * entry guard; otherwise the arm guard. */
 static sm_state next_from_disarmed(const sm_inputs *inputs)
 {
     if (!inputs->rc_valid) {
         return SM_STATE_FAILSAFE;
+    }
+    if (can_enter_calibration(inputs)) {
+        return SM_STATE_ESC_CALIBRATION;
     }
     if (can_arm(inputs)) {
         return SM_STATE_ARMED;

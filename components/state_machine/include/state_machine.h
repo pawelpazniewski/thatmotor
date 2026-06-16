@@ -24,6 +24,9 @@ extern "C" {
  *    RC recovery -> DISARMED. It NEVER transitions straight back to ARMED.
  *  - The servo rule is independent of arming: RC valid -> servo tracks CH1,
  *    RC invalid -> servo centers, regardless of ARMED/DISARMED.
+ *  - DISARMED->ESC_CALIBRATION is gated (R15/SI-5): RC valid AND throttle
+ *    neutral AND an explicit calibration request AND a confirmed warning. It
+ *    NEVER starts automatically. RC loss inside calibration drops to FAILSAFE.
  */
 
 /** Control states. ESC_CALIBRATION is a first-class state (sequence in Unit 9). */
@@ -46,6 +49,8 @@ typedef struct {
     bool settings_apply_in_progress;/* a pending settings apply is mid-flight */
     bool ui_arm_request;            /* explicit arm action from the panel */
     bool ui_disarm_request;         /* explicit disarm action from the panel */
+    bool ui_calib_request;          /* explicit "start ESC calibration" action */
+    bool ui_calib_confirm;          /* operator confirmed the removal warning */
 } sm_inputs;
 
 /**

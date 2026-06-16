@@ -13,7 +13,20 @@ static sm_inputs armable_inputs(void)
         .settings_apply_in_progress = false,
         .ui_arm_request = true,
         .ui_disarm_request = false,
+        .ui_calib_request = false,
+        .ui_calib_confirm = false,
     };
+    return in;
+}
+
+/* A baseline "calibration-entry" input: all entry conditions met (R15/SI-5).
+ * Individual tests drop one field to prove entry is refused without it. */
+static sm_inputs calib_entry_inputs(void)
+{
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;   /* calibration request, not an arm request */
+    in.ui_calib_request = true;
+    in.ui_calib_confirm = true;
     return in;
 }
 
@@ -189,6 +202,59 @@ static void test_servo_centers_when_rc_invalid_regardless_of_state(void)
     TEST_ASSERT_EQUAL(SERVO_TARGET_CENTER, from_disarmed.servo_target);
 }
 
+/* --- ESC calibration entry guard (R15/SI-5) --- */
+
+static void test_calib_entry_all_conditions_enters(void)
+{
+    sm_inputs in = calib_entry_inputs();
+
+    sm_outputs out = sm_step(SM_STATE_DISARMED, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_ESC_CALIBRATION, out.state);
+}
+
+static void test_calib_entry_without_confirmation_refused(void)
+{
+    /* SI-5: never start without the confirmed removal warning. */
+    sm_inputs in = calib_entry_inputs();
+    in.ui_calib_confirm = false;
+
+    sm_outputs out = sm_step(SM_STATE_DISARMED, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
+}
+
+static void test_calib_entry_without_request_refused(void)
+{
+    /* SI-5: never start automatically (no explicit UI request). */
+    sm_inputs in = calib_entry_inputs();
+    in.ui_calib_request = false;
+
+    sm_outputs out = sm_step(SM_STATE_DISARMED, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
+}
+
+static void test_calib_entry_without_neutral_refused(void)
+{
+    sm_inputs in = calib_entry_inputs();
+    in.throttle_neutral = false;
+
+    sm_outputs out = sm_step(SM_STATE_DISARMED, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
+}
+
+static void test_calib_entry_rc_invalid_goes_failsafe_not_calib(void)
+{
+    sm_inputs in = calib_entry_inputs();
+    in.rc_valid = false;
+
+    sm_outputs out = sm_step(SM_STATE_DISARMED, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_FAILSAFE, out.state);
+}
+
 void run_state_machine_tests(void)
 {
     RUN_TEST(test_boot_disarmed_regardless_of_inputs);
@@ -206,4 +272,9 @@ void run_state_machine_tests(void)
     RUN_TEST(test_servo_tracks_when_rc_valid_disarmed);
     RUN_TEST(test_servo_tracks_when_rc_valid_armed);
     RUN_TEST(test_servo_centers_when_rc_invalid_regardless_of_state);
+    RUN_TEST(test_calib_entry_all_conditions_enters);
+    RUN_TEST(test_calib_entry_without_confirmation_refused);
+    RUN_TEST(test_calib_entry_without_request_refused);
+    RUN_TEST(test_calib_entry_without_neutral_refused);
+    RUN_TEST(test_calib_entry_rc_invalid_goes_failsafe_not_calib);
 }

@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "esc_calibration.h"
 #include "rc_sample.h"
 #include "rc_validity.h"
 #include "settings_model.h"
@@ -34,6 +35,10 @@ typedef struct {
     uint32_t now_ticks;    /* current tick in the rc_capture domain (recency) */
     bool ui_arm_request;   /* explicit arm action from the panel this cycle */
     bool ui_disarm_request;/* explicit disarm action from the panel this cycle */
+    bool ui_calib_request; /* explicit "start ESC calibration" action */
+    bool ui_calib_confirm; /* operator confirmed the removal warning */
+    calib_event calib_event;/* calibration step event (next/cancel) this cycle */
+    bool calib_timeout;    /* calibration idle timeout elapsed this cycle */
 } loop_inputs;
 
 /** Per-channel validity thresholds (constant across cycles). */
@@ -48,6 +53,7 @@ typedef struct {
     rc_debounce_state rc_debounce;
     int32_t throttle_ramp; /* normalized ramped throttle command */
     int32_t servo_slew;    /* slewed servo pulse width (us) */
+    calib_step calib_step; /* current ESC calibration step (when in calib) */
 } loop_state;
 
 /** Telemetry snapshot produced each cycle (read-only view for the web panel). */

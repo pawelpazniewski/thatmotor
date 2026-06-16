@@ -30,6 +30,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/signal_chain/src/throttle_chain.c
     ${REPO_ROOT}/components/signal_chain/src/servo_chain.c
     ${REPO_ROOT}/components/state_machine/src/state_machine.c
+    ${REPO_ROOT}/components/state_machine/src/esc_calibration.c
     ${REPO_ROOT}/components/control_loop/src/loop_step.c
 )
 
@@ -62,6 +63,7 @@ set(TEST_SOURCES
     test_throttle_chain.c
     test_servo_chain.c
     test_state_machine.c
+    test_esc_calibration.c
     test_loop_step.c
 )
 

@@ -184,15 +184,15 @@ Weryfikacja:
 Wymagania: R15, SI-3, SI-5. Zależności: Unit 6, Unit 7, Unit 2.
 
 Implementacja:
-- [ ] `components/state_machine/src/esc_calibration.c` (+`.h`) — pure: sekwencja kroków, mapowanie krok→stałe µs, reguły abortu/timeoutu
-- [ ] Modyfikuj `loop_step.c` — state==ESC_CALIBRATION→esc_us z sekwencji, pomija łańcuch gazu, przez clamp
-- [ ] Modyfikuj `state_machine.c` — guard wejścia (DISARMED + RC valid + throttle neutral + jawna akcja UI + potwierdzenie ostrzeżenia)
+- [x] `components/state_machine/src/esc_calibration.c` (+`.h`) — pure: sekwencja kroków, mapowanie krok→stałe µs, reguły abortu/timeoutu
+- [x] Modyfikuj `loop_step.c` — state==ESC_CALIBRATION→esc_us z sekwencji, pomija łańcuch gazu, przez clamp
+- [x] Modyfikuj `state_machine.c` — guard wejścia (DISARMED + RC valid + throttle neutral + jawna akcja UI + potwierdzenie ostrzeżenia)
 
 Testy:
-- [ ] Test: [Unit] wejście dozwolone tylko przy wszystkich warunkach + potwierdzenie; brak potwierdzenia→brak wejścia
-- [ ] Test: [Unit] kroki: neutral→1500, full fwd→2000, full rev→1000, Done→DISARMED+neutral
-- [ ] Test: [Unit] abort: RC invalid→FAILSAFE; timeout→DISARMED+neutral; cancel→DISARMED+neutral
-- [ ] Test: [Unit] wartości kroków przechodzą przez clamp (SI-3 w trybie serwisowym)
+- [x] Test: [Unit] wejście dozwolone tylko przy wszystkich warunkach + potwierdzenie; brak potwierdzenia→brak wejścia
+- [x] Test: [Unit] kroki: neutral→1500, full fwd→2000, full rev→1000, Done→DISARMED+neutral
+- [x] Test: [Unit] abort: RC invalid→FAILSAFE; timeout→DISARMED+neutral; cancel→DISARMED+neutral
+- [x] Test: [Unit] wartości kroków przechodzą przez clamp (SI-3 w trybie serwisowym)
 - [ ] Test: [HW, śmigło zdjęte] Operator przechodzi sekwencję, WP880 potwierdza zakres
 
 Weryfikacja:
