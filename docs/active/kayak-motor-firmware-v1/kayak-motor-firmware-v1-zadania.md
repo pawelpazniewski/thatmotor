@@ -55,14 +55,14 @@ Weryfikacja:
 Wymagania: R1, R12, fundament SI-4. Zależności: Unit 1.
 
 Implementacja:
-- [ ] `components/rc_capture/include/rc_capture.h` — typ `rc_channel_sample {width_us, period_us, last_edge_us, edge_seen}`
-- [ ] `components/rc_capture/src/rc_capture.c` — MCPWM cap timer + 3 kanały (G34/G35/G32), callback `on_cap`
-- [ ] `components/rc_capture/src/cap_math.c` (+`.h`) — pure konwersja ticki→µs, liczenie okresu
-- [ ] CH4 czytany jako diagnostyczny (oznaczony poza RC_valid)
-- [ ] Modyfikuj `main/app_main.c` — init capture
+- [x] `components/rc_capture/include/rc_capture.h` — typ `rc_channel_sample {width_us, period_us, last_edge_us, edge_seen}`
+- [x] `components/rc_capture/src/rc_capture.c` — MCPWM cap timer + 3 kanały (G34/G35/G32), callback `on_cap`
+- [x] `components/rc_capture/src/cap_math.c` (+`.h`) — pure konwersja ticki→µs, liczenie okresu
+- [x] CH4 czytany jako diagnostyczny (oznaczony poza RC_valid)
+- [x] Modyfikuj `main/app_main.c` — init capture
 
 Testy:
-- [ ] Test: [Unit] `cap_math`: konwersja ticki→µs (12.5 ns/tick); okres z dwóch kolejnych zboczy; obsługa przepełnienia licznika
+- [x] Test: [Unit] `cap_math`: konwersja ticki→µs (12.5 ns/tick); okres z dwóch kolejnych zboczy; obsługa przepełnienia licznika
 - [ ] Test: [HW] Oscyloskop równolegle z odczytem: zmierzona szerokość/okres zgodne z odbiornikiem; zapisać zmierzony okres ramki do Planu pomiarów
 
 Weryfikacja:
@@ -72,17 +72,17 @@ Weryfikacja:
 Wymagania: SI-4, R12, R16, baza R10. Zależności: Unit 1.
 
 Implementacja:
-- [ ] `components/rc_validity/include/rc_validity.h` + `src/rc_validity.c` — `channel_valid(sample, cfg)`, `rc_valid(ch1, ch2)`, debounce N ramek
-- [ ] `components/settings/include/settings_model.h` — struktura parametrów (slew serwa, rampy ESC ↑/↓, deadband gazu, deadband steru=0, timeout failsafe, limit mocy ±, endpointy serwa, kalibracja wejścia RC, flagi reverse, kalibracja wyjścia ESC esc*Us, warunkowo `reverseNeutralDwellMs`, `schema_version`)
-- [ ] `components/settings/src/settings_defaults.c` — konserwatywne defaulty (CH 1000/1500/2000, szeroki deadband, niski max throttle, łagodne rampy, escNeutralUs 1400–1600)
-- [ ] `components/settings/src/settings_validate.c` (+`.h`) — walidacja per-field + cross-field; flagi `settings_source/settings_valid/calibrated/defaults_used/nvs_error`
+- [x] `components/rc_validity/include/rc_validity.h` + `src/rc_validity.c` — `channel_valid(sample, cfg)`, `rc_valid(ch1, ch2)`, debounce N ramek
+- [x] `components/settings/include/settings_model.h` — struktura parametrów (slew serwa, rampy ESC ↑/↓, deadband gazu, deadband steru=0, timeout failsafe, limit mocy ±, endpointy serwa, kalibracja wejścia RC, flagi reverse, kalibracja wyjścia ESC esc*Us, warunkowo `reverseNeutralDwellMs`, `schema_version`)
+- [x] `components/settings/src/settings_defaults.c` — konserwatywne defaulty (CH 1000/1500/2000, szeroki deadband, niski max throttle, łagodne rampy, escNeutralUs 1400–1600)
+- [x] `components/settings/src/settings_validate.c` (+`.h`) — walidacja per-field + cross-field; flagi `settings_source/settings_valid/calibrated/defaults_used/nvs_error`
 
 Testy:
-- [ ] Test: [Unit] `channel_valid`: brak edge w T ms→false; szerokość 700/2300→false; okres poza tolerancją→false; ważny impuls→true
-- [ ] Test: [Unit] `rc_valid`: CH1 zły→false; CH2 zły→false; oba dobre→true; CH4 zły→bez wpływu
-- [ ] Test: [Unit] debounce: 1 zła ramka→valid; N kolejnych złych→invalid; powrót dobrej→reset licznika
-- [ ] Test: [Unit] walidacja: empty→DEFAULTS/defaults_used/!calibrated; jedno pole spoza zakresu→fallback pola + MIXED_RECOVERED; OK→NVS/valid
-- [ ] Test: [Unit] cross-field: `escForwardMin > escForwardMax`→odrzucone/fallback
+- [x] Test: [Unit] `channel_valid`: brak edge w T ms→false; szerokość 700/2300→false; okres poza tolerancją→false; ważny impuls→true
+- [x] Test: [Unit] `rc_valid`: CH1 zły→false; CH2 zły→false; oba dobre→true; CH4 zły→bez wpływu
+- [x] Test: [Unit] debounce: 1 zła ramka→valid; N kolejnych złych→invalid; powrót dobrej→reset licznika
+- [x] Test: [Unit] walidacja: empty→DEFAULTS/defaults_used/!calibrated; jedno pole spoza zakresu→fallback pola + MIXED_RECOVERED; OK→NVS/valid
+- [x] Test: [Unit] cross-field: `escForwardMin > escForwardMax`→odrzucone/fallback
 
 Weryfikacja:
 - [ ] Weryfikacja: testy hosta przechodzą; utrata CH1 lub CH2 (symulacja)→RC_valid=false po N ramkach; defaulty nigdy poza oknem sanity

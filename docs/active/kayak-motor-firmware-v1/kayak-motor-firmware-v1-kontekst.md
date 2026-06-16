@@ -47,6 +47,22 @@ kebab-case). Pliki < 300 linii, funkcje < 50 linii, early return zamiast nesting
 | Watchdog | esp_task_wdt panic, fed tylko z ukończonej iteracji | Hang → reset; nie maskować zawisu. |
 | Architektura | pure logic ⊥ HAL; `loop_step` czysty rdzeń | Pokrycie integracyjne cross-layer na hoście. |
 
+## Decyzje progowe Fazy 1 (konserwatywne wartości startowe — do dostrojenia po pomiarach)
+
+Źródło nie podaje liczb, więc przyjęto wartości startowe (uczynione konfigurowalnymi, NIE hardcode):
+
+- **Okres ramki RC** — NIE hardcode 20 ms. `rc_channel_cfg.period_expected_us` jest parametrem
+  podawanym z konfiguracji (po pomiarze odbiornika). W testach hosta użyto placeholdera 20 ms ± 5 ms
+  tolerancji tylko jako reprezentatywnego przypadku. Próg okresu wejdzie do walidacji z modelu ustawień.
+- **N kolejnych złych ramek (debounce failsafe)** — `RC_DEBOUNCE_DEFAULT_THRESHOLD = 5` (dolny koniec
+  zakresu „~5–10" z planu): jeden glitch nie wywoła failsafe, utrata sygnału łapana w kilka ramek.
+- **Zakresy walidacji parametrów** — `components/settings/src/settings_ranges.h`. Konserwatywne,
+  szerokie sanity windows; defaulty z R16: CH 1000/1500/2000, `escNeutralUs=1500` (okno 1400–1600),
+  `max_throttle_pct=30`, łagodne rampy (up=5, down=10 µs/cykl), slew serwa=10, deadband steru=0,
+  deadband gazu=80 µs, `failsafe_timeout_ms=200`, `reverseNeutralDwellMs=0` (wyłączony do pomiaru
+  pluggingu WP880). Cross-field: RC monotoniczne min<mid<max; endpointy serwa rosnące; pasmo ESC
+  forward rosnące, reverse malejące od neutralu.
+
 ## Otwarte / odroczone (do implementacji lub Planu pomiarów)
 - Zmierzony neutral/pasmo WP880, progi startu, realne `escNeutralUs` (SI-2).
 - Czy potrzebny `reverseNeutralDwellMs` (po pomiarze szybkiej zmiany przód↔tył).
@@ -60,6 +76,16 @@ kebab-case). Pliki < 300 linii, funkcje < 50 linii, early return zamiast nesting
 - ESP-IDF 5.5.x (pinować dokładny tag). ArduinoJson v7 (component registry) lub cJSON (w IDF).
 - Sprzęt: ESP32 DevKit, WP880 ESC, serwo DS3240, odbiornik RC (z konfigurowalnym failsafe —
   twardy wymóg: brak PWM przy utracie RF), LiFePO4 12V 100Ah, buck 5V, pull-downy G18/G19, e-stop.
+
+## Review fazy 0 (2026-06-16)
+
+Multi-agent code review commitu `866555e` (Unit 1+2). Severity gate: ⚠️ ZASTRZEŻENIA — P1=0, P2=2, P3=5. Raport: `review-faza-0.md`. Testy hosta 10/10 PASS; build idf.py + host przeszły w execute.
+
+Kluczowe wnioski:
+- SI-1 (boot-to-safe), SI-3 (hard clamp niebypassowalny), izolacja LEDC do `pwm_out`, separacja pure ⊥ HAL — wszystkie spełnione na poziomie source. Pokrycie wymaganych scenariuszy Unit 2 = 100%.
+- 2× P2 do domknięcia w obrębie zadania (nie blokują startu Fazy 1): (1) `clamp_pwm_us` inwariant `min<=max` chroniony tylko przez `assert` (no-op w release) — utwardzić zanim wejdą okna z NVS/kalibracji (Unit 8/9); (2) realny code-path `pwm_out_write_us` (walidacja kanału + dowód clamp-before-convert) bez testu — ekstrakcja czystej logiki do `PURE_SOURCES`.
+- Odchylenia od planu: testy w `test/host/` zamiast `components/*/test/` (świadoma decyzja zgodna z kontekst.md:14/zadania.md:21 — standalone host harness, NIE naruszenie); konwersja µs→duty round-to-nearest zamiast floor `<<16` (ulepszenie, wartości zgodne z kontraktem).
+- [HW]/[E2E] checkboxy odroczone do known-issues (brak sprzętu/UI) — nie liczone jako findingi. Agent E2E = N/A (brak panelu WWW przed Unit 10).
 
 ## Źródła
 - Requirements doc: docs/requirements/2026-06-16-kayak-motor-firmware-v1-requirements-v2.md

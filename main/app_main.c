@@ -1,6 +1,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "pwm_out.h"
+#include "rc_capture.h"
 
 static const char *TAG = "app_main";
 
@@ -43,9 +44,14 @@ void app_main(void)
     esp_reset_reason_t reason = esp_reset_reason();
     ESP_LOGI(TAG, "boot: reset reason = %s (%d)", reset_reason_label(reason), reason);
 
-    /* Safe outputs FIRST, ahead of any RC/state-machine/web init (added in
-     * later phases). This is the boot-to-safe-state placeholder for Phase 0. */
+    /* Safe outputs FIRST, ahead of any RC/state-machine/web init. SI-1: every
+     * boot path lands in a safe output state before signal acquisition starts. */
     enter_safe_outputs();
 
-    ESP_LOGI(TAG, "Phase 0 boot complete; idling in safe state");
+    /* RC signal acquisition (MCPWM capture) once outputs are safe. Fail-fast on
+     * any driver error: a broken capture init must surface, not run silently. */
+    ESP_ERROR_CHECK(rc_capture_init());
+    ESP_LOGI(TAG, "RC capture started: CH1/CH2/CH4 (MCPWM)");
+
+    ESP_LOGI(TAG, "Phase 1 boot complete; idling in safe state");
 }

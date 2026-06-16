@@ -18,11 +18,19 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/safety_clamp/src/safety_clamp.c
     ${REPO_ROOT}/components/pwm_out/src/pwm_us_to_duty.c
     ${REPO_ROOT}/components/pwm_out/src/pwm_out_logic.c
+    ${REPO_ROOT}/components/rc_capture/src/cap_math.c
+    ${REPO_ROOT}/components/rc_validity/src/rc_validity.c
+    ${REPO_ROOT}/components/settings/src/settings_defaults.c
+    ${REPO_ROOT}/components/settings/src/settings_validate.c
 )
 
 set(PURE_INCLUDE_DIRS
     ${REPO_ROOT}/components/safety_clamp/include
     ${REPO_ROOT}/components/pwm_out/include
+    ${REPO_ROOT}/components/rc_capture/include
+    ${REPO_ROOT}/components/rc_validity/include
+    ${REPO_ROOT}/components/settings/include
+    ${REPO_ROOT}/components/settings/src
 )
 
 # Test sources.
@@ -31,6 +39,9 @@ set(TEST_SOURCES
     test_safety_clamp.c
     test_pwm_us_to_duty.c
     test_pwm_out_logic.c
+    test_cap_math.c
+    test_rc_validity.c
+    test_settings_validate.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})

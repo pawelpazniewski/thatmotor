@@ -1,0 +1,168 @@
+#include "settings_validate.h"
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "settings_model.h"
+#include "settings_ranges.h"
+
+/* Clamp-to-default helper: if value is outside [min,max], take the default and
+ * flag that a repair happened. Returns the value to use. */
+static uint16_t field_or_default(uint16_t value, uint16_t min, uint16_t max,
+                                 uint16_t fallback, bool *repaired)
+{
+    if (value < min || value > max) {
+        *repaired = true;
+        return fallback;
+    }
+    return value;
+}
+
+/* Per-field range checks. Repairs out-of-range fields in *p in place against
+ * the defaults in *def, setting *repaired when any field is replaced. */
+static void validate_fields(settings_params *p, const settings_params *def,
+                            bool *repaired)
+{
+    p->rc_min_us = field_or_default(p->rc_min_us, RC_US_MIN, RC_US_MAX,
+                                    def->rc_min_us, repaired);
+    p->rc_mid_us = field_or_default(p->rc_mid_us, RC_US_MIN, RC_US_MAX,
+                                    def->rc_mid_us, repaired);
+    p->rc_max_us = field_or_default(p->rc_max_us, RC_US_MIN, RC_US_MAX,
+                                    def->rc_max_us, repaired);
+
+    p->servo_slew_us_per_cycle =
+        field_or_default(p->servo_slew_us_per_cycle, SERVO_SLEW_MIN,
+                         SERVO_SLEW_MAX, def->servo_slew_us_per_cycle, repaired);
+    p->servo_min_us = field_or_default(p->servo_min_us, SERVO_US_MIN,
+                                       SERVO_US_MAX, def->servo_min_us, repaired);
+    p->servo_max_us = field_or_default(p->servo_max_us, SERVO_US_MIN,
+                                       SERVO_US_MAX, def->servo_max_us, repaired);
+    p->steer_deadband_us = field_or_default(p->steer_deadband_us, 0U,
+                                            DEADBAND_MAX, def->steer_deadband_us,
+                                            repaired);
+
+    p->esc_ramp_up_us_per_cycle =
+        field_or_default(p->esc_ramp_up_us_per_cycle, ESC_RAMP_MIN, ESC_RAMP_MAX,
+                         def->esc_ramp_up_us_per_cycle, repaired);
+    p->esc_ramp_down_us_per_cycle =
+        field_or_default(p->esc_ramp_down_us_per_cycle, ESC_RAMP_MIN,
+                         ESC_RAMP_MAX, def->esc_ramp_down_us_per_cycle, repaired);
+    p->throttle_deadband_us =
+        field_or_default(p->throttle_deadband_us, 0U, DEADBAND_MAX,
+                         def->throttle_deadband_us, repaired);
+    p->max_throttle_pct =
+        field_or_default(p->max_throttle_pct, MAX_THROTTLE_PCT_MIN,
+                         MAX_THROTTLE_PCT_MAX, def->max_throttle_pct, repaired);
+
+    p->esc_neutral_us = field_or_default(p->esc_neutral_us, ESC_NEUTRAL_MIN,
+                                         ESC_NEUTRAL_MAX, def->esc_neutral_us,
+                                         repaired);
+    p->esc_neutral_band_us =
+        field_or_default(p->esc_neutral_band_us, ESC_NEUTRAL_BAND_MIN,
+                         ESC_NEUTRAL_BAND_MAX, def->esc_neutral_band_us,
+                         repaired);
+    p->esc_forward_min_us = field_or_default(p->esc_forward_min_us, ESC_US_MIN,
+                                             ESC_US_MAX, def->esc_forward_min_us,
+                                             repaired);
+    p->esc_forward_max_us = field_or_default(p->esc_forward_max_us, ESC_US_MIN,
+                                             ESC_US_MAX, def->esc_forward_max_us,
+                                             repaired);
+    p->esc_reverse_min_us = field_or_default(p->esc_reverse_min_us, ESC_US_MIN,
+                                             ESC_US_MAX, def->esc_reverse_min_us,
+                                             repaired);
+    p->esc_reverse_max_us = field_or_default(p->esc_reverse_max_us, ESC_US_MIN,
+                                             ESC_US_MAX, def->esc_reverse_max_us,
+                                             repaired);
+
+    p->failsafe_timeout_ms =
+        field_or_default(p->failsafe_timeout_ms, FAILSAFE_TIMEOUT_MS_MIN,
+                         FAILSAFE_TIMEOUT_MS_MAX, def->failsafe_timeout_ms,
+                         repaired);
+    p->reverse_neutral_dwell_ms = field_or_default(
+        p->reverse_neutral_dwell_ms, REVERSE_NEUTRAL_DWELL_MS_MIN,
+        REVERSE_NEUTRAL_DWELL_MS_MAX, def->reverse_neutral_dwell_ms, repaired);
+}
+
+/* Cross-field invariants. On violation, restore the whole related group from
+ * defaults (so the group stays internally consistent) and flag a repair. */
+static void validate_cross_fields(settings_params *p,
+                                  const settings_params *def, bool *repaired)
+{
+    /* RC calibration must be monotonic: min < mid < max. */
+    if (!(p->rc_min_us < p->rc_mid_us && p->rc_mid_us < p->rc_max_us)) {
+        p->rc_min_us = def->rc_min_us;
+        p->rc_mid_us = def->rc_mid_us;
+        p->rc_max_us = def->rc_max_us;
+        *repaired = true;
+    }
+
+    /* Servo endpoints ascending. */
+    if (p->servo_min_us >= p->servo_max_us) {
+        p->servo_min_us = def->servo_min_us;
+        p->servo_max_us = def->servo_max_us;
+        *repaired = true;
+    }
+
+    /* Forward ESC band ascends away from neutral. */
+    if (p->esc_forward_min_us > p->esc_forward_max_us) {
+        p->esc_forward_min_us = def->esc_forward_min_us;
+        p->esc_forward_max_us = def->esc_forward_max_us;
+        *repaired = true;
+    }
+
+    /* Reverse ESC band descends away from neutral (reverse_min nearer neutral
+     * than reverse_max). */
+    if (p->esc_reverse_min_us < p->esc_reverse_max_us) {
+        p->esc_reverse_min_us = def->esc_reverse_min_us;
+        p->esc_reverse_max_us = def->esc_reverse_max_us;
+        *repaired = true;
+    }
+}
+
+static settings_validation_result make_defaults_result(settings_params *out,
+                                                       bool nvs_error)
+{
+    settings_load_defaults(out);
+    settings_validation_result result = {
+        .source = SETTINGS_SOURCE_DEFAULTS,
+        .settings_valid = false,
+        .calibrated = false,
+        .defaults_used = true,
+        .nvs_error = nvs_error,
+    };
+    return result;
+}
+
+settings_validation_result settings_validate(const settings_params *stored,
+                                             bool has_stored,
+                                             settings_params *out)
+{
+    /* No usable blob (empty/corrupt/version-mismatch, decided by the loader):
+     * pure conservative defaults. The nvs_error distinction (blob present but
+     * unreadable) is owned by the NVS layer in a later unit, so it is not set
+     * here. */
+    if (!has_stored || stored == NULL) {
+        return make_defaults_result(out, false);
+    }
+
+    settings_params defaults;
+    settings_load_defaults(&defaults);
+
+    *out = *stored;
+    out->schema_version = SETTINGS_SCHEMA_VERSION;
+
+    bool repaired = false;
+    validate_fields(out, &defaults, &repaired);
+    validate_cross_fields(out, &defaults, &repaired);
+
+    settings_validation_result result = {
+        .source = repaired ? SETTINGS_SOURCE_MIXED_RECOVERED
+                           : SETTINGS_SOURCE_NVS,
+        .settings_valid = !repaired,
+        .calibrated = !repaired,
+        .defaults_used = repaired,
+        .nvs_error = false,
+    };
+    return result;
+}
