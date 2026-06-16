@@ -22,6 +22,8 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/rc_validity/src/rc_validity.c
     ${REPO_ROOT}/components/settings/src/settings_defaults.c
     ${REPO_ROOT}/components/settings/src/settings_validate.c
+    ${REPO_ROOT}/components/settings/src/blob_codec.c
+    ${REPO_ROOT}/components/settings/src/commit_debounce.c
     ${REPO_ROOT}/components/signal_chain/src/ramp.c
     ${REPO_ROOT}/components/signal_chain/src/chain_math.c
     ${REPO_ROOT}/components/signal_chain/src/throttle_chain.c
@@ -52,6 +54,8 @@ set(TEST_SOURCES
     test_cap_math.c
     test_rc_validity.c
     test_settings_validate.c
+    test_blob_codec.c
+    test_commit_debounce.c
     test_ramp.c
     test_throttle_chain.c
     test_servo_chain.c

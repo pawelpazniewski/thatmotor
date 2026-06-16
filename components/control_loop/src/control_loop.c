@@ -1,11 +1,14 @@
 #include "control_loop.h"
 
+#include "commit_debounce.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "loop_step.h"
+#include "nvs_store.h"
 #include "pwm_out.h"
 #include "rc_capture.h"
 #include "rc_validity.h"
@@ -26,6 +29,13 @@ static settings_params s_params;
 static loop_state s_loop;
 static loop_validity_cfg s_validity_cfg;
 static QueueHandle_t s_pending_queue;
+static commit_debounce_state s_commit;
+
+/* Monotonic milliseconds for the commit debounce (esp_timer is monotonic). */
+static uint32_t now_ms(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
 
 /* Build the per-channel validity config. edge_timeout comes from the configured
  * failsafe timeout so RC loss is caught on the same budget the operator tuned. */
@@ -55,6 +65,7 @@ esp_err_t control_loop_init(const settings_params *initial)
     s_params = *initial;
     rebuild_validity_cfg(&s_params);
     loop_state_init(&s_loop, &s_params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    commit_debounce_init(&s_commit, COMMIT_DEBOUNCE_DEFAULT_MS);
 
     s_pending_queue = xQueueCreate(1, sizeof(settings_params));
     if (s_pending_queue == NULL) {
@@ -90,7 +101,29 @@ static void maybe_apply_pending(void)
     xQueueReceive(s_pending_queue, &pending, 0);
     s_params = pending;
     rebuild_validity_cfg(&s_params);
+    /* Stage a delayed NVS commit: coalesce a slider burst into one flash write. */
+    commit_debounce_mark_changed(&s_commit, now_ms());
     ESP_LOGI(TAG, "applied pending params (DISARMED)");
+}
+
+/* Commit active params to NVS only while DISARMED (R17) and once the debounce
+ * window has elapsed since the last change. A failed write leaves the change
+ * pending (dirty stays set) so the next eligible cycle retries. */
+static void maybe_commit_params(void)
+{
+    if (!loop_should_apply_pending(s_loop.state)) {
+        return; /* same DISARMED gate as apply: never persist while armed */
+    }
+    if (!commit_debounce_should_commit(&s_commit, now_ms(), false)) {
+        return;
+    }
+    esp_err_t err = nvs_store_commit(&s_params);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "NVS commit failed (0x%x), will retry", err);
+        return;
+    }
+    commit_debounce_mark_committed(&s_commit);
+    ESP_LOGI(TAG, "params committed to NVS");
 }
 
 /* Read the two control channels into the per-cycle input snapshot. */
@@ -114,6 +147,9 @@ static void run_one_cycle(void)
 
     pwm_out_write_us(PWM_OUT_ESC, out.esc_us);
     pwm_out_write_us(PWM_OUT_SERVO, out.servo_us);
+
+    /* Persist staged changes after actuators are driven (DISARMED + debounce). */
+    maybe_commit_params();
 }
 
 void control_loop_run(void)

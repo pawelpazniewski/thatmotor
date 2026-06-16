@@ -163,14 +163,14 @@ Weryfikacja:
 Wymagania: R11, R16, R17, SI-6. Zależności: Unit 4, Unit 7.
 
 Implementacja:
-- [ ] `components/settings/src/nvs_store.c` — `nvs_store_load` (read→CRC→walidacja Unit 4→params+flagi), `nvs_store_commit`, init-recovery (rozdziel `NEW_VERSION_FOUND` jako alert)
-- [ ] `components/settings/src/blob_codec.c` (+`.h`) — pure serializacja struct↔blob, CRC32, sprawdzenie schema_version i długości
-- [ ] `components/settings/src/commit_debounce.c` (+`.h`) — pure logika debounce (force vs timer)
-- [ ] Modyfikuj `main/app_main.c` — load przy boocie przed startem pętli; `control_loop` — commit gdy dirty + DISARMED + debounce upłynął
+- [x] `components/settings/src/nvs_store.c` — `nvs_store_load` (read→CRC→walidacja Unit 4→params+flagi), `nvs_store_commit`, init-recovery (rozdziel `NEW_VERSION_FOUND` jako alert)
+- [x] `components/settings/src/blob_codec.c` (+`.h`) — pure serializacja struct↔blob, CRC32, sprawdzenie schema_version i długości
+- [x] `components/settings/src/commit_debounce.c` (+`.h`) — pure logika debounce (force vs timer)
+- [x] Modyfikuj `main/app_main.c` — load przy boocie przed startem pętli; `control_loop` — commit gdy dirty + DISARMED + debounce upłynął
 
 Testy:
-- [ ] Test: [Unit] `blob_codec` round-trip: serialize→deserialize równe; zła CRC→odrzucone; zła długość→odrzucone; inny schema_version→odrzucone (→defaulty)
-- [ ] Test: [Unit] `commit_debounce`: zmiana→brak commitu przed upływem; kolejna zmiana resetuje timer; force→natychmiast; brak zmian→brak commitu
+- [x] Test: [Unit] `blob_codec` round-trip: serialize→deserialize równe; zła CRC→odrzucone; zła długość→odrzucone; inny schema_version→odrzucone (→defaulty)
+- [x] Test: [Unit] `commit_debounce`: zmiana→brak commitu przed upływem; kolejna zmiana resetuje timer; force→natychmiast; brak zmian→brak commitu
 - [ ] Test: [HW] Zapis w DISARMED→restart→wartość przetrwała; power-cut przed commitem→ostatnia dobra/default; pusty/zepsuty NVS→defaulty + UNCALIBRATED
 
 Weryfikacja:
@@ -296,6 +296,17 @@ Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=2, P3=4). Raport: `r
 - [ ] 🟡 [nit] **components/signal_chain/include/signal_chain.h:80-83 + servo_chain.c:51** — kontrakt seed `slew_state` (µs, wartość center) vs `ramp_state` (znormalizowane, 0) tylko w prozie; oba `int32_t*`. Udokumentować wymaganą wartość seed serwa (center) przed integracją Unit 7 (ryzyko startowego transjentu jeśli zaseedowane 0).
 - [ ] 🟡 [nit] **components/signal_chain/src/throttle_chain.c:11-12 + servo_chain.c:10-11** — zduplikowana stała okna SI-3 `1000/2000` w dwóch plikach; rozważyć wspólną definicję.
 - [ ] 🟡 [nit] **test/host/test_throttle_chain.c** — brak testów off-center `rc_mid` (asymetrie deadband/reverse/limit niepokryte); drobny duplikat: `test_deadband_small_signal_maps_to_neutral` i `test_deadband_at_threshold_is_inclusive_neutral` oba używają 1580 µs.
+
+---
+
+## Do poprawy po review fazy 3
+
+Severity gate: ✅ CZYSTE (P1=0, P2=0, P3=4). Raport: `review-faza-3.md`. Testy hosta 103/103 PASS; build idf.py set-target esp32 EXIT=0 — oba na żywo. E2E: N/A (brak UI w Fazie 3). Kontrakt epoch/recency: POPRAWNY (recency wygasa przy braku zboczy → failsafe; wrap-safe; width/period niezależne od epoch). Regresje cross-phase: brak (103/103).
+
+- [ ] 🟡 [nit] **components/control_loop/src/control_loop.c:270-284** — `maybe_apply_pending` (peek→gate→receive, realny TOCTOU re-check) jest HAL-only, niepokryta testem hosta; pokryta tylko czysta bramka `loop_should_apply_pending`. Rozważyć wyniesienie/odtestowanie kolejności peek/receive przy Unit 8/10 (realny przepływ pending z panelu).
+- [ ] 🟡 [nit] **components/control_loop/src/control_loop.c:209** — `RC_PERIOD_EXPECTED_US 20000` zahardkodowane mimo „NIE zakładać 20 ms"; świadomy placeholder z tolerancją 8000 µs do czasu pomiaru okresu ramki. Dopiąć realną wartość po pomiarze odbiornika.
+- [ ] 🟡 [nit] **components/rc_validity + components/rc_capture** — brak jawnego host-testu „recency wygasa gdy `now_ticks` postępuje a `last_edge_ticks` zamrożone" w domenie esp_timer×80; pośrednio pokryte przez `stale_sample` i testy wrapu Fazy 1. Dodać jawny test kontraktu epoch jako mocniejszą wyrocznię.
+- [ ] 🟡 [nit] **components/control_loop/src/loop_step.c** — brak testu ścieżki ESC_CALIBRATION (override ESC z sekwencji); celowa luka — sekwencja w Unit 9 (Faza 5). Domknąć przy Unit 9.
 
 ---
 

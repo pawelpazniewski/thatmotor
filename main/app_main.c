@@ -1,6 +1,7 @@
 #include "control_loop.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "nvs_store.h"
 #include "pwm_out.h"
 #include "rc_capture.h"
 #include "settings_model.h"
@@ -56,12 +57,17 @@ void app_main(void)
     ESP_ERROR_CHECK(rc_capture_init());
     ESP_LOGI(TAG, "RC capture started: CH1/CH2/CH4 (MCPWM)");
 
-    /* Control loop: start from conservative built-in defaults (NVS load lands in
-     * Unit 8). The loop is the single writer of active params (SI-6) and always
-     * boots in DISARMED (SI-1). This task becomes the control task and never
-     * returns; the watchdog is fed only at the end of each completed cycle. */
+    /* Load persisted params from NVS BEFORE the loop starts. A corrupt/empty/
+     * version-mismatched store falls back to conservative defaults inside
+     * nvs_store_load (validated at read), so active params are never outside the
+     * sanity window. The loop is the single writer of active params (SI-6) and
+     * always boots in DISARMED (SI-1). This task becomes the control task and
+     * never returns; the watchdog is fed only at the end of each completed cycle. */
     settings_params params;
-    settings_load_defaults(&params);
+    settings_validation_result load_result;
+    ESP_ERROR_CHECK(nvs_store_load(&params, &load_result));
+    ESP_LOGI(TAG, "settings loaded: source=%d calibrated=%d defaults_used=%d",
+             load_result.source, load_result.calibrated, load_result.defaults_used);
     ESP_ERROR_CHECK(control_loop_init(&params));
     ESP_LOGI(TAG, "control loop initialised; entering 50 Hz loop (DISARMED)");
     control_loop_run();
