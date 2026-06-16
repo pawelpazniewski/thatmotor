@@ -2,6 +2,7 @@
 
 #include "api_contract.h"
 #include "control_loop.h"
+#include "params_decide.h"
 #include "params_json.h"
 #include "settings_validate.h"
 #include "state_machine.h"
@@ -33,13 +34,13 @@ params_api_response params_api_handle_get(char *body, size_t body_size)
     return resp;
 }
 
-/* Whether the controller is in DISARMED right now (the only state in which a
- * settings write is accepted, R17/SI-6). Read from the lossy snapshot. */
-static bool controller_is_disarmed(void)
+/* Current controller state from the lossy snapshot. The authoritative re-check
+ * happens in the loop at apply time (TOCTOU); this is the boundary gate input. */
+static sm_state controller_state(void)
 {
     control_loop_snapshot snap;
     control_loop_get_snapshot(&snap);
-    return snap.state == SM_STATE_DISARMED;
+    return snap.state;
 }
 
 /* Re-validate a parsed candidate field-by-field at the API boundary. The
@@ -50,6 +51,23 @@ static bool candidate_is_valid(const settings_params *candidate,
 {
     settings_validation_result vr = settings_validate(candidate, true, out);
     return vr.settings_valid;
+}
+
+/* Stage validated params and render the 200 success envelope (or 500 on a
+ * serialise/mailbox failure). Reached only after params_decide_write accepts. */
+static params_api_response stage_and_render(const settings_params *validated,
+                                            char *body, size_t body_size)
+{
+    if (control_loop_post_pending(validated) != ESP_OK) {
+        return make_error(API_ERR_INTERNAL, NULL, 500, body, body_size);
+    }
+    char data[PARAMS_JSON_MAX];
+    if (params_json_serialize(validated, data, sizeof(data)) == 0U) {
+        return make_error(API_ERR_INTERNAL, NULL, 500, body, body_size);
+    }
+    params_api_response resp = {.http_status = 200};
+    resp.body_len = api_build_success(data, body, body_size);
+    return resp;
 }
 
 params_api_response params_api_handle_post(const char *request_json, char *body,
@@ -63,27 +81,15 @@ params_api_response params_api_handle_post(const char *request_json, char *body,
         return make_error(API_ERR_BAD_REQUEST, NULL, 400, body, body_size);
     }
 
-    /* Gate: writes are only accepted while DISARMED (firmware-enforced). */
-    if (!controller_is_disarmed()) {
-        return make_error(API_ERR_NOT_DISARMED, NULL, 409, body, body_size);
-    }
-
-    /* Re-validate every field server-side before staging. */
+    /* Re-validate every field server-side, then delegate the accept/reject gate
+     * (DISARMED + valid) to the pure decision core. */
     settings_params validated;
-    if (!candidate_is_valid(&candidate, &validated)) {
-        return make_error(API_ERR_VALIDATION_FAILED, NULL, 400, body, body_size);
-    }
+    bool fields_valid = candidate_is_valid(&candidate, &validated);
+    params_write_outcome outcome =
+        params_decide_write(controller_state(), fields_valid);
 
-    /* Stage to the loop's pending mailbox; the loop applies under DISARMED. */
-    if (control_loop_post_pending(&validated) != ESP_OK) {
-        return make_error(API_ERR_INTERNAL, NULL, 500, body, body_size);
+    if (outcome.decision != PARAMS_WRITE_ACCEPT) {
+        return make_error(outcome.code, NULL, outcome.http_status, body, body_size);
     }
-
-    char data[PARAMS_JSON_MAX];
-    if (params_json_serialize(&validated, data, sizeof(data)) == 0U) {
-        return make_error(API_ERR_INTERNAL, NULL, 500, body, body_size);
-    }
-    params_api_response resp = {.http_status = 200};
-    resp.body_len = api_build_success(data, body, body_size);
-    return resp;
+    return stage_and_render(&validated, body, body_size);
 }

@@ -2,14 +2,23 @@
 
 #include <string.h>
 
+#include "api_contract.h"
+#include "cJSON.h"
+#include "command_parse.h"
 #include "control_loop.h"
-#include "esc_calibration.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "params_api.h"
 #include "ws_telemetry.h"
 
 static const char *TAG = "http_server";
+
+/* Bound on the command POST body. A {"cmd":"..."} object is tens of bytes; this
+ * leaves generous headroom while capping the read. */
+#define HTTP_CMD_MAX 256
+
+/* Bounded retry budget for transient recv timeouts while reading a body. */
+#define HTTP_RECV_MAX_TIMEOUTS 4
 
 /* Embedded panel assets (see EMBED_FILES in CMakeLists). */
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
@@ -75,66 +84,106 @@ static esp_err_t get_params(httpd_req_t *req)
     return send_api_response(req, resp.http_status, body, resp.body_len);
 }
 
-/* Read the request body into buf (NUL-terminated). Returns -1 on overflow/error. */
+/* Read the full request body into buf (NUL-terminated). Loops httpd_req_recv
+ * until the declared content_len arrives, so a partial TCP read never silently
+ * truncates the body. Returns -1 on overflow (body >= buf_size), connection
+ * close before completion, a persistent timeout, or any recv error. */
 static int read_body(httpd_req_t *req, char *buf, size_t buf_size)
 {
-    if (req->content_len >= buf_size) {
-        return -1;
+    size_t content_len = req->content_len;
+    if (content_len >= buf_size) {
+        return -1; /* too large for the contract buffer: reject, never truncate */
     }
-    int received = httpd_req_recv(req, buf, req->content_len);
-    if (received < 0) {
-        return -1;
+    size_t received = 0;
+    int timeouts = 0;
+    while (received < content_len) {
+        int n = httpd_req_recv(req, buf + received, content_len - received);
+        if (n == HTTPD_SOCK_ERR_TIMEOUT) {
+            if (++timeouts > HTTP_RECV_MAX_TIMEOUTS) {
+                return -1;
+            }
+            continue;
+        }
+        if (n <= 0) {
+            return -1; /* <0: recv error; 0: peer closed before full body */
+        }
+        received += (size_t)n;
     }
     buf[received] = '\0';
-    return received;
+    return (int)received;
 }
 
 static esp_err_t post_params(httpd_req_t *req)
 {
     char reqbuf[HTTP_REQ_MAX];
-    if (read_body(req, reqbuf, sizeof(reqbuf)) < 0) {
-        char body[HTTP_BODY_MAX];
-        params_api_response r = params_api_handle_post("", body, sizeof(body));
-        return send_api_response(req, 400, body, r.body_len);
-    }
     char body[HTTP_BODY_MAX];
+    if (read_body(req, reqbuf, sizeof(reqbuf)) < 0) {
+        size_t len = api_build_error(API_ERR_BAD_REQUEST, NULL, body, sizeof(body));
+        return send_api_response(req, 400, body, len);
+    }
     params_api_response resp = params_api_handle_post(reqbuf, body, sizeof(body));
     return send_api_response(req, resp.http_status, body, resp.body_len);
 }
 
-/* Translate a command keyword in the request body into a UI event set. The body
- * is a tiny JSON like {"cmd":"arm"}; a substring match keeps this dependency-free. */
-static control_loop_ui_events parse_command(const char *body)
+/* Extract the "cmd" string from a {"cmd":"..."} body via cJSON (exact field).
+ * Copies the keyword into out and returns true; false on parse/shape failure.
+ * No substring matching: the keyword set is owned by the pure command_parse. */
+static bool extract_command(const char *body, char *out, size_t out_size)
 {
-    control_loop_ui_events ev = {0};
-    if (strstr(body, "\"arm\"") != NULL) {
-        ev.arm_request = true;
-    } else if (strstr(body, "\"disarm\"") != NULL) {
-        ev.disarm_request = true;
-    } else if (strstr(body, "\"calib_start\"") != NULL) {
-        ev.calib_request = true;
-        ev.calib_confirm = true;
-    } else if (strstr(body, "\"calib_next\"") != NULL) {
-        ev.calib_event = CALIB_EVENT_NEXT;
-    } else if (strstr(body, "\"calib_cancel\"") != NULL) {
-        ev.calib_event = CALIB_EVENT_CANCEL;
+    cJSON *root = cJSON_Parse(body);
+    if (root == NULL) {
+        return false;
     }
+    const cJSON *cmd = cJSON_GetObjectItemCaseSensitive(root, "cmd");
+    bool ok = cJSON_IsString(cmd) && cmd->valuestring != NULL &&
+              strlen(cmd->valuestring) < out_size;
+    if (ok) {
+        strcpy(out, cmd->valuestring);
+    }
+    cJSON_Delete(root);
+    return ok;
+}
+
+/* Convert the pure parser's fields into the loop's UI event struct. */
+static control_loop_ui_events to_ui_events(const command_parse_result *parsed)
+{
+    control_loop_ui_events ev = {
+        .arm_request = parsed->arm_request,
+        .disarm_request = parsed->disarm_request,
+        .calib_request = parsed->calib_request,
+        .calib_confirm = parsed->calib_confirm,
+        .calib_event = parsed->calib_event,
+    };
     return ev;
+}
+
+static esp_err_t send_command_error(httpd_req_t *req, api_error_code code)
+{
+    char body[HTTP_BODY_MAX];
+    size_t len = api_build_error(code, NULL, body, sizeof(body));
+    return send_api_response(req, 400, body, len);
 }
 
 static esp_err_t post_command(httpd_req_t *req)
 {
-    char reqbuf[256];
+    char reqbuf[HTTP_CMD_MAX];
     if (read_body(req, reqbuf, sizeof(reqbuf)) < 0) {
-        httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_send(req, "{\"data\":null,\"error\":{\"code\":"
-            "\"BAD_REQUEST\",\"message\":\"bad command\"}}", HTTPD_RESP_USE_STRLEN);
+        return send_command_error(req, API_ERR_BAD_REQUEST);
     }
-    control_loop_ui_events ev = parse_command(reqbuf);
+    char cmd[HTTP_CMD_MAX];
+    if (!extract_command(reqbuf, cmd, sizeof(cmd))) {
+        return send_command_error(req, API_ERR_BAD_REQUEST);
+    }
+    command_parse_result parsed = command_parse(cmd);
+    if (!parsed.ok) {
+        return send_command_error(req, API_ERR_VALIDATION_FAILED);
+    }
+    control_loop_ui_events ev = to_ui_events(&parsed);
     control_loop_post_ui_events(&ev);
-    httpd_resp_set_type(req, "application/json");
-    return httpd_resp_send(req, "{\"data\":null,\"error\":null}",
-                           HTTPD_RESP_USE_STRLEN);
+
+    char body[HTTP_BODY_MAX];
+    size_t len = api_build_success(NULL, body, sizeof(body));
+    return send_api_response(req, 200, body, len);
 }
 
 /* WS handshake + frames. On the opening handshake, register this socket as the

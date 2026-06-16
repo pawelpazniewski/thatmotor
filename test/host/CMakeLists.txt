@@ -33,6 +33,8 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/state_machine/src/esc_calibration.c
     ${REPO_ROOT}/components/control_loop/src/loop_step.c
     ${REPO_ROOT}/components/web_panel/src/api_contract.c
+    ${REPO_ROOT}/components/web_panel/src/command_parse.c
+    ${REPO_ROOT}/components/web_panel/src/params_decide.c
     ${REPO_ROOT}/components/web_panel/src/wifi_ap_config.c
     ${REPO_ROOT}/components/led_status/src/led_pattern.c
 )
@@ -71,6 +73,8 @@ set(TEST_SOURCES
     test_esc_calibration.c
     test_loop_step.c
     test_api_contract.c
+    test_command_parse.c
+    test_params_decide.c
     test_wifi_ap_config.c
     test_led_pattern.c
 )

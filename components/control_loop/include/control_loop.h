@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "esc_calibration.h"
 #include "esp_err.h"
 #include "settings_model.h"
 #include "settings_validate.h"
@@ -47,7 +48,7 @@ typedef struct {
     bool disarm_request;
     bool calib_request;
     bool calib_confirm;
-    int calib_event;   /* calib_event enum value (CALIB_EVENT_*) */
+    calib_event calib_event;   /* discriminated calibration operator event */
 } control_loop_ui_events;
 
 /**

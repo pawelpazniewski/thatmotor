@@ -21,6 +21,8 @@ void run_state_machine_tests(void);
 void run_esc_calibration_tests(void);
 void run_loop_step_tests(void);
 void run_api_contract_tests(void);
+void run_command_parse_tests(void);
+void run_params_decide_tests(void);
 void run_wifi_ap_config_tests(void);
 void run_led_pattern_tests(void);
 
@@ -43,6 +45,8 @@ int main(void)
     run_esc_calibration_tests();
     run_loop_step_tests();
     run_api_contract_tests();
+    run_command_parse_tests();
+    run_params_decide_tests();
     run_wifi_ap_config_tests();
     run_led_pattern_tests();
     return UNITY_END();

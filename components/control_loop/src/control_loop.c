@@ -182,7 +182,7 @@ static void apply_ui_events(loop_inputs *in)
     in->ui_disarm_request = ev.disarm_request;
     in->ui_calib_request = ev.calib_request;
     in->ui_calib_confirm = ev.calib_confirm;
-    in->calib_event = (calib_event)ev.calib_event;
+    in->calib_event = ev.calib_event;
 }
 
 /* Read the two control channels into the per-cycle input snapshot. */

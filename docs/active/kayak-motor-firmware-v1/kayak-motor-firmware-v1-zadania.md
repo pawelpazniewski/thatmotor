@@ -340,6 +340,25 @@ Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=4, P3=5). Raport: `r
 
 ---
 
+## Do poprawy po review fazy 6
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=4, P3=8). Raport: `review-faza-6.md`. Testy hosta 184/184 PASS (154→184, +30: 8 api_contract + 8 wifi_ap_config + 14 led_pattern) — na żywo; build idf.py set-target esp32 EXIT=0 — na żywo. E2E/HW: ODROCZONE (brak sprzętu i przeglądarki — decyzja użytkownika; 12 scenariuszy do ręcznej weryfikacji w raporcie). Bezpieczeństwo: AP non-OPEN guard REALNY (abort przed esp_wifi_start, niezależny od NDEBUG, brak ścieżki do OPEN, hasło=placeholder); JSON parsing bez OOB/injection (re-walidacja settings_validate + escaping overflow-safe); 409/single-writer EGZEKWOWANE W FIRMWARE (gate przy aplikacji w pętli, brak TOCTOU, mailbox length-1, params_api nie pisze s_params). Regresje: BRAK (184/184).
+
+- [x] 🟠 [important] **components/web_panel/src/http_server.c:84** — `read_body` pojedynczy `httpd_req_recv` traktowany jako całe ciało; partial read (TCP) truncuje JSON (fail-safe 400, ale legalny duży POST może spuriously failować). Pętla recv do `received == content_len` lub error/timeout.
+- [x] 🟠 [important] **components/web_panel/src/http_server.c:107-138** — `post_command` omija warstwę `*_api`: inlinuje parsowanie (`strstr` substring) + literał enwelopy błędu w transporcie (duplikacja kontraktu, §14/§4). Substring matching: `{"note":"do not arm"}` dopasuje `"arm"` (i tak gated przez state machine). Wydzielić `command_api_handle_post(...)` + parsować `cmd` przez cJSON (exact) + `api_build_error`.
+- [x] 🟠 [important] **components/web_panel/src/params_api.c + params_json.c** — handlery bez testów hosta (zależność cJSON/control_loop). Niepokryte: 409/NOT_DISARMED→status, BAD_REQUEST/INTERNAL paths, parowania status↔code (409/400/500), round-trip serialize/parse + clamp_u16 + partial-overlay. Headline scenariusz "zapis w ARMED→409" niezweryfikowany w wiringu (tylko leaf string w api_contract). Stub cJSON+control_loop do harness albo zalogować known coverage gap w closeout.
+- [x] 🟠 [important] **components/control_loop/include/control_loop.h:50** — `control_loop_ui_events.calib_event` typowane `int` zamiast `calib_event` (dwa casty w `apply_ui_events`/`parse_command`); §10 type-safety. Typ `calib_event` + `#include "esc_calibration.h"` (pure header, coupling nie rośnie).
+- [ ] 🟡 [nit] **components/web_panel/src/http_server.c:127 + ws_telemetry.c:49** — gołe `256` (`reqbuf`/`json`) bez named constant (kontrast z `HTTP_REQ_MAX`/`HTTP_BODY_MAX`); §1/§6.
+- [ ] 🟡 [nit] **components/web_panel/src/api_contract.c:88** — `finalise` gęsty ternary `out[ok && pos < out_size ? pos : 0]`; §11 czytelność. Early-return.
+- [ ] 🟡 [nit] **components/web_panel/src/http_server.c:97** — overflow ścieżka `post_params` woła `params_api_handle_post("", ...)` by reużyć 400 envelope; couplinguje do empty-string handlingu. Czytelniej `api_build_error` bezpośrednio.
+- [ ] 🟡 [nit] **components/web_panel (transport+ws)** — brak auth/authz na endpointach i WS; jedyna granica WPA2-PSK. Świadoma decyzja (single-operator SoftAP, bezpieczeństwo gated rc_valid+DISARMED). Zapisać jawne założenie zaufania: asocjacja do AP == pełna władza. Brak CSRF (low risk na izolowanym AP).
+- [ ] 🟡 [nit] **components/control_loop/src/control_loop.c (get_snapshot/get_active_params)** — unlocked struct copy współbieżnie z pętlą (tearing). Udokumentowany lossy design, benign dla read-only display. Zostawić jak jest / odnotować known limitation.
+- [ ] 🟡 [nit] **test/host/test_api_contract.c** — brak bezpośrednich asercji stabilnego stringa dla `BAD_REQUEST`/`VALIDATION_FAILED`/`INTERNAL_ERROR` i gałęzi `API_OK→INTERNAL` (api_contract.c:112-113). Tylko `NOT_DISARMED` zapięty.
+- [ ] 🟡 [nit] **test/host/test_api_contract.c** — brak testu too-small-buffer dla `api_build_success` (tylko `api_build_error` pokryty). Ta sama maszyneria, niskie ryzyko.
+- [ ] 🟡 [nit] **test/host/test_led_pattern.c** — FAILSAFE "niezależny od poprzedniego stanu" gwarantowany strukturalnie (`led_pattern_on` bezstanowy); test asercjuje tylko oś `calibrated`. Odnotować że niezależność od poprzedniego stanu jest by-construction.
+
+---
+
 ## Źródła
 - Requirements doc: docs/requirements/2026-06-16-kayak-motor-firmware-v1-requirements-v2.md
 - Plan techniczny: docs/plans/2026-06-16-001-feat-kayak-motor-firmware-v1-plan.md
