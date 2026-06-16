@@ -2,7 +2,12 @@
 
 #include "driver/ledc.h"
 #include "esp_err.h"
+#include "pwm_out_logic.h"
 #include "pwm_us_to_duty.h"
+
+/* The pure logic mirrors the channel count; keep the two definitions in sync. */
+_Static_assert(PWM_OUT_LOGIC_CHANNEL_COUNT == PWM_OUT_CHANNEL_COUNT,
+               "pwm_out_logic channel count out of sync with PwmOutChannel");
 
 /* GPIO assignment (fixed pin map from the plan). */
 #define PWM_OUT_SERVO_GPIO 18
@@ -67,12 +72,12 @@ esp_err_t pwm_out_init(void)
 
 esp_err_t pwm_out_write_us(PwmOutChannel channel, uint32_t value_us)
 {
-    if (channel < 0 || channel >= PWM_OUT_CHANNEL_COUNT) {
+    uint32_t duty = 0;
+    PwmOutLogicResult result =
+        pwm_out_resolve_duty(channel, value_us, PWM_OUT_WINDOW, &duty);
+    if (result != PWM_OUT_LOGIC_OK) {
         return ESP_ERR_INVALID_ARG;
     }
-
-    uint32_t clamped_us = clamp_pwm_us(value_us, PWM_OUT_WINDOW);
-    uint32_t duty = pwm_us_to_duty(clamped_us);
 
     esp_err_t err = ledc_set_duty(PWM_OUT_SPEED_MODE, CHANNEL_MAP[channel], duty);
     if (err != ESP_OK) {

@@ -17,6 +17,7 @@ target_include_directories(unity PUBLIC unity)
 set(PURE_SOURCES
     ${REPO_ROOT}/components/safety_clamp/src/safety_clamp.c
     ${REPO_ROOT}/components/pwm_out/src/pwm_us_to_duty.c
+    ${REPO_ROOT}/components/pwm_out/src/pwm_out_logic.c
 )
 
 set(PURE_INCLUDE_DIRS
@@ -29,6 +30,7 @@ set(TEST_SOURCES
     test_main.c
     test_safety_clamp.c
     test_pwm_us_to_duty.c
+    test_pwm_out_logic.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})

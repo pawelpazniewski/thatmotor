@@ -258,6 +258,20 @@ Weryfikacja:
 - [ ] Odbiornik: zachowanie przy utracie RF (gaśnie/hold-last/preset) + konfiguracja failsafe odbiornika
 - [ ] Odbiornik: zmierzony okres ramki (do progu okresu w RC_valid — NIE zakładać 20 ms)
 
+## Do poprawy po review fazy 0
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=2, P3=5). Raport: `review-faza-0.md`.
+
+- [x] 🟠 [important] **components/safety_clamp/src/safety_clamp.c:7** — `assert(min<=max)` to jedyna ochrona inwariantu, kompiluje się do no-op w release (`NDEBUG`); header obiecuje „fail-fast" którego w release nie ma. Zamienić na bezwarunkowy fail-safe niezależny od `NDEBUG` (normalizacja okna lub `abort()` aktywny w release) — najpóźniej przed wprowadzeniem okien z NVS/kalibracji (Unit 8/9).
+- [x] 🟠 [important] **components/pwm_out/src/pwm_out.c:68-82** — realny code-path `pwm_out_write_us` nieprzetestowany (walidacja kanału → `ESP_ERR_INVALID_ARG` + dowód clamp-before-convert na produkcyjnej funkcji). Wyekstrahować czystą logikę do `PURE_SOURCES` i dodać happy path + error case (coding-rules §2).
+- [ ] 🟡 [nit] **components/pwm_out/src/pwm_out.c:70** — tautologiczne `channel < 0` dla enum bez wartości ujemnych (potencjalny `-Wtype-limits`); usunąć dolne porównanie lub rzutować na `unsigned`.
+- [ ] 🟡 [nit] **components/pwm_out/src/pwm_us_to_duty.c:8** — komentarz „fits in uint64_t (max ~ 20000 * 65536)" niedoszacowany; powołać się na `UINT32_MAX * 65536` (funkcja nie limituje zakresu wejścia).
+- [ ] 🟡 [nit] **components/pwm_out/src/pwm_out.c:20,25** — niespójny prefix `CHANNEL_MAP`/`GPIO_MAP` vs `PWM_OUT_*`; ujednolicić do `PWM_OUT_CHANNEL_MAP`/`PWM_OUT_GPIO_MAP`.
+- [ ] 🟡 [nit] **sdkconfig.defaults:18** — `CONFIG_HTTPD_WS_SUPPORT=y` przedwczesny w Fazie 0 (martwy do Unit 10); świadoma decyzja zgodna z zadania.md:18 — do rozważenia minimalizacja attack surface.
+- [ ] 🟡 [nit] **components/*/include** — typy PascalCase (`PwmWindow`, `PwmOutChannel`) vs konwencja ESP-IDF `snake_case_t`; zgodne z literą reguł §7 — potwierdzić spójność w kolejnych fazach.
+
+---
+
 ## Źródła
 - Requirements doc: docs/requirements/2026-06-16-kayak-motor-firmware-v1-requirements-v2.md
 - Plan techniczny: docs/plans/2026-06-16-001-feat-kayak-motor-firmware-v1-plan.md
