@@ -1,0 +1,18 @@
+# Default sdkconfig for kayak-motor firmware. Pin via ESP-IDF v5.5.
+# Local `sdkconfig` (generated) is gitignored; this file is the source of truth.
+
+# --- Custom partition table (adds dedicated `appcfg` NVS partition) ---
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# --- Task watchdog: panic on timeout so a hung control loop forces a reset ---
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
+
+# --- Brownout detector enabled: reset on supply sag (SI-1) ---
+CONFIG_ESP_BROWNOUT_DET=y
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_7=y
+
+# --- HTTP server WebSocket support for live telemetry panel (Unit 10) ---
+CONFIG_HTTPD_WS_SUPPORT=y

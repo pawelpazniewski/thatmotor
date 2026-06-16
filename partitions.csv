@@ -1,0 +1,10 @@
+# Partition table for kayak-motor firmware.
+# `nvs`    : default IDF system NVS (WiFi calibration, system state).
+# `appcfg` : dedicated NVS partition for application settings (versioned blob +
+#            CRC32, Unit 8) — kept separate from system `nvs` so a corrupt or
+#            reflashed app config never touches system NVS and vice versa.
+# Name,     Type, SubType, Offset,   Size,    Flags
+nvs,        data, nvs,     0x9000,   0x6000,
+phy_init,   data, phy,     0xf000,   0x1000,
+factory,    app,  factory, 0x10000,  0x180000,
+appcfg,     data, nvs,     ,         0x6000,

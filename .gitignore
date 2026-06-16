@@ -4,3 +4,10 @@ sdkconfig.old
 .DS_Store
 *.pyc
 __pycache__/
+
+# ESP-IDF managed component cache and dependency lock
+managed_components/
+dependencies.lock
+
+# Host test build output
+test/host/build/

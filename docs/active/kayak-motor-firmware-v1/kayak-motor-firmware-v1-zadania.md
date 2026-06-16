@@ -14,16 +14,16 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 Wymagania: baza; R16 (partycja), SI-1 (watchdog/brownout). Zależności: brak.
 
 Implementacja:
-- [ ] `CMakeLists.txt` (root), `main/CMakeLists.txt`, `main/app_main.c` (placeholder boot do bezpiecznego stanu)
-- [ ] `sdkconfig.defaults`: `CONFIG_ESP_TASK_WDT_PANIC=y`, `CONFIG_ESP_TASK_WDT_EN=y`, brownout enabled, `CONFIG_HTTPD_WS_SUPPORT=y`; pinować tag IDF
-- [ ] `partitions.csv` z dedykowaną partycją `appcfg` (data/nvs) osobno od `nvs`
-- [ ] Puste komponenty z `CMakeLists.txt` (safety_clamp, pwm_out, rc_capture, rc_validity, settings, signal_chain, state_machine, control_loop, web_panel, led_status)
-- [ ] `test/host/CMakeLists.txt` + integracja Unity dla komponentów pure (lub target `linux`)
-- [ ] `.gitignore` (build/, lokalny sdkconfig)
-- [ ] `docs/hardware/bom-and-measurements.md` (pull-downy G18/G19, tap 12V przed kill-switchem, decoupling, lista pomiarów ze źródła)
+- [x] `CMakeLists.txt` (root), `main/CMakeLists.txt`, `main/app_main.c` (placeholder boot do bezpiecznego stanu)
+- [x] `sdkconfig.defaults`: `CONFIG_ESP_TASK_WDT_PANIC=y`, `CONFIG_ESP_TASK_WDT_EN=y`, brownout enabled, `CONFIG_HTTPD_WS_SUPPORT=y`; pinować tag IDF
+- [x] `partitions.csv` z dedykowaną partycją `appcfg` (data/nvs) osobno od `nvs`
+- [x] Puste komponenty z `CMakeLists.txt` (safety_clamp, pwm_out, rc_capture, rc_validity, settings, signal_chain, state_machine, control_loop, web_panel, led_status)
+- [x] `test/host/CMakeLists.txt` + integracja Unity dla komponentów pure (lub target `linux`)
+- [x] `.gitignore` (build/, lokalny sdkconfig)
+- [x] `docs/hardware/bom-and-measurements.md` (pull-downy G18/G19, tap 12V przed kill-switchem, decoupling, lista pomiarów ze źródła)
 
 Testy:
-- [ ] Test: [Unit] Host build kompiluje pusty komponent pure i przechodzi trywialny test Unity
+- [x] Test: [Unit] Host build kompiluje pusty komponent pure i przechodzi trywialny test Unity
 - [ ] Test: [HW] `idf.py build` przechodzi; flash bootuje; log pokazuje reset reason + wejście do bezpiecznego placeholdera
 
 Weryfikacja:
@@ -33,15 +33,15 @@ Weryfikacja:
 Wymagania: R1, SI-1, SI-2 (struktura), SI-3. Zależności: Unit 1.
 
 Implementacja:
-- [ ] `components/safety_clamp/include/safety_clamp.h` + `src/safety_clamp.c` — `clamp_pwm_us(value, window)` bezwarunkowy
-- [ ] `components/pwm_out/include/pwm_out.h` + `src/pwm_out.c` — init LEDC, `pwm_out_write_us` (woła clamp wewnętrznie)
-- [ ] `components/pwm_out/src/pwm_us_to_duty.c` (+`.h`) — pure konwersja µs→duty
-- [ ] Modyfikuj `main/app_main.c` — najpierw init pwm_out + write neutral/center, potem reszta
-- [ ] Audyt: tylko `pwm_out` linkuje driver LEDC (żaden inny moduł nie woła LEDC bezpośrednio)
+- [x] `components/safety_clamp/include/safety_clamp.h` + `src/safety_clamp.c` — `clamp_pwm_us(value, window)` bezwarunkowy
+- [x] `components/pwm_out/include/pwm_out.h` + `src/pwm_out.c` — init LEDC, `pwm_out_write_us` (woła clamp wewnętrznie)
+- [x] `components/pwm_out/src/pwm_us_to_duty.c` (+`.h`) — pure konwersja µs→duty
+- [x] Modyfikuj `main/app_main.c` — najpierw init pwm_out + write neutral/center, potem reszta
+- [x] Audyt: tylko `pwm_out` linkuje driver LEDC (żaden inny moduł nie woła LEDC bezpośrednio)
 
 Testy:
-- [ ] Test: [Unit] `clamp_pwm_us`: <min→min; >max→max; w oknie→bez zmian; na granicy→granica (inclusive)
-- [ ] Test: [Unit] `pwm_us_to_duty`: 1000/1500/2000 µs → 3277/4915/6554; wartości spoza okna najpierw zclampowane
+- [x] Test: [Unit] `clamp_pwm_us`: <min→min; >max→max; w oknie→bez zmian; na granicy→granica (inclusive)
+- [x] Test: [Unit] `pwm_us_to_duty`: 1000/1500/2000 µs → 3277/4915/6554; wartości spoza okna najpierw zclampowane
 - [ ] Test: [HW/Plan pomiarów] Oscyloskop: po boocie G18/G19 emitują neutral/centrum; zmierzyć okno martwe (reset→pierwszy impuls); zachowanie przy watchdog-resecie i brownout-sag; sprawdzić pull-downy
 
 Weryfikacja:
