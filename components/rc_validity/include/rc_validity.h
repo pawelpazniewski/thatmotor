@@ -50,12 +50,21 @@ typedef struct {
 /**
  * Pure single-frame validity predicate for one channel.
  *
- * @param sample  Latest raw capture sample for the channel.
- * @param now_us  Current time in microseconds (same epoch as last_edge_us).
- * @param cfg     Validity thresholds.
+ * CONTRACT (epoch): now_ticks and sample->last_edge_ticks MUST both be in the
+ * same MCPWM free-running 32-bit capture-counter domain (12.5 ns/tick). Recency
+ * is computed with wrap-safe modular subtraction in that tick domain (via
+ * cap_ticks_elapsed), so it stays correct right after boot and across every
+ * ~53.6 s counter wrap. Do NOT pass esp_timer_get_time(): that is a different
+ * epoch and does not wrap at 2^32 ticks. The producer of now_ticks is the same
+ * MCPWM capture timer that stamps last_edge_ticks.
+ *
+ * @param sample     Latest raw capture sample for the channel.
+ * @param now_ticks  Current capture-counter tick (same domain as
+ *                   sample->last_edge_ticks).
+ * @param cfg        Validity thresholds (edge_timeout_us in microseconds).
  * @return true if this frame's pulse is valid, false otherwise.
  */
-bool channel_valid(const rc_channel_sample *sample, uint32_t now_us,
+bool channel_valid(const rc_channel_sample *sample, uint32_t now_ticks,
                    const rc_channel_cfg *cfg);
 
 /**

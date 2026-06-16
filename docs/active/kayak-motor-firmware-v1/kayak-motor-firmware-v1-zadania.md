@@ -272,6 +272,20 @@ Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=2, P3=5). Raport: `r
 
 ---
 
+## Do poprawy po review fazy 1
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=2, P3=5). Raport: `review-faza-1.md`. Testy hosta 42/42 PASS; build idf.py EXIT=0 — oba na żywo.
+
+- [x] 🟠 [important] **components/rc_capture/src/rc_capture.c:56 + components/rc_validity/src/rc_validity.c:29** — epoch/wrap `last_edge_us`: konwersja absolutnego 32-bit licznika capture zawija co ~53,6 s; `edge_recent` wymaga `now_us` w tym samym epoku ticków (nagłówek to obiecuje, ale producenta brak). Naiwne `esp_timer_get_time()` da błędną recency po starcie i wokół wrapu. Domknąć w Unit 7 (integracja pętli): `now_us` z tego samego licznika + porównanie modularne, albo recency liczona jako wiek/licznik ramek w ISR. → **NAPRAWIONE (cykl 1):** kontrakt domknięty na warstwie pure. `rc_channel_sample.last_edge_us`→`last_edge_ticks` (raw 32-bit capture tick, NIE konwertowany); `channel_valid` przyjmuje `now_ticks` w domenie licznika capture; recency liczona przez `cap_ticks_elapsed` (modular subtraction wrap-safe) → `cap_ticks_to_us` → porównanie z `edge_timeout_us`. Kontrakt epoch udokumentowany w nagłówku (zakaz `esp_timer_get_time()`). Testy: recency poprawna wokół wrapu + stary edge wokół wrapu → not recent.
+- [x] 🟠 [important] **test/host/test_rc_validity.c** — brak testu granicy inclusive: predykat używa `>=`/`<=`, testy sprawdzają tylko wartości wyraźnie poza/wewnątrz. Dodać asercje boundary: width == 800/2200 → true; period == expected±tol → true; expected±(tol+1) → false. → **NAPRAWIONE (cykl 1):** dodano `test_width_at_min_boundary_is_valid` (800), `test_width_at_max_boundary_is_valid` (2200), `test_period_at_upper_tolerance_boundary_is_valid` (expected+tol), `test_period_at_lower_tolerance_boundary_is_valid` (expected-tol), `test_period_one_us_past_tolerance_is_invalid` (expected+tol+1 → false).
+- [ ] 🟡 [nit] **components/rc_capture/src/rc_capture.c:130** — torn read w `rc_capture_read` (kopia 16-bajtowej struktury współbieżnie z ISR może zmieszać pola). Świadomie udokumentowany "best-effort snapshot" + downstream debounce; utwardzić przy integracji pętli (seqlock / krótkie disable IRQ).
+- [ ] 🟡 [nit] **components/settings/src/settings_validate.c:122-166** — `nvs_error` zawsze `false` (własność warstwy NVS, Unit 8). Pole kontraktu bez realnego użycia/testu do Unit 8.
+- [ ] 🟡 [nit] **components/settings/src/settings_validate.c:24-85** — `validate_fields` ~60 linii (> 50, coding-rules §1); płaska lista przypisań, rozważyć podział na grupy rc/servo/esc/safety jeśli przyrośnie.
+- [ ] 🟡 [nit] **components/rc_capture/src/rc_capture.c:19** — typy PascalCase (`RcCaptureChannel`) vs konwencja ESP-IDF `snake_case_t` (kontynuacja nitu z fazy 0); potwierdzić jednolitą konwencję projektu.
+- [ ] 🟡 [nit] **components/rc_capture/src/rc_capture.c:118-122** — brak deinit/rollback przy częściowym sukcesie init (timer/kanały nie zwalniane przy fail kanału 2); akceptowalne dla zasobu na całe życie urządzenia.
+
+---
+
 ## Źródła
 - Requirements doc: docs/requirements/2026-06-16-kayak-motor-firmware-v1-requirements-v2.md
 - Plan techniczny: docs/plans/2026-06-16-001-feat-kayak-motor-firmware-v1-plan.md

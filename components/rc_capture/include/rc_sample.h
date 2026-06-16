@@ -31,16 +31,20 @@ typedef enum {
  * by the validity predicate in rc_validity. Carries no validity judgement of
  * its own.
  *
- * width_us     Last measured pulse width (high time) in microseconds.
- * period_us    Last measured frame period (rising-edge to rising-edge) in us.
- * last_edge_us Timestamp of the last rising edge, in microseconds, for
- *              edge-recency checks. Monotonic within a counter epoch.
- * edge_seen    True once at least one complete pulse has been measured.
+ * width_us        Last measured pulse width (high time) in microseconds.
+ * period_us       Last measured frame period (rising-edge to rising-edge) in us.
+ * last_edge_ticks Raw timestamp of the last rising edge, in capture-timer ticks
+ *                 (12.5 ns/tick), in the MCPWM free-running 32-bit counter
+ *                 domain. Kept as raw ticks (NOT converted to us) so recency can
+ *                 be computed with wrap-safe modular subtraction in the same
+ *                 counter epoch. The recency "now" MUST come from this same
+ *                 capture-tick domain (see channel_valid).
+ * edge_seen       True once at least one complete pulse has been measured.
  */
 typedef struct {
     uint32_t width_us;
     uint32_t period_us;
-    uint32_t last_edge_us;
+    uint32_t last_edge_ticks;
     bool edge_seen;
 } rc_channel_sample;
 

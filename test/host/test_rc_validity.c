@@ -10,15 +10,20 @@ static const rc_channel_cfg CFG = {
     .edge_timeout_us = 30000U,
 };
 
-/* A nominal-valid sample at time NOW. */
-#define NOW_US 1000000U
+/* Capture-counter resolution: 80 MHz -> 80 ticks per microsecond. now_ticks and
+ * last_edge_ticks live in this same domain (NOT esp_timer microseconds). */
+#define TICKS_PER_US 80U
+
+/* "Now" as a capture-counter tick, mid-range so it is far from a wrap edge. */
+#define NOW_TICKS 1000000U
 
 static rc_channel_sample valid_sample(void)
 {
     rc_channel_sample s = {
         .width_us = 1500U,
         .period_us = 20000U,
-        .last_edge_us = NOW_US - 1000U, /* edge 1 ms ago */
+        /* edge 1 ms ago = 1000 us * 80 ticks/us = 80000 ticks earlier */
+        .last_edge_ticks = NOW_TICKS - (1000U * TICKS_PER_US),
         .edge_seen = true,
     };
     return s;
@@ -30,7 +35,7 @@ static void test_valid_pulse_is_valid(void)
     rc_channel_sample s = valid_sample();
 
     /* Act */
-    bool result = channel_valid(&s, NOW_US, &CFG);
+    bool result = channel_valid(&s, NOW_TICKS, &CFG);
 
     /* Assert */
     TEST_ASSERT_TRUE(result);
@@ -38,12 +43,12 @@ static void test_valid_pulse_is_valid(void)
 
 static void test_no_recent_edge_is_invalid(void)
 {
-    /* Arrange: last edge well beyond edge_timeout_us. */
+    /* Arrange: last edge well beyond edge_timeout_us (100 ms ago). */
     rc_channel_sample s = valid_sample();
-    s.last_edge_us = NOW_US - 100000U; /* 100 ms ago */
+    s.last_edge_ticks = NOW_TICKS - (100000U * TICKS_PER_US);
 
     /* Act / Assert */
-    TEST_ASSERT_FALSE(channel_valid(&s, NOW_US, &CFG));
+    TEST_ASSERT_FALSE(channel_valid(&s, NOW_TICKS, &CFG));
 }
 
 static void test_never_seen_edge_is_invalid(void)
@@ -53,7 +58,32 @@ static void test_never_seen_edge_is_invalid(void)
     s.edge_seen = false;
 
     /* Act / Assert */
-    TEST_ASSERT_FALSE(channel_valid(&s, NOW_US, &CFG));
+    TEST_ASSERT_FALSE(channel_valid(&s, NOW_TICKS, &CFG));
+}
+
+static void test_recency_correct_across_counter_wrap(void)
+{
+    /* Arrange: edge stamped just before the 32-bit counter wraps, "now" just
+     * after the wrap. Elapsed = 1000 us -> within the 30 ms timeout. A naive
+     * subtraction in the us domain would mis-judge this; modular tick
+     * subtraction must still report recent. */
+    rc_channel_sample s = valid_sample();
+    uint32_t now_ticks = 1000U * TICKS_PER_US - 1U; /* just past wrap */
+    s.last_edge_ticks = now_ticks - (1000U * TICKS_PER_US); /* wraps below 0 */
+
+    /* Act / Assert: edge is 1 ms old across the wrap -> still valid. */
+    TEST_ASSERT_TRUE(channel_valid(&s, now_ticks, &CFG));
+}
+
+static void test_stale_edge_across_wrap_is_invalid(void)
+{
+    /* Arrange: same wrap geometry but the edge is 100 ms old (> timeout). */
+    rc_channel_sample s = valid_sample();
+    uint32_t now_ticks = 1000U * TICKS_PER_US - 1U;
+    s.last_edge_ticks = now_ticks - (100000U * TICKS_PER_US);
+
+    /* Act / Assert: too old even across the wrap -> not recent. */
+    TEST_ASSERT_FALSE(channel_valid(&s, now_ticks, &CFG));
 }
 
 static void test_width_too_low_is_invalid(void)
@@ -63,7 +93,7 @@ static void test_width_too_low_is_invalid(void)
     s.width_us = 700U;
 
     /* Act / Assert */
-    TEST_ASSERT_FALSE(channel_valid(&s, NOW_US, &CFG));
+    TEST_ASSERT_FALSE(channel_valid(&s, NOW_TICKS, &CFG));
 }
 
 static void test_width_too_high_is_invalid(void)
@@ -73,7 +103,27 @@ static void test_width_too_high_is_invalid(void)
     s.width_us = 2300U;
 
     /* Act / Assert */
-    TEST_ASSERT_FALSE(channel_valid(&s, NOW_US, &CFG));
+    TEST_ASSERT_FALSE(channel_valid(&s, NOW_TICKS, &CFG));
+}
+
+static void test_width_at_min_boundary_is_valid(void)
+{
+    /* Arrange: width exactly at width_min_us (inclusive boundary). */
+    rc_channel_sample s = valid_sample();
+    s.width_us = CFG.width_min_us;
+
+    /* Act / Assert */
+    TEST_ASSERT_TRUE(channel_valid(&s, NOW_TICKS, &CFG));
+}
+
+static void test_width_at_max_boundary_is_valid(void)
+{
+    /* Arrange: width exactly at width_max_us (inclusive boundary). */
+    rc_channel_sample s = valid_sample();
+    s.width_us = CFG.width_max_us;
+
+    /* Act / Assert */
+    TEST_ASSERT_TRUE(channel_valid(&s, NOW_TICKS, &CFG));
 }
 
 static void test_period_out_of_tolerance_is_invalid(void)
@@ -83,7 +133,37 @@ static void test_period_out_of_tolerance_is_invalid(void)
     s.period_us = 30000U;
 
     /* Act / Assert */
-    TEST_ASSERT_FALSE(channel_valid(&s, NOW_US, &CFG));
+    TEST_ASSERT_FALSE(channel_valid(&s, NOW_TICKS, &CFG));
+}
+
+static void test_period_at_upper_tolerance_boundary_is_valid(void)
+{
+    /* Arrange: period exactly at expected + tolerance (inclusive). */
+    rc_channel_sample s = valid_sample();
+    s.period_us = CFG.period_expected_us + CFG.period_tol_us;
+
+    /* Act / Assert */
+    TEST_ASSERT_TRUE(channel_valid(&s, NOW_TICKS, &CFG));
+}
+
+static void test_period_at_lower_tolerance_boundary_is_valid(void)
+{
+    /* Arrange: period exactly at expected - tolerance (inclusive). */
+    rc_channel_sample s = valid_sample();
+    s.period_us = CFG.period_expected_us - CFG.period_tol_us;
+
+    /* Act / Assert */
+    TEST_ASSERT_TRUE(channel_valid(&s, NOW_TICKS, &CFG));
+}
+
+static void test_period_one_us_past_tolerance_is_invalid(void)
+{
+    /* Arrange: one microsecond beyond the upper tolerance bound. */
+    rc_channel_sample s = valid_sample();
+    s.period_us = CFG.period_expected_us + CFG.period_tol_us + 1U;
+
+    /* Act / Assert */
+    TEST_ASSERT_FALSE(channel_valid(&s, NOW_TICKS, &CFG));
 }
 
 static void test_rc_valid_both_good(void)
@@ -161,9 +241,16 @@ void run_rc_validity_tests(void)
     RUN_TEST(test_valid_pulse_is_valid);
     RUN_TEST(test_no_recent_edge_is_invalid);
     RUN_TEST(test_never_seen_edge_is_invalid);
+    RUN_TEST(test_recency_correct_across_counter_wrap);
+    RUN_TEST(test_stale_edge_across_wrap_is_invalid);
     RUN_TEST(test_width_too_low_is_invalid);
     RUN_TEST(test_width_too_high_is_invalid);
+    RUN_TEST(test_width_at_min_boundary_is_valid);
+    RUN_TEST(test_width_at_max_boundary_is_valid);
     RUN_TEST(test_period_out_of_tolerance_is_invalid);
+    RUN_TEST(test_period_at_upper_tolerance_boundary_is_valid);
+    RUN_TEST(test_period_at_lower_tolerance_boundary_is_valid);
+    RUN_TEST(test_period_one_us_past_tolerance_is_invalid);
     RUN_TEST(test_rc_valid_both_good);
     RUN_TEST(test_rc_valid_ch1_bad);
     RUN_TEST(test_rc_valid_ch2_bad);

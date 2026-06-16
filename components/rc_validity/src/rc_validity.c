@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "cap_math.h"
+
 /* Absolute difference for unsigned timestamps/periods. */
 static uint32_t abs_diff_u32(uint32_t a, uint32_t b)
 {
@@ -23,19 +25,24 @@ static bool period_in_tolerance(const rc_channel_sample *sample,
            cfg->period_tol_us;
 }
 
-static bool edge_recent(const rc_channel_sample *sample, uint32_t now_us,
+static bool edge_recent(const rc_channel_sample *sample, uint32_t now_ticks,
                         const rc_channel_cfg *cfg)
 {
-    return abs_diff_u32(now_us, sample->last_edge_us) <= cfg->edge_timeout_us;
+    /* Wrap-safe: elapsed is computed by unsigned modular subtraction in the
+     * 32-bit capture-tick domain (cap_ticks_elapsed), so it stays correct
+     * across a counter wrap, then is converted to microseconds for comparison
+     * against the human-readable timeout. */
+    uint32_t elapsed_ticks = cap_ticks_elapsed(now_ticks, sample->last_edge_ticks);
+    return cap_ticks_to_us(elapsed_ticks) <= cfg->edge_timeout_us;
 }
 
-bool channel_valid(const rc_channel_sample *sample, uint32_t now_us,
+bool channel_valid(const rc_channel_sample *sample, uint32_t now_ticks,
                    const rc_channel_cfg *cfg)
 {
     if (!sample->edge_seen) {
         return false;
     }
-    if (!edge_recent(sample, now_us, cfg)) {
+    if (!edge_recent(sample, now_ticks, cfg)) {
         return false;
     }
     if (!width_in_range(sample, cfg)) {

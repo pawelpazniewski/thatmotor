@@ -53,7 +53,7 @@ static bool IRAM_ATTR on_cap(mcpwm_cap_channel_handle_t channel,
         state->prev_rising_valid = true;
         state->rising_edge_ticks = ticks;
         state->rising_pending = true;
-        state->sample.last_edge_us = cap_ticks_to_us(ticks);
+        state->sample.last_edge_ticks = ticks;
         return false;
     }
 
