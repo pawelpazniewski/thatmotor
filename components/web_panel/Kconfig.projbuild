@@ -1,0 +1,29 @@
+menu "Kayak Motor Web Panel"
+
+    config KAYAK_AP_SSID
+        string "SoftAP SSID"
+        default "kayak-motor"
+        help
+            SSID advertised by the on-board WPA2-PSK access point.
+
+    config KAYAK_AP_PASSWORD
+        string "SoftAP WPA2-PSK password (8..63 chars, NOT a real secret default)"
+        default "CHANGE-ME-kayak"
+        help
+            WPA2-PSK passphrase for the on-board access point. MUST be 8..63
+            characters. The compiled-in default is a documented placeholder, not
+            a real secret: change it per deployment. An empty/too-short value
+            makes the AP config invalid and the firmware fail-fasts at startup
+            (it never starts an OPEN access point).
+
+    config KAYAK_AP_CHANNEL
+        int "SoftAP Wi-Fi channel"
+        default 6
+        range 1 13
+
+    config KAYAK_AP_MAX_CONN
+        int "SoftAP max simultaneous connections"
+        default 1
+        range 1 2
+
+endmenu

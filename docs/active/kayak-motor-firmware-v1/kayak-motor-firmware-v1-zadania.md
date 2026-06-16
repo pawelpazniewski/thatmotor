@@ -206,16 +206,17 @@ Weryfikacja:
 Wymagania: R8, R9, R10, R12, R14, R16, R17, SI-6. Zależności: Unit 4, 6/9, 7, 8.
 
 Implementacja:
-- [ ] `components/web_panel/src/wifi_ap.c` (+`.h`) — WPA2-PSK, kanał stały, max_connection 1–2, **assert authmode != OPEN + fail-fast**
-- [ ] `components/web_panel/src/http_server.c` (+`.h`) — `esp_http_server`, rejestracja URI
-- [ ] `components/web_panel/src/ws_telemetry.c` — push snapshotu przez `httpd_queue_work`, jeden slot, drop gdy klient w tyle
-- [ ] `components/web_panel/src/params_api.c` (+`.h`) — JSON parse/serialize, walidacja→pending→mailbox; 409 gdy nie DISARMED z kodem `SETTINGS_WRITE_REJECTED_NOT_DISARMED`
-- [ ] `components/web_panel/src/api_contract.c` (+`.h`) — pure budowa `{data, error:{code,message}}`
-- [ ] `web/index.html`, `web/app.js`, `web/style.css` — embed przez EMBED_FILES; live CH1/CH2/CH4 + wyjścia + status/flagi R16; edycja przy DISARMED; sekcja ESC_CALIBRATION z ostrzeżeniem „Remove propeller / disconnect motor"
-- [ ] Modyfikuj `main/app_main.c` — start AP + serwera po init pętli/NVS
+- [x] `components/web_panel/src/wifi_ap.c` (+`.h`) — WPA2-PSK, kanał stały, max_connection 1–2, **assert authmode != OPEN + fail-fast** (czysta `wifi_ap_config_valid` w `wifi_ap_config.{h,c}`, runtime guard `assert_ap_secure`→abort)
+- [x] `components/web_panel/src/http_server.c` (+`.h`) — `esp_http_server`, rejestracja URI (GET panel/app.js/style.css, GET/POST /api/params, POST /api/command, GET /ws)
+- [x] `components/web_panel/src/ws_telemetry.c` — push snapshotu przez `httpd_queue_work`, jeden slot, drop gdy klient w tyle (atomic in-flight flag, ~10 Hz timer)
+- [x] `components/web_panel/src/params_api.c` (+`.h`) — JSON parse/serialize (`params_json.{h,c}` + cJSON), walidacja→pending→mailbox; 409 gdy nie DISARMED z kodem `SETTINGS_WRITE_REJECTED_NOT_DISARMED`
+- [x] `components/web_panel/src/api_contract.c` (+`.h`) — pure budowa `{data, error:{code,message}}`
+- [x] `web/index.html`, `web/app.js`, `web/style.css` — embed przez EMBED_FILES; live CH1/CH2/CH4 + wyjścia + status/flagi R16; edycja przy DISARMED; sekcja ESC_CALIBRATION z ostrzeżeniem „Remove propeller / disconnect motor"
+- [x] Modyfikuj `main/app_main.c` — start AP + serwera po init pętli/NVS (+ `control_loop` rozszerzony o snapshot telemetrii, active params getter, UI-event mailbox)
 
 Testy:
-- [ ] Test: [Unit] `api_contract`: sukces→`{data,error:null}`; walidacja fail→`error.code/message`, brak data; zapis w ARMED→kod `SETTINGS_WRITE_REJECTED_NOT_DISARMED`
+- [x] Test: [Unit] `api_contract`: sukces→`{data,error:null}`; walidacja fail→`error.code/message`, brak data; zapis w ARMED→kod `SETTINGS_WRITE_REJECTED_NOT_DISARMED`
+- [x] Test: [Unit] `wifi_ap_config_valid`: OPEN/puste/NULL/za krótkie/za długie→invalid; WPA2 + hasło 8..63→valid (pokrywa intencję [HW] „assert non-OPEN" jako host-testowalny guard)
 - [ ] Test: [E2E] AP widoczny jako WPA2 (nie otwarty); połącz→panel ładuje; live pokazuje CH1/CH2/CH4 i wyjścia; flagi R16 widoczne przy pustym NVS (UNCALIBRATED)
 - [ ] Test: [E2E] W DISARMED zmień parametr→zapis OK, widoczny po restarcie; w ARMED próba zapisu→409 + kod; podgląd live działa zawsze
 - [ ] Test: [HW] Assert non-OPEN: build z pustym hasłem→fail-fast
@@ -227,13 +228,13 @@ Weryfikacja:
 Wymagania: R8, wsparcie R6, R16. Zależności: Unit 6, Unit 4 (równolegle z Unit 10).
 
 Implementacja:
-- [ ] `components/led_status/src/led_pattern.c` (+`.h`) — pure `(state, calibrated, t_ms)→led_on_off`
-- [ ] `components/led_status/src/led_driver.c` — HAL GPIO2
-- [ ] Wzory: DISARMED wolne miganie (0.5 Hz) + UNCALIBRATED double-blink nakładka; ARMED solid; FAILSAFE szybkie (5 Hz) cały czas; ESC_CALIBRATION double-blink
-- [ ] Modyfikuj `control_loop` — wołanie wzoru co cykl
+- [x] `components/led_status/src/led_pattern.c` (+`.h`) — pure `(state, calibrated, t_ms)→led_on_off`
+- [x] `components/led_status/src/led_driver.c` — HAL GPIO2 (`led_driver.{h,c}`, gpio_config push-pull, init off)
+- [x] Wzory: DISARMED wolne miganie (0.5 Hz) + UNCALIBRATED double-blink nakładka; ARMED solid; FAILSAFE szybkie (5 Hz) cały czas; ESC_CALIBRATION double-blink
+- [x] Modyfikuj `control_loop` — wołanie wzoru co cykl (`drive_led` z `now_ms()`)
 
 Testy:
-- [ ] Test: [Unit] każdy stan→oczekiwany wzór on/off w funkcji t_ms; FAILSAFE niezależny od poprzedniego stanu; UNCALIBRATED nakładka tylko gdy !calibrated
+- [x] Test: [Unit] każdy stan→oczekiwany wzór on/off w funkcji t_ms; FAILSAFE niezależny od poprzedniego stanu; UNCALIBRATED nakładka tylko gdy !calibrated
 - [ ] Test: [HW] Wizualna weryfikacja każdego stanu na płytce
 
 Weryfikacja:

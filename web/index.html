@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kayak Motor Controller</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Kayak Motor Controller</h1>
+    <div id="conn" class="badge badge-off">disconnected</div>
+  </header>
+
+  <section class="card">
+    <h2>Live</h2>
+    <div class="grid">
+      <div class="metric"><span class="label">State</span><span id="state" class="value">--</span></div>
+      <div class="metric"><span class="label">RC valid</span><span id="rc_valid" class="value">--</span></div>
+      <div class="metric"><span class="label">CH1 (steer)</span><span id="ch1_us" class="value">--</span></div>
+      <div class="metric"><span class="label">CH2 (throttle)</span><span id="ch2_us" class="value">--</span></div>
+      <div class="metric"><span class="label">CH4 (diag)</span><span id="ch4_us" class="value">--</span></div>
+      <div class="metric"><span class="label">Servo out</span><span id="servo_us" class="value">--</span></div>
+      <div class="metric"><span class="label">ESC out</span><span id="esc_us" class="value">--</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Status flags (R16)</h2>
+    <div class="grid">
+      <div class="metric"><span class="label">Source</span><span id="source" class="value">--</span></div>
+      <div class="metric"><span class="label">Settings valid</span><span id="settings_valid" class="value">--</span></div>
+      <div class="metric"><span class="label">Calibrated</span><span id="calibrated" class="value">--</span></div>
+      <div class="metric"><span class="label">Defaults used</span><span id="defaults_used" class="value">--</span></div>
+      <div class="metric"><span class="label">NVS error</span><span id="nvs_error" class="value">--</span></div>
+    </div>
+    <p id="uncal_warn" class="warn hidden">UNCALIBRATED: running on defaults. Calibrate before use.</p>
+  </section>
+
+  <section class="card">
+    <h2>Commands</h2>
+    <div class="btn-row">
+      <button id="btn-arm">Arm</button>
+      <button id="btn-disarm">Disarm</button>
+    </div>
+    <p class="hint">Parameter edits are accepted only while DISARMED. Writing in ARMED/FAILSAFE returns 409.</p>
+  </section>
+
+  <section class="card">
+    <h2>Parameters</h2>
+    <p id="edit-lock" class="warn">Editing is locked unless the controller is DISARMED.</p>
+    <form id="params-form"></form>
+    <div class="btn-row">
+      <button id="btn-save" type="button">Save parameters</button>
+    </div>
+    <p id="save-status" class="status"></p>
+  </section>
+
+  <section class="card danger">
+    <h2>ESC range calibration</h2>
+    <p class="warn strong">Remove propeller / disconnect motor before starting calibration.</p>
+    <label class="confirm"><input type="checkbox" id="calib-ack"> I have removed the propeller / disconnected the motor.</label>
+    <div class="btn-row">
+      <button id="btn-calib-start" disabled>Start calibration</button>
+      <button id="btn-calib-next" disabled>Next step</button>
+      <button id="btn-calib-cancel" disabled>Cancel</button>
+    </div>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>

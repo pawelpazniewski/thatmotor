@@ -32,6 +32,9 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/state_machine/src/state_machine.c
     ${REPO_ROOT}/components/state_machine/src/esc_calibration.c
     ${REPO_ROOT}/components/control_loop/src/loop_step.c
+    ${REPO_ROOT}/components/web_panel/src/api_contract.c
+    ${REPO_ROOT}/components/web_panel/src/wifi_ap_config.c
+    ${REPO_ROOT}/components/led_status/src/led_pattern.c
 )
 
 set(PURE_INCLUDE_DIRS
@@ -45,6 +48,8 @@ set(PURE_INCLUDE_DIRS
     ${REPO_ROOT}/components/signal_chain/src
     ${REPO_ROOT}/components/state_machine/include
     ${REPO_ROOT}/components/control_loop/include
+    ${REPO_ROOT}/components/web_panel/include
+    ${REPO_ROOT}/components/led_status/include
 )
 
 # Test sources.
@@ -65,6 +70,9 @@ set(TEST_SOURCES
     test_state_machine.c
     test_esc_calibration.c
     test_loop_step.c
+    test_api_contract.c
+    test_wifi_ap_config.c
+    test_led_pattern.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})

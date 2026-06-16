@@ -7,6 +7,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "led_driver.h"
+#include "led_pattern.h"
 #include "loop_step.h"
 #include "nvs_store.h"
 #include "pwm_out.h"
@@ -29,7 +31,15 @@ static settings_params s_params;
 static loop_state s_loop;
 static loop_validity_cfg s_validity_cfg;
 static QueueHandle_t s_pending_queue;
+static QueueHandle_t s_ui_queue;
 static commit_debounce_state s_commit;
+
+/* Load-time provenance flags (R16), surfaced verbatim to panel telemetry. */
+static settings_validation_result s_load_flags;
+
+/* Latest telemetry snapshot (lossy single slot, newest wins). The loop is the
+ * sole writer; panel readers copy the struct best-effort. */
+static control_loop_snapshot s_snapshot;
 
 /* Monotonic milliseconds for the commit debounce (esp_timer is monotonic). */
 static uint32_t now_ms(void)
@@ -57,12 +67,14 @@ static void rebuild_validity_cfg(const settings_params *params)
     s_validity_cfg.ch2 = make_channel_cfg(params);
 }
 
-esp_err_t control_loop_init(const settings_params *initial)
+esp_err_t control_loop_init(const settings_params *initial,
+                            const settings_validation_result *load_result)
 {
-    if (initial == NULL) {
+    if (initial == NULL || load_result == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
     s_params = *initial;
+    s_load_flags = *load_result;
     rebuild_validity_cfg(&s_params);
     loop_state_init(&s_loop, &s_params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
     commit_debounce_init(&s_commit, COMMIT_DEBOUNCE_DEFAULT_MS);
@@ -71,6 +83,38 @@ esp_err_t control_loop_init(const settings_params *initial)
     if (s_pending_queue == NULL) {
         return ESP_ERR_NO_MEM;
     }
+    s_ui_queue = xQueueCreate(1, sizeof(control_loop_ui_events));
+    if (s_ui_queue == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    return ESP_OK;
+}
+
+void control_loop_get_snapshot(control_loop_snapshot *out)
+{
+    if (out == NULL) {
+        return;
+    }
+    *out = s_snapshot; /* best-effort copy of the newest slot */
+}
+
+void control_loop_get_active_params(settings_params *out)
+{
+    if (out == NULL) {
+        return;
+    }
+    *out = s_params;
+}
+
+esp_err_t control_loop_post_ui_events(const control_loop_ui_events *events)
+{
+    if (s_ui_queue == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (events == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    xQueueOverwrite(s_ui_queue, events);
     return ESP_OK;
 }
 
@@ -126,6 +170,21 @@ static void maybe_commit_params(void)
     ESP_LOGI(TAG, "params committed to NVS");
 }
 
+/* Drain the latest staged UI events into the per-cycle inputs (edge semantics:
+ * each posted set is consumed once). Absent any post, all events are inert. */
+static void apply_ui_events(loop_inputs *in)
+{
+    control_loop_ui_events ev;
+    if (xQueueReceive(s_ui_queue, &ev, 0) != pdTRUE) {
+        return;
+    }
+    in->ui_arm_request = ev.arm_request;
+    in->ui_disarm_request = ev.disarm_request;
+    in->ui_calib_request = ev.calib_request;
+    in->ui_calib_confirm = ev.calib_confirm;
+    in->calib_event = (calib_event)ev.calib_event;
+}
+
 /* Read the two control channels into the per-cycle input snapshot. */
 static loop_inputs read_inputs(void)
 {
@@ -133,9 +192,33 @@ static loop_inputs read_inputs(void)
     rc_capture_read(RC_CAP_CH1, &in.ch1);
     rc_capture_read(RC_CAP_CH2, &in.ch2);
     in.now_ticks = rc_capture_now_ticks();
-    in.ui_arm_request = false;   /* wired to the panel in Unit 10 */
-    in.ui_disarm_request = false;
+    apply_ui_events(&in);
     return in;
+}
+
+/* Publish the newest telemetry snapshot for the panel (lossy single slot). */
+static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
+{
+    rc_channel_sample ch4 = {0};
+    rc_capture_read(RC_CAP_CH4, &ch4);
+    s_snapshot.state = out->telemetry.state;
+    s_snapshot.rc_valid = out->telemetry.rc_valid;
+    s_snapshot.ch1_us = in->ch1.width_us;
+    s_snapshot.ch2_us = in->ch2.width_us;
+    s_snapshot.ch4_us = ch4.width_us;
+    s_snapshot.servo_us = out->servo_us;
+    s_snapshot.esc_us = out->esc_us;
+    s_snapshot.source = s_load_flags.source;
+    s_snapshot.settings_valid = s_load_flags.settings_valid;
+    s_snapshot.calibrated = s_load_flags.calibrated;
+    s_snapshot.defaults_used = s_load_flags.defaults_used;
+    s_snapshot.nvs_error = s_load_flags.nvs_error;
+}
+
+/* Drive the status LED for this cycle from the pure pattern (Unit 11). */
+static void drive_led(sm_state state)
+{
+    led_driver_set(led_pattern_on(state, s_load_flags.calibrated, now_ms()));
 }
 
 static void run_one_cycle(void)
@@ -148,12 +231,16 @@ static void run_one_cycle(void)
     pwm_out_write_us(PWM_OUT_ESC, out.esc_us);
     pwm_out_write_us(PWM_OUT_SERVO, out.servo_us);
 
+    publish_snapshot(&in, &out);
+    drive_led(out.telemetry.state);
+
     /* Persist staged changes after actuators are driven (DISARMED + debounce). */
     maybe_commit_params();
 }
 
 void control_loop_run(void)
 {
+    ESP_ERROR_CHECK(led_driver_init());
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
     ESP_LOGI(TAG, "control loop running @ ~%u Hz", 1000U / CONTROL_LOOP_PERIOD_MS);
 

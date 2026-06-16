@@ -1,11 +1,13 @@
 #include "control_loop.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "http_server.h"
 #include "nvs_store.h"
 #include "pwm_out.h"
 #include "rc_capture.h"
 #include "settings_model.h"
 #include "settings_validate.h"
+#include "wifi_ap.h"
 
 static const char *TAG = "app_main";
 
@@ -68,7 +70,16 @@ void app_main(void)
     ESP_ERROR_CHECK(nvs_store_load(&params, &load_result));
     ESP_LOGI(TAG, "settings loaded: source=%d calibrated=%d defaults_used=%d",
              load_result.source, load_result.calibrated, load_result.defaults_used);
-    ESP_ERROR_CHECK(control_loop_init(&params));
+    ESP_ERROR_CHECK(control_loop_init(&params, &load_result));
+
+    /* Bring up connectivity BEFORE the control loop takes over this task and
+     * never returns. wifi_ap_start fail-fasts if the AP would not be WPA2-PSK
+     * (R14: never an open access point). The HTTP server + telemetry WS + params
+     * API run on the system/server task; the control loop owns this task. */
+    ESP_ERROR_CHECK(wifi_ap_start());
+    ESP_ERROR_CHECK(http_server_start());
+    ESP_LOGI(TAG, "AP + web panel up");
+
     ESP_LOGI(TAG, "control loop initialised; entering 50 Hz loop (DISARMED)");
     control_loop_run();
 }
