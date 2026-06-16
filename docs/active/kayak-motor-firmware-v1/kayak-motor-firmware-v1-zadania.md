@@ -95,20 +95,20 @@ Weryfikacja:
 Wymagania: R2, R3, R4, R5, R10, wsparcie R6. Zależności: Unit 2 (clamp), Unit 4 (model).
 
 Implementacja:
-- [ ] `components/signal_chain/include/signal_chain.h`
-- [ ] `components/signal_chain/src/throttle_chain.c` — kroki 1–9 (normalizacja→deadband→reverse→limit→TARGET→rampa→mapowanie ESC)
-- [ ] `components/signal_chain/src/servo_chain.c` — łańcuch serwa (normalizacja→deadband→reverse→endpointy→TARGET→slew→mapowanie)
-- [ ] `components/signal_chain/src/ramp.c` (+`.h`) — rampa/slew, osobne tempa ↑/↓ gazu, krok per cykl, dąży do targetu
-- [ ] Kolejność stała: deadband przed skalowaniem/rampą; reverse po deadbandzie; limit przed rampą; override na target
+- [x] `components/signal_chain/include/signal_chain.h`
+- [x] `components/signal_chain/src/throttle_chain.c` — kroki 1–9 (normalizacja→deadband→reverse→limit→TARGET→rampa→mapowanie ESC)
+- [x] `components/signal_chain/src/servo_chain.c` — łańcuch serwa (normalizacja→deadband→reverse→endpointy→TARGET→slew→mapowanie)
+- [x] `components/signal_chain/src/ramp.c` (+`.h`) — rampa/slew, osobne tempa ↑/↓ gazu, krok per cykl, dąży do targetu
+- [x] Kolejność stała: deadband przed skalowaniem/rampą; reverse po deadbandzie; limit przed rampą; override na target
 
 Testy:
-- [ ] Test: [Unit] deadband gazu: mały sygnał wokół środka→target 0; tuż za deadbandem→niezerowy
-- [ ] Test: [Unit] reverse po deadbandzie: neutral z reverse=on→wciąż neutral
-- [ ] Test: [Unit] limit mocy: target za limitem→ograniczony przed rampą
-- [ ] Test: [Unit] rampa: 0→max rośnie z rampUp; max→0 z rampDown; osobne tempa; nigdy nie przeskakuje targetu
-- [ ] Test: [Unit] override target: FAILSAFE→target=0→rampa soft-stop do neutralu (nie skok)
-- [ ] Test: [Unit] slew serwa: duży skok CH1→ograniczona prędkość; FAILSAFE→target=center, slew do środka
-- [ ] Test: [Unit] endpointy serwa: wartości poza endpointami→ograniczone do min/max kąta
+- [x] Test: [Unit] deadband gazu: mały sygnał wokół środka→target 0; tuż za deadbandem→niezerowy
+- [x] Test: [Unit] reverse po deadbandzie: neutral z reverse=on→wciąż neutral
+- [x] Test: [Unit] limit mocy: target za limitem→ograniczony przed rampą
+- [x] Test: [Unit] rampa: 0→max rośnie z rampUp; max→0 z rampDown; osobne tempa; nigdy nie przeskakuje targetu
+- [x] Test: [Unit] override target: FAILSAFE→target=0→rampa soft-stop do neutralu (nie skok)
+- [x] Test: [Unit] slew serwa: duży skok CH1→ograniczona prędkość; FAILSAFE→target=center, slew do środka
+- [x] Test: [Unit] endpointy serwa: wartości poza endpointami→ograniczone do min/max kąta
 
 Weryfikacja:
 - [ ] Weryfikacja: testy hosta przechodzą; symulacja ciągu cykli pokazuje rampy/slew; neutral po reverse zostaje neutralem

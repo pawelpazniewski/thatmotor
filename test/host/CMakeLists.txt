@@ -22,6 +22,10 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/rc_validity/src/rc_validity.c
     ${REPO_ROOT}/components/settings/src/settings_defaults.c
     ${REPO_ROOT}/components/settings/src/settings_validate.c
+    ${REPO_ROOT}/components/signal_chain/src/ramp.c
+    ${REPO_ROOT}/components/signal_chain/src/chain_math.c
+    ${REPO_ROOT}/components/signal_chain/src/throttle_chain.c
+    ${REPO_ROOT}/components/signal_chain/src/servo_chain.c
 )
 
 set(PURE_INCLUDE_DIRS
@@ -31,6 +35,8 @@ set(PURE_INCLUDE_DIRS
     ${REPO_ROOT}/components/rc_validity/include
     ${REPO_ROOT}/components/settings/include
     ${REPO_ROOT}/components/settings/src
+    ${REPO_ROOT}/components/signal_chain/include
+    ${REPO_ROOT}/components/signal_chain/src
 )
 
 # Test sources.
@@ -42,6 +48,9 @@ set(TEST_SOURCES
     test_cap_math.c
     test_rc_validity.c
     test_settings_validate.c
+    test_ramp.c
+    test_throttle_chain.c
+    test_servo_chain.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})
