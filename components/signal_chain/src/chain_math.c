@@ -51,16 +51,29 @@ int32_t apply_reverse(int32_t value, bool reverse)
     return reverse ? -value : value;
 }
 
-int32_t deadband_us_to_normalized(uint16_t deadband_us, uint16_t min_us,
-                                  uint16_t mid_us, uint16_t max_us)
+/* Normalized deadband threshold for one half-range. `span` (mid..min or
+ * mid..max) is the same half used by normalize_us for that side, so the
+ * threshold lives in the SAME normalized domain as the value it gates. A
+ * non-positive span (degenerate calibration) yields a zero threshold. */
+static int32_t deadband_threshold_for_span(uint16_t deadband_us, int32_t span)
 {
-    int32_t low_span = (int32_t)mid_us - (int32_t)min_us;
-    int32_t high_span = (int32_t)max_us - (int32_t)mid_us;
-    int32_t span = low_span < high_span ? low_span : high_span;
     if (span <= 0) {
         return 0;
     }
     return scale_half((int32_t)deadband_us, span);
+}
+
+int32_t shape_deadband(int32_t value, uint16_t deadband_us, uint16_t min_us,
+                       uint16_t mid_us, uint16_t max_us)
+{
+    /* Pick the half-range matching the value's side so the deadband is
+     * converted in the SAME domain normalize_us scaled that side with. This
+     * makes the dead zone a consistent input deflection on both sides of an
+     * off-center mid, instead of borrowing the nearer half for both. */
+    int32_t span = value < 0 ? (int32_t)mid_us - (int32_t)min_us
+                             : (int32_t)max_us - (int32_t)mid_us;
+    int32_t threshold = deadband_threshold_for_span(deadband_us, span);
+    return apply_deadband(value, threshold);
 }
 
 uint32_t map_normalized_to_us(int32_t value, uint32_t min_us, uint32_t center_us,

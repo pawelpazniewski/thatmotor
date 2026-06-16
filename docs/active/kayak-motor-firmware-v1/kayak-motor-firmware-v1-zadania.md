@@ -286,6 +286,19 @@ Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=2, P3=5). Raport: `r
 
 ---
 
+## Do poprawy po review fazy 2
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=2, P3=4). Raport: `review-faza-2.md`. Testy hosta 81/81 PASS; build idf.py EXIT=0 — oba na żywo. E2E: N/A (Unit 5 pure, brak UI).
+
+- [x] 🟠 [important] **components/signal_chain/src/chain_math.c:59** — asymetria deadbandu przy off-center mid: `deadband_us_to_normalized` zwija deadband do bliższej (min) połowy, a `normalize_us` skaluje każdą połowę niezależnie. Przykład `rc_min/mid/max=1000/1300/2000`, deadband 80 µs → wyjście z deadbandu po 81 µs (niska strona) vs 188 µs (wysoka strona), 2,3× asymetria. Niepokryte testem (wszystkie testy używają wyśrodkowanego 1000/1500/2000). Liczyć deadband per-połowa spójnie z `normalize_us` albo udokumentować jako świadomą decyzję z uzasadnieniem.
+- [x] 🟠 [important] **components/settings/src/settings_validate.c:107-120** — brak cross-field invariantu `esc_reverse_max < esc_neutral < esc_forward_max`. Config `esc_neutral=1600`, `esc_forward_max=1000` przechodzi walidację, a `map_normalized_to_us` (chain_math.c:77) daje ujemny span → odwrócone mapowanie (full-forward poniżej neutralu). Hard clamp utrzymuje bezpieczeństwo (output w [1000,2000]), ale mapowanie cicho błędne. Dodać invariant (domknąć w Unit 5/8).
+- [ ] 🟡 [nit] **components/signal_chain/include/signal_chain.h:58,74** — niespójna numeracja kroków: nagłówek "Steps 3-10" vs inline "Step 9"+clamp vs enum-doc "step 7". Ujednolicić.
+- [ ] 🟡 [nit] **components/signal_chain/include/signal_chain.h:80-83 + servo_chain.c:51** — kontrakt seed `slew_state` (µs, wartość center) vs `ramp_state` (znormalizowane, 0) tylko w prozie; oba `int32_t*`. Udokumentować wymaganą wartość seed serwa (center) przed integracją Unit 7 (ryzyko startowego transjentu jeśli zaseedowane 0).
+- [ ] 🟡 [nit] **components/signal_chain/src/throttle_chain.c:11-12 + servo_chain.c:10-11** — zduplikowana stała okna SI-3 `1000/2000` w dwóch plikach; rozważyć wspólną definicję.
+- [ ] 🟡 [nit] **test/host/test_throttle_chain.c** — brak testów off-center `rc_mid` (asymetrie deadband/reverse/limit niepokryte); drobny duplikat: `test_deadband_small_signal_maps_to_neutral` i `test_deadband_at_threshold_is_inclusive_neutral` oba używają 1580 µs.
+
+---
+
 ## Źródła
 - Requirements doc: docs/requirements/2026-06-16-kayak-motor-firmware-v1-requirements-v2.md
 - Plan techniczny: docs/plans/2026-06-16-001-feat-kayak-motor-firmware-v1-plan.md

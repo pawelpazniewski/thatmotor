@@ -84,6 +84,27 @@ static void validate_fields(settings_params *p, const settings_params *def,
         REVERSE_NEUTRAL_DWELL_MS_MAX, def->reverse_neutral_dwell_ms, repaired);
 }
 
+/* The ESC map (map_normalized_to_us in the throttle chain) treats
+ * esc_reverse_max_us as the -full endpoint, esc_neutral_us as centre and
+ * esc_forward_max_us as the +full endpoint. They must increase in that order or
+ * the map silently inverts direction (full forward maps below neutral); the
+ * hard clamp keeps the output in band but the direction is wrong. On violation,
+ * restore all three from defaults so the resulting map is monotonic. */
+static void validate_esc_map_monotonic(settings_params *p,
+                                       const settings_params *def,
+                                       bool *repaired)
+{
+    bool is_monotonic = p->esc_reverse_max_us < p->esc_neutral_us &&
+                        p->esc_neutral_us < p->esc_forward_max_us;
+    if (is_monotonic) {
+        return;
+    }
+    p->esc_reverse_max_us = def->esc_reverse_max_us;
+    p->esc_neutral_us = def->esc_neutral_us;
+    p->esc_forward_max_us = def->esc_forward_max_us;
+    *repaired = true;
+}
+
 /* Cross-field invariants. On violation, restore the whole related group from
  * defaults (so the group stays internally consistent) and flag a repair. */
 static void validate_cross_fields(settings_params *p,
@@ -118,6 +139,8 @@ static void validate_cross_fields(settings_params *p,
         p->esc_reverse_max_us = def->esc_reverse_max_us;
         *repaired = true;
     }
+
+    validate_esc_map_monotonic(p, def, repaired);
 }
 
 static settings_validation_result make_defaults_result(settings_params *out,

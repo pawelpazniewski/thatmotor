@@ -110,6 +110,29 @@ static void test_cross_field_rc_non_monotonic_rejected(void)
     TEST_ASSERT_TRUE(out.rc_mid_us < out.rc_max_us);
 }
 
+static void test_cross_field_esc_map_inverted_rejected(void)
+{
+    /* Arrange: per-field-valid but the ESC map endpoints are non-monotonic.
+     * neutral 1600 (max allowed) sits ABOVE forward_max 1550, so the map would
+     * scale the forward half with a negative span (inverted direction). Keep the
+     * forward/reverse band checks satisfied so only the new invariant fires. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.esc_neutral_us = 1600U;
+    stored.esc_forward_min_us = 1550U;
+    stored.esc_forward_max_us = 1550U;
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: repaired to mixed-recovered and the map is monotonic again. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_TRUE(out.esc_reverse_max_us < out.esc_neutral_us);
+    TEST_ASSERT_TRUE(out.esc_neutral_us < out.esc_forward_max_us);
+}
+
 void run_settings_validate_tests(void)
 {
     RUN_TEST(test_empty_nvs_yields_defaults);
@@ -118,4 +141,5 @@ void run_settings_validate_tests(void)
     RUN_TEST(test_single_out_of_range_field_recovers);
     RUN_TEST(test_cross_field_esc_forward_inverted_rejected);
     RUN_TEST(test_cross_field_rc_non_monotonic_rejected);
+    RUN_TEST(test_cross_field_esc_map_inverted_rejected);
 }

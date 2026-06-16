@@ -64,6 +64,33 @@ static void test_deadband_at_threshold_is_inclusive_neutral(void)
     TEST_ASSERT_EQUAL_UINT32(p.esc_neutral_us, esc_us);
 }
 
+static void test_offcenter_deadband_is_consistent_both_sides(void)
+{
+    /* Arrange: off-center calibration 1000/1300/2000 (low half 300 us, high half
+     * 700 us) with an 80 us throttle deadband. The deadband must act as the SAME
+     * 80 us physical dead zone on BOTH sides of mid, not 80 us low / ~188 us high
+     * (the pre-fix asymmetry from borrowing the nearer half for both sides). */
+    settings_params p = defaults_params();
+    p.rc_min_us = 1000U;
+    p.rc_mid_us = 1300U;
+    p.rc_max_us = 2000U;
+    p.throttle_deadband_us = 80U;
+    p.max_throttle_pct = 100U;
+
+    /* Act + Assert: exactly 80 us off mid (both sides) stays neutral. */
+    TEST_ASSERT_EQUAL_UINT32(
+        p.esc_neutral_us, settle_throttle(1220U, THROTTLE_TARGET_TRACK, &p));
+    TEST_ASSERT_EQUAL_UINT32(
+        p.esc_neutral_us, settle_throttle(1380U, THROTTLE_TARGET_TRACK, &p));
+
+    /* Act + Assert: one us past the dead zone moves off neutral on BOTH sides,
+     * each toward its own direction (low -> reverse, high -> forward). */
+    uint32_t low_past = settle_throttle(1219U, THROTTLE_TARGET_TRACK, &p);
+    uint32_t high_past = settle_throttle(1381U, THROTTLE_TARGET_TRACK, &p);
+    TEST_ASSERT_LESS_THAN_UINT32(p.esc_neutral_us, low_past);
+    TEST_ASSERT_GREATER_THAN_UINT32(p.esc_neutral_us, high_past);
+}
+
 static void test_reverse_keeps_neutral_neutral(void)
 {
     /* Arrange: reverse enabled, stick exactly centered. Reverse is applied
@@ -225,6 +252,7 @@ void run_throttle_chain_tests(void)
     RUN_TEST(test_deadband_small_signal_maps_to_neutral);
     RUN_TEST(test_deadband_just_past_threshold_is_nonzero);
     RUN_TEST(test_deadband_at_threshold_is_inclusive_neutral);
+    RUN_TEST(test_offcenter_deadband_is_consistent_both_sides);
     RUN_TEST(test_reverse_keeps_neutral_neutral);
     RUN_TEST(test_reverse_flips_direction_of_a_nonzero_command);
     RUN_TEST(test_power_limit_caps_target_before_ramp);

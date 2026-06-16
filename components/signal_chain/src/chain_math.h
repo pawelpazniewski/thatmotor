@@ -51,18 +51,23 @@ int32_t apply_deadband(int32_t value, int32_t deadband);
 int32_t apply_reverse(int32_t value, bool reverse);
 
 /**
- * Convert a deadband half-width expressed in input microseconds into normalized
- * units, relative to the nearer calibration half-range from mid. Used so the
- * configurable deadband (stored in us) acts on the normalized target.
+ * Apply a deadband expressed in input microseconds to a normalized command,
+ * converting the threshold using the SAME calibration half-range (mid..min or
+ * mid..max) that normalize_us scaled the command's side with. This keeps the
+ * dead zone a consistent input deflection on both sides of an off-center mid:
+ * the same microsecond deadband around centre maps to neutral whether the stick
+ * is pushed toward min or toward max, rather than borrowing the nearer half for
+ * both sides.
  *
+ * @param value        Normalized command (post-normalize, pre-reverse).
  * @param deadband_us  Deadband half-width in input microseconds.
  * @param min_us       Stick full one way.
  * @param mid_us       Stick centre.
  * @param max_us       Stick full other way.
- * @return Deadband half-width in normalized units (>= 0).
+ * @return 0 inside the per-side band, otherwise the value unchanged.
  */
-int32_t deadband_us_to_normalized(uint16_t deadband_us, uint16_t min_us,
-                                  uint16_t mid_us, uint16_t max_us);
+int32_t shape_deadband(int32_t value, uint16_t deadband_us, uint16_t min_us,
+                       uint16_t mid_us, uint16_t max_us);
 
 /**
  * Linearly map a normalized command in [-full, +full] onto an output pulse

@@ -19,11 +19,10 @@ static int32_t shape_command(uint32_t raw_us, const settings_params *params)
 {
     int32_t normalized = normalize_us(raw_us, params->rc_min_us,
                                       params->rc_mid_us, params->rc_max_us);
-    int32_t deadband = deadband_us_to_normalized(params->throttle_deadband_us,
-                                                 params->rc_min_us,
-                                                 params->rc_mid_us,
-                                                 params->rc_max_us);
-    int32_t after_deadband = apply_deadband(normalized, deadband);
+    int32_t after_deadband = shape_deadband(normalized,
+                                            params->throttle_deadband_us,
+                                            params->rc_min_us, params->rc_mid_us,
+                                            params->rc_max_us);
     return apply_reverse(after_deadband, params->throttle_reverse);
 }
 
