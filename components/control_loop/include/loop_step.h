@@ -6,6 +6,7 @@
 #include "esc_calibration.h"
 #include "rc_sample.h"
 #include "rc_validity.h"
+#include "safety_clamp.h"
 #include "settings_model.h"
 #include "state_machine.h"
 
@@ -93,6 +94,20 @@ void loop_state_init(loop_state *state, const settings_params *params,
  */
 loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
                        const settings_params *params, loop_state *state);
+
+/**
+ * Route a calibration ESC value through the SI-3 hard clamp (SI-3 boundary on
+ * the service-mode path). This is the SINGLE, unconditional clamp every
+ * calibration constant passes through before reaching the ESC; the calibration
+ * sequence has no branch that bypasses it. Exposed so the SI-3 invariant can be
+ * proven behaviourally with an out-of-window value (a calibration constant that
+ * exceeds a narrowed window MUST be snapped to the boundary).
+ *
+ * @param esc_us  Pre-clamp ESC pulse width (a calibration step constant).
+ * @param window  Inclusive sanity window; bounds normalised if inverted.
+ * @return Clamped pulse width within the inclusive window.
+ */
+uint32_t calib_clamp_esc(uint32_t esc_us, PwmWindow window);
 
 /**
  * Whether a staged pending params set may be applied to the active params this

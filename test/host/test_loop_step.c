@@ -234,10 +234,13 @@ static void test_calibration_steps_emit_constants_bypassing_throttle(void)
     TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
 }
 
-static void test_calibration_output_stays_within_hard_clamp(void)
+static void test_calibration_constants_lie_within_clamp_window(void)
 {
-    /* SI-3: every calibration step value passes through the hard clamp, so it
-     * is always inside the ESC sanity window [1000, 2000]. */
+    /* The calibration step constants are legal inputs: each emitted value sits
+     * inside the ESC sanity window [1000, 2000]. NOTE: this alone does NOT prove
+     * the clamp is on the path (the constants equal the window boundaries);
+     * test_calib_clamp_esc_snaps_out_of_window_value_to_boundary provides that
+     * oracle. */
     settings_params params;
     settings_load_defaults(&params);
     loop_validity_cfg cfg = make_cfg();
@@ -252,6 +255,102 @@ static void test_calibration_output_stays_within_hard_clamp(void)
         TEST_ASSERT_GREATER_OR_EQUAL_UINT32(ESC_CLAMP_MIN_US, out.esc_us);
         TEST_ASSERT_LESS_OR_EQUAL_UINT32(ESC_CLAMP_MAX_US, out.esc_us);
     }
+}
+
+static void test_calib_clamp_esc_snaps_out_of_window_value_to_boundary(void)
+{
+    /* SI-3 ORACLE on the service-mode path. calib_clamp_esc is the SINGLE clamp
+     * every calibration constant is routed through in run_calibration. Feed it a
+     * calibration constant (2000) with a NARROWED window whose max is below it,
+     * so a working clamp MUST snap the value to the boundary. If the clamp were
+     * removed from the path (raw co.esc_us returned), the value would pass
+     * through unchanged and these assertions would fail. The default window
+     * [1000, 2000] cannot expose this because the constants equal its bounds. */
+    PwmWindow narrow_high = {.min_us = 1000U, .max_us = 1500U};
+    /* FORWARD constant 2000 exceeds max 1500 -> must be clamped to 1500. */
+    TEST_ASSERT_EQUAL_UINT32(1500U, calib_clamp_esc(2000U, narrow_high));
+    /* NEUTRAL constant 1500 is at the boundary -> unchanged. */
+    TEST_ASSERT_EQUAL_UINT32(1500U, calib_clamp_esc(1500U, narrow_high));
+
+    PwmWindow narrow_low = {.min_us = 1500U, .max_us = 2000U};
+    /* REVERSE constant 1000 is below min 1500 -> must be clamped to 1500. */
+    TEST_ASSERT_EQUAL_UINT32(1500U, calib_clamp_esc(1000U, narrow_low));
+    /* FORWARD constant 2000 is inside -> unchanged. */
+    TEST_ASSERT_EQUAL_UINT32(2000U, calib_clamp_esc(2000U, narrow_low));
+}
+
+static void test_calibration_timeout_returns_to_disarmed_neutral(void)
+{
+    /* Integration coverage of the calib_timeout abort on the loop path:
+     * in->calib_timeout -> co.exit -> calib_exit_state -> DISARMED + neutral. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    enter_calibration(&state, &cfg, &params);
+
+    loop_inputs timed_out = make_inputs(1500U, 2000U, false);
+    timed_out.calib_timeout = true;
+
+    loop_outputs out = loop_step(&timed_out, &cfg, &params, &state);
+
+    /* Assert: idle timeout aborts the service mode to DISARMED, ESC parked. */
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
+}
+
+static void test_calibration_entry_frame_ignores_event_starts_at_neutral(void)
+{
+    /* Entry-frame contract: when the SAME frame both enters calibration (UI
+     * request+confirm) AND carries a calib_event (NEXT), the entry frame must
+     * suppress the event so the sequence starts at NEUTRAL (1500), never
+     * skipping to FORWARD (2000) on the first frame. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+
+    /* Throttle held neutral (entry guard requires it); the perturbation under
+     * test is the co-arriving calib_event=NEXT on the entry frame. */
+    loop_inputs entry = make_inputs(1500U, 1500U, false);
+    entry.ui_calib_request = true;
+    entry.ui_calib_confirm = true;
+    entry.calib_event = CALIB_EVENT_NEXT; /* co-arriving event on entry frame */
+
+    loop_outputs out = loop_step(&entry, &cfg, &params, &state);
+
+    /* Assert: entered calibration and held NEUTRAL (1500), event suppressed.
+     * Without the entry-frame guard the NEXT would advance to FORWARD (2000). */
+    TEST_ASSERT_EQUAL(SM_STATE_ESC_CALIBRATION, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT32(1500U, out.esc_us);
+}
+
+static void test_calibration_reentry_reinitialises_step_to_neutral(void)
+{
+    /* Re-usable service mode: after a full sequence exits to DISARMED, entering
+     * calibration again must re-initialise the step to NEUTRAL (1500), not
+     * resume at a stale step. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+
+    /* First run: enter, then cancel back to DISARMED. */
+    enter_calibration(&state, &cfg, &params);
+    loop_inputs cancel = make_inputs(1500U, 1500U, false);
+    cancel.calib_event = CALIB_EVENT_CANCEL;
+    loop_step(&cancel, &cfg, &params, &state);
+
+    /* Second run: re-enter and hold; must restart at NEUTRAL (1500). */
+    enter_calibration(&state, &cfg, &params);
+    loop_inputs hold = make_inputs(1500U, 2000U, false);
+    loop_outputs out = loop_step(&hold, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL(SM_STATE_ESC_CALIBRATION, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT32(1500U, out.esc_us);
 }
 
 static void test_calibration_rc_loss_aborts_to_failsafe(void)
@@ -318,8 +417,12 @@ void run_loop_step_tests(void)
     RUN_TEST(test_rc_invalid_failsafe_soft_stop_and_center);
     RUN_TEST(test_calibration_entry_requires_confirmation);
     RUN_TEST(test_calibration_steps_emit_constants_bypassing_throttle);
-    RUN_TEST(test_calibration_output_stays_within_hard_clamp);
+    RUN_TEST(test_calibration_constants_lie_within_clamp_window);
+    RUN_TEST(test_calib_clamp_esc_snaps_out_of_window_value_to_boundary);
     RUN_TEST(test_calibration_rc_loss_aborts_to_failsafe);
     RUN_TEST(test_calibration_cancel_returns_to_disarmed_neutral);
+    RUN_TEST(test_calibration_timeout_returns_to_disarmed_neutral);
+    RUN_TEST(test_calibration_entry_frame_ignores_event_starts_at_neutral);
+    RUN_TEST(test_calibration_reentry_reinitialises_step_to_neutral);
     RUN_TEST(test_pending_applies_only_in_disarmed);
 }

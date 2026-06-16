@@ -323,6 +323,22 @@ Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=1, P3=5). Raport: `r
 
 ---
 
+## Do poprawy po review fazy 5
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=4, P3=5). Raport: `review-faza-5.md`. Testy hosta 150/150 PASS (131→150, +19); build idf.py set-target esp32 EXIT=0 — oba na żywo. E2E: N/A (brak UI w fazie 5; producent `calib_event`/UI = Unit 10). SI-5 (wejście niemożliwe bez potwierdzenia): TAK (dowód mocny, drop-one każdego warunku). SI-3 (clamp nieomijalny): TAK strukturalnie (single-return przez clamp_esc + clamp_pwm_us osobno udowodniony), ale dowód testowy na ścieżce calib słaby (P2-1). Bypass gazu (CH2): TAK (mocny). Precedencja RC loss: poprawna. Regresje cross-phase: brak (150/150).
+
+- [x] 🟠 [important] **test/host/test_loop_step.c:236-254** — `test_calibration_output_stays_within_hard_clamp` bez mocy wyroczni: stałe 1000/1500/2000 == granice okna [1000,2000], więc test przejdzie czy `clamp_esc` jest na ścieżce, czy nie (usunięcie clampu z `run_calibration:98` nie wywróciłoby testu). Plan żądał "dowodu SI-3 w trybie serwisowym" (plan:624). Inwariant fizycznie spełniony, ale wzmocnić dowód: przemianować na "stałe w oknie" + dodać behawioralny dowód clampa na ścieżce calib z wartością poza oknem.
+- [x] 🟠 [important] **components/control_loop/src/loop_step.c:105-119** — `resolve_esc` miesza 3 odpowiedzialności: detekcja wejścia + mutacja `state->calib_step`, wybór gałęzi calib-vs-throttle, obliczenie wyjścia (SRP, reguła §14). Wydzielić `reset_calib_on_entry(state, sm)` wołany przed `resolve_esc`.
+- [x] 🟠 [important] **test/host/test_loop_step.c** — abort przez `calib_timeout` niepokryty integracyjnie: pole przekazywane w `run_calibration:89`, ale żaden test loop go nie ustawia (tylko sub-machine `test_timeout_aborts_to_disarmed_neutral`). Dodać `test_calibration_timeout_returns_to_disarmed_neutral`.
+- [x] 🟠 [important] **test/host/test_loop_step.c + loop_step.c:109-116** — ramka wejścia z `calib_event` (NEXT/CANCEL) niepokryta: `entering_calib` resetuje step→NEUTRAL, ale ta sama ramka przetwarza `in->calib_event` (NEXT → przeskok NEUTRAL→FORWARD na pierwszej ramce, 2000 zamiast 1500). Domknąć kontrakt entry-frame (wymusić NONE lub udokumentować) + test. Kontrakt wiringu Unit 10. → ROZWIĄZANE: entry-frame wymusza `CALIB_EVENT_NONE` + `timeout=false` w `compute_calib_esc` (loop_step.c); test `test_calibration_entry_frame_ignores_event_starts_at_neutral` (NEXT na ramce wejścia → wyjście 1500, nie 2000). Granica Unit 10: producent UI nadal nie istnieje, ale kontrakt entry-frame jest teraz domknięty po stronie loop_step (event na ramce wejścia nie może przeskoczyć kroku).
+- [x] 🟡 [nit] **test/host/test_loop_step.c** — re-entry do calib po DONE/cancel nieprzetestowane (re-inicjalizacja `calib_step` przez `entering_calib`, loop_step.c:111-113); tryb wielokrotnego użytku. → ROZWIĄZANE przy okazji entry-frame: `test_calibration_reentry_reinitialises_step_to_neutral` (cancel→DISARMED→ponowne wejście restartuje krok na NEUTRAL=1500).
+- [ ] 🟡 [nit] **components/state_machine/src/state_machine.c:17** — `settings_apply_in_progress` w `can_enter_calibration` bez drop-one testu; martwy na ścieżce loop (`build_sm_inputs:54` hardcoduje false). Domknąć gdy Unit 8/10 podłączy realny producent.
+- [ ] 🟡 [nit] **components/state_machine/src/state_machine.c:13-18** — `calib_in_progress` poza guardem wejścia (asymetria z `can_arm`); nieosiągalne (guard tylko z DISARMED). Defensywna spójność — zostawić jak jest.
+- [ ] 🟡 [nit] **components/control_loop/src/loop_step.c:69-76** — `calib_exit_state` bez jawnego `switch` po wszystkich wariantach `calib_exit` (spójność z `calib_us_for_step`/`step_after`); stylistyczne, guard po stronie callera.
+- [ ] 🟡 [nit] **components/state_machine/src/esc_calibration.c:31-43** — `step_after(CALIB_STEP_DONE)` przez wspólny `default→DONE` z REVERSE; `DONE` jako wejście nieosiągalne. Rozważyć komentarz.
+
+---
+
 ## Źródła
 - Requirements doc: docs/requirements/2026-06-16-kayak-motor-firmware-v1-requirements-v2.md
 - Plan techniczny: docs/plans/2026-06-16-001-feat-kayak-motor-firmware-v1-plan.md

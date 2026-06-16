@@ -59,10 +59,15 @@ static sm_inputs build_sm_inputs(const loop_inputs *in,
     return si;
 }
 
-/* Clamp every ESC value through the SI-3 hard clamp before it leaves the loop. */
-static uint32_t clamp_esc(uint32_t esc_us)
+/* The SI-3 hard clamp window every ESC value is routed through. */
+static PwmWindow esc_clamp_window(void)
 {
     PwmWindow window = {.min_us = ESC_WINDOW_MIN_US, .max_us = ESC_WINDOW_MAX_US};
+    return window;
+}
+
+uint32_t calib_clamp_esc(uint32_t esc_us, PwmWindow window)
+{
     return clamp_pwm_us(esc_us, window);
 }
 
@@ -75,27 +80,64 @@ static sm_state calib_exit_state(calib_exit exit)
     return SM_STATE_DISARMED; /* done / cancel / timeout */
 }
 
-/* Drive the ESC calibration sequence for one cycle. Overrides the ESC output
- * with the step constant (bypassing the throttle chain) but still through the
- * hard clamp, and resolves the next control state from the abort rules. The
- * throttle ramp is parked at neutral so re-entry to DISARMED has no transient. */
-static uint32_t run_calibration(const loop_inputs *in, bool rc_is_valid,
-                                loop_state *state, sm_state *next_state)
+/* Detect the calibration entry frame and reset the step to NEUTRAL. The entry
+ * frame ignores any operator event so the sequence always starts at NEUTRAL
+ * (1500 us) and cannot skip the first step (entry-frame contract). Pure state
+ * mutation: no output is produced here. */
+static void reset_calib_on_entry(loop_state *state, const sm_outputs *sm)
+{
+    bool entering_calib = state->state != SM_STATE_ESC_CALIBRATION &&
+                          sm->state == SM_STATE_ESC_CALIBRATION;
+    if (!entering_calib) {
+        return;
+    }
+    state->calib_step = CALIB_STEP_NEUTRAL;
+}
+
+/* Whether this cycle is the calibration entry frame (just crossed into calib).
+ * On the entry frame the operator event is suppressed so the first step is
+ * always NEUTRAL regardless of a co-arriving NEXT/CANCEL. */
+static bool is_calib_entry_frame(const loop_state *state, const sm_outputs *sm)
+{
+    return state->state != SM_STATE_ESC_CALIBRATION &&
+           sm->state == SM_STATE_ESC_CALIBRATION;
+}
+
+/* Compute one calibration cycle: step the sub-machine, park the throttle ramp,
+ * and route the constant through the SI-3 hard clamp. Pure with respect to the
+ * next state, which it reports via *exit (the caller maps it to a state). */
+static uint32_t compute_calib_esc(const loop_inputs *in, bool rc_is_valid,
+                                  bool entry_frame, loop_state *state,
+                                  calib_exit *exit)
 {
     calib_inputs ci = {
         .step = state->calib_step,
-        .event = in->calib_event,
+        .event = entry_frame ? CALIB_EVENT_NONE : in->calib_event,
         .rc_valid = rc_is_valid,
-        .timeout = in->calib_timeout,
+        .timeout = entry_frame ? false : in->calib_timeout,
     };
     calib_outputs co = calib_step_next(&ci);
     state->calib_step = co.step;
     state->throttle_ramp = 0;
+    *exit = co.exit;
+    return calib_clamp_esc(co.esc_us, esc_clamp_window());
+}
 
-    if (co.exit != CALIB_EXIT_NONE) {
-        *next_state = calib_exit_state(co.exit);
+/* Drive the ESC calibration sequence for one cycle, resolving the next control
+ * state from the abort rules. The ESC constant bypasses the throttle chain but
+ * still passes through the hard clamp; the ramp is parked so re-entry to
+ * DISARMED has no transient. */
+static uint32_t run_calibration(const loop_inputs *in, bool rc_is_valid,
+                                bool entry_frame, loop_state *state,
+                                sm_state *next_state)
+{
+    calib_exit exit = CALIB_EXIT_NONE;
+    uint32_t esc_us = compute_calib_esc(in, rc_is_valid, entry_frame, state,
+                                        &exit);
+    if (exit != CALIB_EXIT_NONE) {
+        *next_state = calib_exit_state(exit);
     }
-    return clamp_esc(co.esc_us);
+    return esc_us;
 }
 
 /* Resolve the ESC output and the next state, branching on calibration. In
@@ -106,13 +148,10 @@ static uint32_t resolve_esc(const loop_inputs *in, const settings_params *params
                             bool rc_is_valid, const sm_outputs *sm,
                             loop_state *state, sm_state *next_state)
 {
-    bool entering_calib = state->state != SM_STATE_ESC_CALIBRATION &&
-                          sm->state == SM_STATE_ESC_CALIBRATION;
-    if (entering_calib) {
-        state->calib_step = CALIB_STEP_NEUTRAL;
-    }
     if (sm->state == SM_STATE_ESC_CALIBRATION) {
-        return run_calibration(in, rc_is_valid, state, next_state);
+        bool entry_frame = is_calib_entry_frame(state, sm);
+        reset_calib_on_entry(state, sm);
+        return run_calibration(in, rc_is_valid, entry_frame, state, next_state);
     }
     return throttle_chain_step(in->ch2.width_us, sm->throttle_target, params,
                                &state->throttle_ramp);
