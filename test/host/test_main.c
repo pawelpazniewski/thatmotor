@@ -14,6 +14,8 @@ void run_settings_validate_tests(void);
 void run_ramp_tests(void);
 void run_throttle_chain_tests(void);
 void run_servo_chain_tests(void);
+void run_state_machine_tests(void);
+void run_loop_step_tests(void);
 
 int main(void)
 {
@@ -27,5 +29,7 @@ int main(void)
     run_ramp_tests();
     run_throttle_chain_tests();
     run_servo_chain_tests();
+    run_state_machine_tests();
+    run_loop_step_tests();
     return UNITY_END();
 }

@@ -51,12 +51,13 @@ typedef struct {
  * Pure single-frame validity predicate for one channel.
  *
  * CONTRACT (epoch): now_ticks and sample->last_edge_ticks MUST both be in the
- * same MCPWM free-running 32-bit capture-counter domain (12.5 ns/tick). Recency
- * is computed with wrap-safe modular subtraction in that tick domain (via
- * cap_ticks_elapsed), so it stays correct right after boot and across every
- * ~53.6 s counter wrap. Do NOT pass esp_timer_get_time(): that is a different
- * epoch and does not wrap at 2^32 ticks. The producer of now_ticks is the same
- * MCPWM capture timer that stamps last_edge_ticks.
+ * same rc_capture recency tick domain (12.5 ns/tick, free-running 32-bit).
+ * Recency is computed with wrap-safe modular subtraction in that tick domain
+ * (via cap_ticks_elapsed), so it stays correct right after boot and across every
+ * ~53.6 s wrap. Pass rc_capture_now_ticks() (and nothing else) as now_ticks: it
+ * is the same producer that stamps last_edge_ticks. Do NOT pass a raw
+ * esp_timer_get_time() in microseconds: that is the wrong scale and does not
+ * wrap at 2^32 ticks.
  *
  * @param sample     Latest raw capture sample for the channel.
  * @param now_ticks  Current capture-counter tick (same domain as

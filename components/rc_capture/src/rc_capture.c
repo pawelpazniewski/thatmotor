@@ -4,6 +4,23 @@
 #include "driver/mcpwm_cap.h"
 #include "esp_attr.h"
 #include "esp_err.h"
+#include "esp_timer.h"
+
+/* Ticks per microsecond in the rc_capture recency domain (12.5 ns/tick =>
+ * 80 ticks/us). Recency timestamps (last_edge_ticks, rc_capture_now_ticks) live
+ * in this domain so cap_ticks_to_us converts them consistently. */
+#define RC_CAP_TICKS_PER_US 80U
+
+/* Current recency tick: esp_timer microseconds scaled into the 80 MHz tick
+ * domain, truncated to 32 bits so it wraps at 2^32 ticks (~53.6 s) exactly like
+ * the hardware capture counter. esp_timer is ISR-safe and monotonic, so this
+ * advances in real time even when RC edges stop (failsafe still fires). The
+ * hardware cap_value is kept for width/period (relative, within-frame) where
+ * the absolute epoch is irrelevant. */
+static inline uint32_t rc_cap_now_ticks_raw(void)
+{
+    return (uint32_t)((uint64_t)esp_timer_get_time() * RC_CAP_TICKS_PER_US);
+}
 
 /* GPIO assignment (fixed pin map from the plan). */
 #define RC_CAP_CH1_GPIO 34
@@ -53,7 +70,11 @@ static bool IRAM_ATTR on_cap(mcpwm_cap_channel_handle_t channel,
         state->prev_rising_valid = true;
         state->rising_edge_ticks = ticks;
         state->rising_pending = true;
-        state->sample.last_edge_ticks = ticks;
+        /* Recency timestamp in the esp_timer-derived tick domain (same domain as
+         * rc_capture_now_ticks), NOT the raw hardware cap_value: that lets the
+         * loop compute edge age wrap-safely against a clock that keeps advancing
+         * when edges stop. Width/period below stay on the hardware cap_value. */
+        state->sample.last_edge_ticks = rc_cap_now_ticks_raw();
         return false;
     }
 
@@ -129,4 +150,9 @@ esp_err_t rc_capture_read(RcCaptureChannel channel, rc_channel_sample *out)
     }
     *out = s_state[channel].sample;
     return ESP_OK;
+}
+
+uint32_t rc_capture_now_ticks(void)
+{
+    return rc_cap_now_ticks_raw();
 }

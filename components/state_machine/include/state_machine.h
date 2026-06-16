@@ -1,0 +1,72 @@
+#pragma once
+
+#include <stdbool.h>
+
+#include "signal_chain.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * Pure control state machine (Unit 6).
+ *
+ * Four states, no I/O, no globals: a single transition function maps the
+ * current state plus a snapshot of inputs to the next state plus per-state
+ * actuator target overrides (consumed by the signal chains in Unit 5/7).
+ *
+ * Safety invariants enforced here:
+ *  - Boot always lands in DISARMED (SI-1); the reset reason is only logged.
+ *  - DISARMED->ARMED is gated (R7): RC valid AND throttle neutral AND an
+ *    explicit arm request AND no calibration/settings-apply in progress.
+ *  - Any state with RC invalid drops to FAILSAFE (SI-4/R6).
+ *  - FAILSAFE is latched: it persists while RC is invalid and the ONLY exit is
+ *    RC recovery -> DISARMED. It NEVER transitions straight back to ARMED.
+ *  - The servo rule is independent of arming: RC valid -> servo tracks CH1,
+ *    RC invalid -> servo centers, regardless of ARMED/DISARMED.
+ */
+
+/** Control states. ESC_CALIBRATION is a first-class state (sequence in Unit 9). */
+typedef enum {
+    SM_STATE_DISARMED = 0,
+    SM_STATE_ARMED = 1,
+    SM_STATE_FAILSAFE = 2,
+    SM_STATE_ESC_CALIBRATION = 3,
+} sm_state;
+
+/**
+ * Snapshot of the decision inputs for one transition. Booleans are debounced /
+ * resolved upstream (rc_validity, UI edge detection); this struct carries no
+ * timing of its own.
+ */
+typedef struct {
+    bool rc_valid;                  /* debounced RC_valid (CH1 AND CH2) */
+    bool throttle_neutral;          /* throttle stick within neutral band */
+    bool calib_in_progress;         /* ESC calibration sequence running */
+    bool settings_apply_in_progress;/* a pending settings apply is mid-flight */
+    bool ui_arm_request;            /* explicit arm action from the panel */
+    bool ui_disarm_request;         /* explicit disarm action from the panel */
+} sm_inputs;
+
+/**
+ * Result of one transition: the next state plus the target-override modes the
+ * signal chains must apply this cycle.
+ */
+typedef struct {
+    sm_state state;
+    throttle_target_mode throttle_target;
+    servo_target_mode servo_target;
+} sm_outputs;
+
+/**
+ * Compute one state transition (pure).
+ *
+ * @param current  Current state.
+ * @param inputs   Decision inputs for this cycle (must be non-NULL).
+ * @return The next state and the per-state actuator target overrides.
+ */
+sm_outputs sm_step(sm_state current, const sm_inputs *inputs);
+
+#ifdef __cplusplus
+}
+#endif

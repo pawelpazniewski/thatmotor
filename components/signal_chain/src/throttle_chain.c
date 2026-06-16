@@ -59,6 +59,17 @@ static uint32_t map_to_esc_us(int32_t command, const settings_params *params)
                                 params->esc_forward_max_us);
 }
 
+bool throttle_is_neutral(uint32_t raw_ch2_us, const settings_params *params)
+{
+    int32_t normalized = normalize_us(raw_ch2_us, params->rc_min_us,
+                                      params->rc_mid_us, params->rc_max_us);
+    int32_t after_deadband = shape_deadband(normalized,
+                                            params->throttle_deadband_us,
+                                            params->rc_min_us, params->rc_mid_us,
+                                            params->rc_max_us);
+    return after_deadband == 0;
+}
+
 uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
                              const settings_params *params, int32_t *ramp_state)
 {

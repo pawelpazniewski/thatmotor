@@ -121,17 +121,17 @@ Weryfikacja:
 Wymagania: R6, R7, SI-1, SI-4; szkielet R15/SI-5. Zależności: Unit 4, Unit 5.
 
 Implementacja:
-- [ ] `components/state_machine/include/state_machine.h` — `enum state`, `struct sm_inputs`, `struct sm_outputs`
-- [ ] `components/state_machine/src/state_machine.c` — czysta funkcja przejść `(state, inputs)→(state, outputs)`
-- [ ] Boot→DISARMED bezwarunkowo; guard DISARMED→ARMED (R7); FAILSAFE ustalony; reguła serwa niezależna od arming; override targetu per stan
+- [x] `components/state_machine/include/state_machine.h` — `enum state`, `struct sm_inputs`, `struct sm_outputs`
+- [x] `components/state_machine/src/state_machine.c` — czysta funkcja przejść `(state, inputs)→(state, outputs)`
+- [x] Boot→DISARMED bezwarunkowo; guard DISARMED→ARMED (R7); FAILSAFE ustalony; reguła serwa niezależna od arming; override targetu per stan
 
 Testy:
-- [ ] Test: [Unit] boot→DISARMED (każdy reset reason)
-- [ ] Test: [Unit] DISARMED + wszystkie warunki arm→ARMED; brak neutralu→DISARMED; RC invalid→FAILSAFE
-- [ ] Test: [Unit] ARMED + RC invalid→FAILSAFE; ARMED + ręczny disarm→DISARMED
-- [ ] Test: [Unit] FAILSAFE trwa przy RC invalid; RC valid→DISARMED (nie ARMED)
-- [ ] Test: [Unit] serwo: RC valid→śledzi; RC invalid→center, niezależnie od ARMED/DISARMED
-- [ ] Test: [Unit] arming zablokowany gdy `calib_in_progress` lub `settings_apply_in_progress`
+- [x] Test: [Unit] boot→DISARMED (każdy reset reason)
+- [x] Test: [Unit] DISARMED + wszystkie warunki arm→ARMED; brak neutralu→DISARMED; RC invalid→FAILSAFE
+- [x] Test: [Unit] ARMED + RC invalid→FAILSAFE; ARMED + ręczny disarm→DISARMED
+- [x] Test: [Unit] FAILSAFE trwa przy RC invalid; RC valid→DISARMED (nie ARMED)
+- [x] Test: [Unit] serwo: RC valid→śledzi; RC invalid→center, niezależnie od ARMED/DISARMED
+- [x] Test: [Unit] arming zablokowany gdy `calib_in_progress` lub `settings_apply_in_progress`
 
 Weryfikacja:
 - [ ] Weryfikacja: testy hosta pokrywają całą tabelę przejść ze źródła; brak wyjścia z FAILSAFE bez RC valid
@@ -140,16 +140,16 @@ Weryfikacja:
 Wymagania: R1, R6, R7, SI-1, SI-3, SI-6; integracja R2–R5. Zależności: Unit 2, 3, 4, 5, 6.
 
 Implementacja:
-- [ ] `components/control_loop/include/control_loop.h` + `src/control_loop.c` — orkiestracja cyklu, „active params", non-blocking odbiór pending, apply tylko DISARMED
-- [ ] `components/control_loop/src/loop_step.c` (+`.h`) — pure krok logiczny `(active_params, rc_samples, state, ramp_state, ui_events)→(new_state, servo_us, esc_us, telemetry)`
-- [ ] Modyfikuj `main/app_main.c` — mailbox length-1, start pętli, `esp_task_wdt_add` + reset co cykl
-- [ ] Watchdog reset tylko na końcu udanej iteracji; re-check DISARMED w momencie apply (TOCTOU)
+- [x] `components/control_loop/include/control_loop.h` + `src/control_loop.c` — orkiestracja cyklu, „active params", non-blocking odbiór pending, apply tylko DISARMED
+- [x] `components/control_loop/src/loop_step.c` (+`.h`) — pure krok logiczny `(active_params, rc_samples, state, ramp_state, ui_events)→(new_state, servo_us, esc_us, telemetry)`
+- [x] Modyfikuj `main/app_main.c` — mailbox length-1, start pętli, `esp_task_wdt_add` + reset co cykl
+- [x] Watchdog reset tylko na końcu udanej iteracji; re-check DISARMED w momencie apply (TOCTOU)
 
 Testy:
-- [ ] Test: [Unit] `loop_step` DISARMED: drążek max→esc_us=neutral (bramka R7)
-- [ ] Test: [Unit] `loop_step` ARMED: gaz śledzi CH2 z rampą; serwo śledzi CH1 ze slew
-- [ ] Test: [Unit] `loop_step` RC invalid→FAILSAFE; esc soft-stop do neutralu; serwo do center
-- [ ] Test: [Unit] apply pending tylko w DISARMED; w ARMED pending nie zmienia active params
+- [x] Test: [Unit] `loop_step` DISARMED: drążek max→esc_us=neutral (bramka R7)
+- [x] Test: [Unit] `loop_step` ARMED: gaz śledzi CH2 z rampą; serwo śledzi CH1 ze slew
+- [x] Test: [Unit] `loop_step` RC invalid→FAILSAFE; esc soft-stop do neutralu; serwo do center
+- [x] Test: [Unit] apply pending tylko w DISARMED; w ARMED pending nie zmienia active params
 - [ ] Test: [HW] Pomiar jittera pętli (~50 Hz stabilne?); zachowanie po watchdog-resecie (boot DISARMED, neutral)
 
 Weryfikacja:

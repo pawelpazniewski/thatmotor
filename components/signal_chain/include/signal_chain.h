@@ -85,6 +85,20 @@ uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
 uint32_t servo_chain_step(uint32_t raw_ch1_us, servo_target_mode mode,
                           const settings_params *params, int32_t *slew_state);
 
+/**
+ * Whether the throttle stick is within its neutral band this cycle.
+ *
+ * Applies the SAME normalize + throttle-deadband steps the throttle chain uses,
+ * so the arming "throttle neutral" gate (R7) and the chain agree on what neutral
+ * means. Independent of arming state and of the reverse flag (reverse acts after
+ * the deadband and never moves a neutral command).
+ *
+ * @param raw_ch2_us  Raw CH2 pulse width in microseconds.
+ * @param params      Active control parameters (must be non-NULL).
+ * @return true when the post-deadband throttle command is exactly neutral.
+ */
+bool throttle_is_neutral(uint32_t raw_ch2_us, const settings_params *params);
+
 #ifdef __cplusplus
 }
 #endif

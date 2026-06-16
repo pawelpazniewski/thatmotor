@@ -33,12 +33,15 @@ typedef enum {
  *
  * width_us        Last measured pulse width (high time) in microseconds.
  * period_us       Last measured frame period (rising-edge to rising-edge) in us.
- * last_edge_ticks Raw timestamp of the last rising edge, in capture-timer ticks
- *                 (12.5 ns/tick), in the MCPWM free-running 32-bit counter
- *                 domain. Kept as raw ticks (NOT converted to us) so recency can
- *                 be computed with wrap-safe modular subtraction in the same
- *                 counter epoch. The recency "now" MUST come from this same
- *                 capture-tick domain (see channel_valid).
+ * last_edge_ticks Timestamp of the last rising edge in the rc_capture recency
+ *                 tick domain (12.5 ns/tick, free-running 32-bit, wraps at
+ *                 2^32). Kept as raw ticks (NOT converted to us) so recency can
+ *                 be computed with wrap-safe modular subtraction. This domain is
+ *                 esp_timer-derived (it advances in real time even when RC edges
+ *                 stop, so recency expires and failsafe fires); width_us and
+ *                 period_us instead come from the hardware capture counter. The
+ *                 recency "now" MUST come from rc_capture_now_ticks(), the same
+ *                 domain (see channel_valid).
  * edge_seen       True once at least one complete pulse has been measured.
  */
 typedef struct {

@@ -1,7 +1,10 @@
+#include "control_loop.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "pwm_out.h"
 #include "rc_capture.h"
+#include "settings_model.h"
+#include "settings_validate.h"
 
 static const char *TAG = "app_main";
 
@@ -53,5 +56,13 @@ void app_main(void)
     ESP_ERROR_CHECK(rc_capture_init());
     ESP_LOGI(TAG, "RC capture started: CH1/CH2/CH4 (MCPWM)");
 
-    ESP_LOGI(TAG, "Phase 1 boot complete; idling in safe state");
+    /* Control loop: start from conservative built-in defaults (NVS load lands in
+     * Unit 8). The loop is the single writer of active params (SI-6) and always
+     * boots in DISARMED (SI-1). This task becomes the control task and never
+     * returns; the watchdog is fed only at the end of each completed cycle. */
+    settings_params params;
+    settings_load_defaults(&params);
+    ESP_ERROR_CHECK(control_loop_init(&params));
+    ESP_LOGI(TAG, "control loop initialised; entering 50 Hz loop (DISARMED)");
+    control_loop_run();
 }

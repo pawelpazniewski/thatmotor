@@ -30,6 +30,17 @@ esp_err_t rc_capture_init(void);
  */
 esp_err_t rc_capture_read(RcCaptureChannel channel, rc_channel_sample *out);
 
+/**
+ * Current recency tick in the rc_capture domain (12.5 ns/tick, 32-bit, wraps at
+ * 2^32 ~ 53.6 s). This is the value to pass as channel_valid's now_ticks: it is
+ * the same domain as rc_channel_sample.last_edge_ticks, advances in real time
+ * (so edge recency expires even when RC stops), and wraps identically. Derived
+ * from esp_timer, NOT the raw hardware capture counter.
+ *
+ * @return Current tick in the rc_capture recency domain.
+ */
+uint32_t rc_capture_now_ticks(void);
+
 #ifdef __cplusplus
 }
 #endif

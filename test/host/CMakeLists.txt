@@ -26,6 +26,8 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/signal_chain/src/chain_math.c
     ${REPO_ROOT}/components/signal_chain/src/throttle_chain.c
     ${REPO_ROOT}/components/signal_chain/src/servo_chain.c
+    ${REPO_ROOT}/components/state_machine/src/state_machine.c
+    ${REPO_ROOT}/components/control_loop/src/loop_step.c
 )
 
 set(PURE_INCLUDE_DIRS
@@ -37,6 +39,8 @@ set(PURE_INCLUDE_DIRS
     ${REPO_ROOT}/components/settings/src
     ${REPO_ROOT}/components/signal_chain/include
     ${REPO_ROOT}/components/signal_chain/src
+    ${REPO_ROOT}/components/state_machine/include
+    ${REPO_ROOT}/components/control_loop/include
 )
 
 # Test sources.
@@ -51,6 +55,8 @@ set(TEST_SOURCES
     test_ramp.c
     test_throttle_chain.c
     test_servo_chain.c
+    test_state_machine.c
+    test_loop_step.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})
