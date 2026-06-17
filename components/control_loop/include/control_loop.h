@@ -30,6 +30,10 @@ typedef struct {
     uint32_t ch1_us;           /* steering raw pulse width */
     uint32_t ch2_us;           /* throttle raw pulse width */
     uint32_t ch4_us;           /* diagnostic raw pulse width (R12) */
+    uint32_t ch1_period_us;    /* DIAG: measured CH1 frame period */
+    uint32_t ch2_period_us;    /* DIAG: measured CH2 frame period */
+    bool ch1_valid;            /* DIAG: CH1 passes channel_valid this frame */
+    bool ch2_valid;            /* DIAG: CH2 passes channel_valid this frame */
     uint32_t servo_us;         /* commanded servo pulse (post-clamp) */
     uint32_t esc_us;           /* commanded ESC pulse (post-clamp) */
     settings_source source;    /* R16: provenance */

@@ -26,6 +26,17 @@
   </section>
 
   <section class="card">
+    <h2>RC diagnostics</h2>
+    <div class="grid">
+      <div class="metric"><span class="label">CH1 period (µs)</span><span id="ch1_period_us" class="value">--</span></div>
+      <div class="metric"><span class="label">CH2 period (µs)</span><span id="ch2_period_us" class="value">--</span></div>
+      <div class="metric"><span class="label">CH1 valid</span><span id="ch1_valid" class="value">--</span></div>
+      <div class="metric"><span class="label">CH2 valid</span><span id="ch2_valid" class="value">--</span></div>
+    </div>
+    <p class="hint">Valid pulse width 800–2200 µs; valid frame period 12000–28000 µs. A channel showing valid=NO with a good width usually means its period is out of that range.</p>
+  </section>
+
+  <section class="card">
     <h2>Status flags (R16)</h2>
     <div class="grid">
       <div class="metric"><span class="label">Source</span><span id="source" class="value">--</span></div>

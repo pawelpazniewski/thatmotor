@@ -239,6 +239,14 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     s_snapshot.ch1_us = in->ch1.width_us;
     s_snapshot.ch2_us = in->ch2.width_us;
     s_snapshot.ch4_us = ch4.width_us;
+    /* DIAG: surface the hidden validity inputs in the panel (period + per-channel
+     * pass/fail) so RC can be diagnosed over WiFi without USB attached. */
+    s_snapshot.ch1_period_us = in->ch1.period_us;
+    s_snapshot.ch2_period_us = in->ch2.period_us;
+    s_snapshot.ch1_valid = channel_valid(&in->ch1, in->now_ticks,
+                                         &s_validity_cfg.ch1);
+    s_snapshot.ch2_valid = channel_valid(&in->ch2, in->now_ticks,
+                                         &s_validity_cfg.ch2);
     s_snapshot.servo_us = out->servo_us;
     s_snapshot.esc_us = out->esc_us;
     s_snapshot.source = s_load_flags.source;

@@ -74,6 +74,10 @@ function applyTelemetry(t) {
   setText("ch1_us", t.ch1_us);
   setText("ch2_us", t.ch2_us);
   setText("ch4_us", t.ch4_us);
+  setText("ch1_period_us", t.ch1_period_us);
+  setText("ch2_period_us", t.ch2_period_us);
+  setText("ch1_valid", t.ch1_valid ? "yes" : "NO");
+  setText("ch2_valid", t.ch2_valid ? "yes" : "NO");
   setText("servo_us", t.servo_us);
   setText("esc_us", t.esc_us);
   setText("source", SOURCE_NAMES[t.source] || t.source);
