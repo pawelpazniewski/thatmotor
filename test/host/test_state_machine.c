@@ -15,6 +15,7 @@ static sm_inputs armable_inputs(void)
         .ui_disarm_request = false,
         .ui_calib_request = false,
         .ui_calib_confirm = false,
+        .mode_toggle = false,
     };
     return in;
 }
@@ -202,6 +203,62 @@ static void test_servo_centers_when_rc_invalid_regardless_of_state(void)
     TEST_ASSERT_EQUAL(SERVO_TARGET_CENTER, from_disarmed.servo_target);
 }
 
+/* --- CH4 mode toggle (ARMED <-> DISARMED via the same guard) --- */
+
+static void test_disarmed_mode_toggle_with_guard_met_arms(void)
+{
+    /* Arrange: no panel arm request; the CH4 toggle is the arm intent, with the
+     * full safety gate satisfied (RC valid, throttle neutral). */
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;
+    in.mode_toggle = true;
+
+    sm_outputs out = sm_step(SM_STATE_DISARMED, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_ARMED, out.state);
+    TEST_ASSERT_EQUAL(THROTTLE_TARGET_TRACK, out.throttle_target);
+}
+
+static void test_disarmed_mode_toggle_without_neutral_stays_disarmed(void)
+{
+    /* The toggle passes the SAME guard as a panel arm: off-neutral throttle must
+     * block arming, so a toggle at the throttle does NOT spin the motor. */
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;
+    in.mode_toggle = true;
+    in.throttle_neutral = false;
+
+    sm_outputs out = sm_step(SM_STATE_DISARMED, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
+    TEST_ASSERT_EQUAL(THROTTLE_TARGET_NEUTRAL, out.throttle_target);
+}
+
+static void test_armed_mode_toggle_disarms(void)
+{
+    /* Arrange: ARMED with no panel disarm; the CH4 toggle alone disarms. */
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;
+    in.ui_disarm_request = false;
+    in.mode_toggle = true;
+
+    sm_outputs out = sm_step(SM_STATE_ARMED, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
+}
+
+static void test_failsafe_mode_toggle_stays_failsafe_without_rc(void)
+{
+    /* RC dominates: a toggle must never lift FAILSAFE while RC is invalid. */
+    sm_inputs in = armable_inputs();
+    in.rc_valid = false;
+    in.mode_toggle = true;
+
+    sm_outputs out = sm_step(SM_STATE_FAILSAFE, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_FAILSAFE, out.state);
+}
+
 /* --- ESC calibration entry guard (R15/SI-5) --- */
 
 static void test_calib_entry_all_conditions_enters(void)
@@ -269,6 +326,10 @@ void run_state_machine_tests(void)
     RUN_TEST(test_armed_stays_armed_when_nominal);
     RUN_TEST(test_failsafe_persists_while_rc_invalid);
     RUN_TEST(test_failsafe_rc_recovery_goes_disarmed_not_armed);
+    RUN_TEST(test_disarmed_mode_toggle_with_guard_met_arms);
+    RUN_TEST(test_disarmed_mode_toggle_without_neutral_stays_disarmed);
+    RUN_TEST(test_armed_mode_toggle_disarms);
+    RUN_TEST(test_failsafe_mode_toggle_stays_failsafe_without_rc);
     RUN_TEST(test_servo_tracks_when_rc_valid_disarmed);
     RUN_TEST(test_servo_tracks_when_rc_valid_armed);
     RUN_TEST(test_servo_centers_when_rc_invalid_regardless_of_state);

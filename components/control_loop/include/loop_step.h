@@ -40,6 +40,9 @@ typedef struct {
     bool ui_calib_confirm; /* operator confirmed the removal warning */
     calib_event calib_event;/* calibration step event (next/cancel) this cycle */
     bool calib_timeout;    /* calibration idle timeout elapsed this cycle */
+    bool mode_toggle;      /* CH4 button edge this cycle (toggles ARMED/DISARMED);
+                            * already resolved (debounced + gated by the enable
+                            * setting) by the HAL before this struct is built */
 } loop_inputs;
 
 /** Per-channel validity thresholds (constant across cycles). */

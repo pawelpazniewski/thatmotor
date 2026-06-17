@@ -37,6 +37,9 @@ void settings_load_defaults(settings_params *out)
 
         .failsafe_timeout_ms = FAILSAFE_TIMEOUT_MS_DEFAULT,
         .reverse_neutral_dwell_ms = REVERSE_NEUTRAL_DWELL_MS_DEFAULT,
+
+        .ch4_mode_switch_enabled = CH4_MODE_SWITCH_ENABLED_DEFAULT,
+        .ch4_switch_threshold_us = CH4_SWITCH_THRESHOLD_US_DEFAULT,
     };
 
     *out = defaults;

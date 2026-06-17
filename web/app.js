@@ -4,13 +4,19 @@
 const STATE_NAMES = ["DISARMED", "ARMED", "FAILSAFE", "ESC_CALIBRATION"];
 const SOURCE_NAMES = ["DEFAULTS", "NVS", "MIXED_RECOVERED"];
 
-const BOOL_KEYS = new Set(["servo_reverse", "throttle_reverse"]);
+const BOOL_KEYS = new Set([
+  "servo_reverse",
+  "throttle_reverse",
+  "ch4_mode_switch_enabled",
+]);
 
 // Friendly labels for params whose JSON key alone is not self-explanatory.
 // Any key not listed falls back to the raw key (the existing behaviour).
 const PARAM_LABELS = {
   max_throttle_fwd_pct: "Max throttle forward (%)",
   max_throttle_rev_pct: "Max throttle reverse (%)",
+  ch4_mode_switch_enabled: "CH4 mode switch enabled",
+  ch4_switch_threshold_us: "CH4 switch threshold (µs)",
 };
 
 let lastState = null;

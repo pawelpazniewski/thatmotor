@@ -34,6 +34,7 @@ static const u16_field U16_FIELDS[] = {
     U16_FIELD(esc_reverse_max_us),
     U16_FIELD(failsafe_timeout_ms),
     U16_FIELD(reverse_neutral_dwell_ms),
+    U16_FIELD(ch4_switch_threshold_us),
 };
 
 #define U16_FIELD_COUNT (sizeof(U16_FIELDS) / sizeof(U16_FIELDS[0]))
@@ -46,6 +47,8 @@ typedef struct {
 static const bool_field BOOL_FIELDS[] = {
     {"servo_reverse", offsetof(settings_params, servo_reverse)},
     {"throttle_reverse", offsetof(settings_params, throttle_reverse)},
+    {"ch4_mode_switch_enabled",
+     offsetof(settings_params, ch4_mode_switch_enabled)},
 };
 
 #define BOOL_FIELD_COUNT (sizeof(BOOL_FIELDS) / sizeof(BOOL_FIELDS[0]))

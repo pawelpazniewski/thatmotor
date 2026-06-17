@@ -55,6 +55,7 @@ static sm_inputs build_sm_inputs(const loop_inputs *in,
         .ui_disarm_request = in->ui_disarm_request,
         .ui_calib_request = in->ui_calib_request,
         .ui_calib_confirm = in->ui_calib_confirm,
+        .mode_toggle = in->mode_toggle,
     };
     return si;
 }

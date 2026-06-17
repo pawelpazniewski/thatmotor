@@ -51,6 +51,10 @@ typedef struct {
     bool ui_disarm_request;         /* explicit disarm action from the panel */
     bool ui_calib_request;          /* explicit "start ESC calibration" action */
     bool ui_calib_confirm;          /* operator confirmed the removal warning */
+    bool mode_toggle;               /* one-shot CH4 button edge this cycle:
+                                     * in DISARMED = arm intent (same guard),
+                                     * in ARMED = disarm. Direction comes from
+                                     * the current state, not the input. */
 } sm_inputs;
 
 /**

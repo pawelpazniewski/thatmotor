@@ -10,6 +10,7 @@ void run_pwm_us_to_duty_tests(void);
 void run_pwm_out_logic_tests(void);
 void run_cap_math_tests(void);
 void run_rc_validity_tests(void);
+void run_ch4_switch_tests(void);
 void run_settings_validate_tests(void);
 void run_blob_codec_tests(void);
 void run_commit_debounce_tests(void);
@@ -34,6 +35,7 @@ int main(void)
     run_pwm_out_logic_tests();
     run_cap_math_tests();
     run_rc_validity_tests();
+    run_ch4_switch_tests();
     run_settings_validate_tests();
     run_blob_codec_tests();
     run_commit_debounce_tests();

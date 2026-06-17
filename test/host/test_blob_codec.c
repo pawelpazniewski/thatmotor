@@ -42,6 +42,8 @@ static settings_params make_sample(void)
     p.max_throttle_fwd_pct = 85;
     p.max_throttle_rev_pct = 25;
     p.esc_neutral_us = 1480;
+    p.ch4_mode_switch_enabled = false; /* non-default to make the round-trip real */
+    p.ch4_switch_threshold_us = 1820;
     return p;
 }
 
@@ -87,6 +89,19 @@ static void test_round_trip_preserves_every_field(void)
     TEST_ASSERT_EQUAL_UINT16(in.failsafe_timeout_ms, out.failsafe_timeout_ms);
     TEST_ASSERT_EQUAL_UINT16(in.reverse_neutral_dwell_ms,
                              out.reverse_neutral_dwell_ms);
+    TEST_ASSERT_EQUAL_INT(in.ch4_mode_switch_enabled,
+                          out.ch4_mode_switch_enabled);
+    TEST_ASSERT_EQUAL_UINT16(in.ch4_switch_threshold_us,
+                             out.ch4_switch_threshold_us);
+}
+
+static void test_blob_size_matches_v3_layout(void)
+{
+    /* Anchor the schema-v3 wire size: 22 u16 (44) + 3 bool (3) field bytes + 4
+     * CRC bytes = 51. A struct/layout change that forgets to update the codec
+     * size trips this. */
+    TEST_ASSERT_EQUAL_UINT(47U, BLOB_CODEC_FIELD_BYTES);
+    TEST_ASSERT_EQUAL_UINT(51U, BLOB_CODEC_SIZE);
 }
 
 static void test_encode_stamps_current_schema_version(void)
@@ -226,6 +241,7 @@ void run_blob_codec_tests(void)
     RUN_TEST(test_crc32_check_value_is_standard);
     RUN_TEST(test_crc32_empty_range_is_zero);
     RUN_TEST(test_round_trip_preserves_every_field);
+    RUN_TEST(test_blob_size_matches_v3_layout);
     RUN_TEST(test_encode_stamps_current_schema_version);
     RUN_TEST(test_bad_crc_is_rejected);
     RUN_TEST(test_corrupt_crc_trailer_is_rejected);

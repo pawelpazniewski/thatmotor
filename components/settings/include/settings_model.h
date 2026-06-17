@@ -10,8 +10,10 @@ extern "C" {
 /* Bump whenever the on-NVS layout of settings_params changes. A stored blob
  * with a different schema_version is rejected at load (-> defaults).
  * v2: split the symmetric max_throttle_pct into asymmetric forward/reverse
- * power limits (max_throttle_fwd_pct / max_throttle_rev_pct). */
-#define SETTINGS_SCHEMA_VERSION 2U
+ * power limits (max_throttle_fwd_pct / max_throttle_rev_pct).
+ * v3: add the CH4 mode-switch button (ch4_mode_switch_enabled +
+ * ch4_switch_threshold_us) so CH4 can toggle ARMED/DISARMED. */
+#define SETTINGS_SCHEMA_VERSION 3U
 
 /**
  * Persisted control parameters.
@@ -55,6 +57,10 @@ typedef struct {
     /* Safety / failsafe. */
     uint16_t failsafe_timeout_ms;
     uint16_t reverse_neutral_dwell_ms; /* dwell at neutral on fwd<->rev flip */
+
+    /* CH4 mode switch (GPIO32 used as an ARMED<->DISARMED toggle button). */
+    bool ch4_mode_switch_enabled;      /* CH4 acts as a mode toggle when true */
+    uint16_t ch4_switch_threshold_us;  /* width >= this (in RC band) = pressed */
 } settings_params;
 
 #ifdef __cplusplus

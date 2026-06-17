@@ -156,6 +156,46 @@ static void test_cross_field_esc_map_inverted_rejected(void)
     TEST_ASSERT_TRUE(out.esc_neutral_us < out.esc_forward_max_us);
 }
 
+static void test_ch4_threshold_out_of_range_recovers(void)
+{
+    /* Arrange: CH4 threshold above the RC band (2200) is invalid; the enabled
+     * flag is set to a non-default value and must survive untouched. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.ch4_switch_threshold_us = 5000U; /* > RC_US_MAX, invalid */
+    stored.ch4_mode_switch_enabled = false; /* non-default, must be preserved */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: threshold falls back to its default, bool is left as stored. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_FALSE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(1700U, out.ch4_switch_threshold_us);
+    TEST_ASSERT_FALSE(out.ch4_mode_switch_enabled);
+}
+
+static void test_ch4_enabled_bool_preserved_when_valid(void)
+{
+    /* Arrange: a fully valid blob with the CH4 switch disabled. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.ch4_mode_switch_enabled = false;
+    stored.ch4_switch_threshold_us = 1800U; /* in RC band */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: clean NVS load, bool and threshold preserved verbatim. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_NVS, result.source);
+    TEST_ASSERT_TRUE(result.settings_valid);
+    TEST_ASSERT_FALSE(out.ch4_mode_switch_enabled);
+    TEST_ASSERT_EQUAL_UINT16(1800U, out.ch4_switch_threshold_us);
+}
+
 void run_settings_validate_tests(void)
 {
     RUN_TEST(test_empty_nvs_yields_defaults);
@@ -166,4 +206,6 @@ void run_settings_validate_tests(void)
     RUN_TEST(test_cross_field_esc_forward_inverted_rejected);
     RUN_TEST(test_cross_field_rc_non_monotonic_rejected);
     RUN_TEST(test_cross_field_esc_map_inverted_rejected);
+    RUN_TEST(test_ch4_threshold_out_of_range_recovers);
+    RUN_TEST(test_ch4_enabled_bool_preserved_when_valid);
 }

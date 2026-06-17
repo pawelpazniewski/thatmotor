@@ -87,6 +87,12 @@ static void validate_fields(settings_params *p, const settings_params *def,
     p->reverse_neutral_dwell_ms = field_or_default(
         p->reverse_neutral_dwell_ms, REVERSE_NEUTRAL_DWELL_MS_MIN,
         REVERSE_NEUTRAL_DWELL_MS_MAX, def->reverse_neutral_dwell_ms, repaired);
+
+    /* CH4 mode switch: the threshold must sit inside the RC pulse band; the
+     * enabled flag is a bool and has no range to check. */
+    p->ch4_switch_threshold_us =
+        field_or_default(p->ch4_switch_threshold_us, RC_US_MIN, RC_US_MAX,
+                         def->ch4_switch_threshold_us, repaired);
 }
 
 /* The ESC map (map_normalized_to_us in the throttle chain) treats

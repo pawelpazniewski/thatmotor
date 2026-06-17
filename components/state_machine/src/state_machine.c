@@ -1,11 +1,14 @@
 #include "state_machine.h"
 
-/* Arming guard (R7): every condition must hold to leave DISARMED for ARMED. */
+/* Arming guard (R7): every condition must hold to leave DISARMED for ARMED. An
+ * arm intent comes from EITHER the panel arm request OR the CH4 mode toggle;
+ * both pass through the identical safety gate, so a toggle while the throttle is
+ * off-neutral (or RC invalid / calibrating / applying) does NOT arm. */
 static bool can_arm(const sm_inputs *inputs)
 {
-    return inputs->rc_valid && inputs->throttle_neutral &&
-           inputs->ui_arm_request && !inputs->calib_in_progress &&
-           !inputs->settings_apply_in_progress;
+    bool arm_intent = inputs->ui_arm_request || inputs->mode_toggle;
+    return arm_intent && inputs->rc_valid && inputs->throttle_neutral &&
+           !inputs->calib_in_progress && !inputs->settings_apply_in_progress;
 }
 
 /* ESC calibration entry guard (R15/SI-5): every condition must hold, including
@@ -33,13 +36,14 @@ static sm_state next_from_disarmed(const sm_inputs *inputs)
     return SM_STATE_DISARMED;
 }
 
-/* Next state from ARMED. RC loss -> FAILSAFE; explicit disarm -> DISARMED. */
+/* Next state from ARMED. RC loss -> FAILSAFE; an explicit disarm request OR a
+ * CH4 mode toggle -> DISARMED (the toggle disarms unconditionally from ARMED). */
 static sm_state next_from_armed(const sm_inputs *inputs)
 {
     if (!inputs->rc_valid) {
         return SM_STATE_FAILSAFE;
     }
-    if (inputs->ui_disarm_request) {
+    if (inputs->ui_disarm_request || inputs->mode_toggle) {
         return SM_STATE_DISARMED;
     }
     return SM_STATE_ARMED;

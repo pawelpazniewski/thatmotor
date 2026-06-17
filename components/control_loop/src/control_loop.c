@@ -1,5 +1,6 @@
 #include "control_loop.h"
 
+#include "ch4_switch.h"
 #include "commit_debounce.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
@@ -30,6 +31,8 @@ static const char *TAG = "control_loop";
 static settings_params s_params;
 static loop_state s_loop;
 static loop_validity_cfg s_validity_cfg;
+/* Persistent CH4 mode-button debounce/edge state (one frame's carry-over). */
+static ch4_switch_state s_ch4_switch;
 static QueueHandle_t s_pending_queue;
 static QueueHandle_t s_ui_queue;
 static commit_debounce_state s_commit;
@@ -67,6 +70,33 @@ static void rebuild_validity_cfg(const settings_params *params)
     s_validity_cfg.ch2 = make_channel_cfg(params);
 }
 
+/* Build the CH4 button config from the active params. The sanity band reuses
+ * the same accepted RC pulse window as the control channels. */
+static ch4_switch_cfg make_ch4_switch_cfg(const settings_params *params)
+{
+    ch4_switch_cfg cfg = {
+        .threshold_us = params->ch4_switch_threshold_us,
+        .sanity_min_us = RC_WIDTH_MIN_US,
+        .sanity_max_us = RC_WIDTH_MAX_US,
+        .debounce_frames = CH4_SWITCH_DEBOUNCE_FRAMES,
+    };
+    return cfg;
+}
+
+/* Resolve the CH4 mode-toggle for this cycle: read CH4, advance the debounced
+ * button interpreter, and emit a one-shot toggle ONLY when the feature is
+ * enabled in settings. Disabled -> always false (legacy behaviour). */
+static bool resolve_mode_toggle(void)
+{
+    if (!s_params.ch4_mode_switch_enabled) {
+        return false;
+    }
+    rc_channel_sample ch4 = {0};
+    rc_capture_read(RC_CAP_CH4, &ch4);
+    ch4_switch_cfg cfg = make_ch4_switch_cfg(&s_params);
+    return ch4_switch_update(&s_ch4_switch, &ch4, &cfg);
+}
+
 esp_err_t control_loop_init(const settings_params *initial,
                             const settings_validation_result *load_result)
 {
@@ -77,6 +107,7 @@ esp_err_t control_loop_init(const settings_params *initial,
     s_load_flags = *load_result;
     rebuild_validity_cfg(&s_params);
     loop_state_init(&s_loop, &s_params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    ch4_switch_init(&s_ch4_switch);
     commit_debounce_init(&s_commit, COMMIT_DEBOUNCE_DEFAULT_MS);
 
     s_pending_queue = xQueueCreate(1, sizeof(settings_params));
@@ -192,6 +223,7 @@ static loop_inputs read_inputs(void)
     rc_capture_read(RC_CAP_CH1, &in.ch1);
     rc_capture_read(RC_CAP_CH2, &in.ch2);
     in.now_ticks = rc_capture_now_ticks();
+    in.mode_toggle = resolve_mode_toggle();
     apply_ui_events(&in);
     return in;
 }
