@@ -234,17 +234,38 @@ function collectForm() {
 
 async function saveParams() {
   const status = $("save-status");
-  status.textContent = "saving...";
+  const stateName = STATE_NAMES[lastState] || lastState;
+  const sent = collectForm();
+  status.textContent = `saving… (state: ${stateName})`;
   const res = await fetch("/api/params", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(collectForm()),
+    body: JSON.stringify(sent),
   });
-  const env = await res.json();
+  const env = await res.json().catch(() => ({}));
   if (env.error) {
-    status.textContent = `error (${res.status}): ${env.error.code} - ${env.error.message}`;
+    status.textContent =
+      `✗ REJECTED ${res.status}: ${env.error.code} — ${env.error.message} (state ${stateName})`;
+    return;
+  }
+  // Let the 50 Hz loop apply the pending set, then read back the device truth so
+  // a silently-unapplied save is visible instead of looking "saved".
+  await new Promise((r) => setTimeout(r, 300));
+  const verify = await fetch("/api/params").then((r) => r.json()).catch(() => ({}));
+  if (!verify.data) {
+    status.textContent = `saved, but read-back failed (state ${stateName})`;
+    return;
+  }
+  const diffs = Object.keys(sent).filter(
+    (k) => String(verify.data[k]) !== String(sent[k]),
+  );
+  buildForm(verify.data); // form now mirrors the device exactly
+  if (diffs.length === 0) {
+    status.textContent =
+      `✓ saved & confirmed on device (state ${stateName}). NVS write ~3 s later while DISARMED — don't power-cycle immediately.`;
   } else {
-    status.textContent = "saved (applied while DISARMED, persisted to NVS)";
+    status.textContent =
+      `⚠ NOT applied — ${diffs.join(", ")} reverted (device kept old value). State=${stateName}: editing needs a stable DISARMED.`;
   }
 }
 
