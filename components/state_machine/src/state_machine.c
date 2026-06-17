@@ -21,16 +21,16 @@ sm_arm_reason sm_arm_block_reason(const sm_inputs *inputs)
     return SM_ARM_READY;
 }
 
-/* Arming guard (R7): every condition must hold to leave DISARMED for ARMED. An
- * arm intent comes from EITHER the panel arm request OR the CH4 mode toggle;
- * both pass through the identical safety gate, so a toggle while the throttle is
- * off-neutral (or RC invalid / calibrating / applying) does NOT arm. The safety
- * conditions are exactly those reported by sm_arm_block_reason (single source of
- * truth: armable iff there is an intent AND the block reason is READY). */
+/* Arming guard (R7): every condition must hold to leave DISARMED for ARMED. The
+ * arm intent is a single explicit request (ui_arm_request); the CH4 position
+ * switch and the panel both feed that same request upstream, so any arm intent
+ * passes through the identical safety gate (off-neutral / RC invalid /
+ * calibrating / applying does NOT arm). The safety conditions are exactly those
+ * reported by sm_arm_block_reason (single source of truth: armable iff there is
+ * an intent AND the block reason is READY). */
 static bool can_arm(const sm_inputs *inputs)
 {
-    bool arm_intent = inputs->ui_arm_request || inputs->mode_toggle;
-    return arm_intent && sm_arm_block_reason(inputs) == SM_ARM_READY;
+    return inputs->ui_arm_request && sm_arm_block_reason(inputs) == SM_ARM_READY;
 }
 
 /* ESC calibration entry guard (R15/SI-5): every condition must hold, including
@@ -58,14 +58,14 @@ static sm_state next_from_disarmed(const sm_inputs *inputs)
     return SM_STATE_DISARMED;
 }
 
-/* Next state from ARMED. RC loss -> FAILSAFE; an explicit disarm request OR a
- * CH4 mode toggle -> DISARMED (the toggle disarms unconditionally from ARMED). */
+/* Next state from ARMED. RC loss -> FAILSAFE; an explicit disarm request (from
+ * the panel or the CH4 position switch, both upstream) -> DISARMED. */
 static sm_state next_from_armed(const sm_inputs *inputs)
 {
     if (!inputs->rc_valid) {
         return SM_STATE_FAILSAFE;
     }
-    if (inputs->ui_disarm_request || inputs->mode_toggle) {
+    if (inputs->ui_disarm_request) {
         return SM_STATE_DISARMED;
     }
     return SM_STATE_ARMED;

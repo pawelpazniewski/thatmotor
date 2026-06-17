@@ -173,7 +173,7 @@ static void test_ch4_threshold_out_of_range_recovers(void)
     TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
     TEST_ASSERT_TRUE(result.defaults_used);
     TEST_ASSERT_FALSE(result.settings_valid);
-    TEST_ASSERT_EQUAL_UINT16(1700U, out.ch4_switch_threshold_us);
+    TEST_ASSERT_EQUAL_UINT16(1500U, out.ch4_switch_threshold_us);
     TEST_ASSERT_FALSE(out.ch4_mode_switch_enabled);
 }
 

@@ -68,9 +68,10 @@
 #define REVERSE_NEUTRAL_DWELL_MS_MAX 2000U
 #define REVERSE_NEUTRAL_DWELL_MS_DEFAULT 0U
 
-/* CH4 mode-switch button. The threshold lives in the RC pulse band; default
- * 1700 us sits comfortably above a 1500 us neutral so a typical 2-position
- * switch (toward ~2000 us) reads as "pressed". The debounce-frame count is a
- * property of the button interpreter and is defined in ch4_switch.h. */
+/* CH4 mode-switch position switch. The threshold lives in the RC pulse band;
+ * default 1500 us is the midpoint of a typical 2-position switch (~1000/~2000
+ * us), so above it reads "high" (arm) and below it reads "low" (disarm). The
+ * debounce-frame count is a property of the switch interpreter and is defined
+ * in ch4_switch.h. */
 #define CH4_MODE_SWITCH_ENABLED_DEFAULT true
-#define CH4_SWITCH_THRESHOLD_US_DEFAULT 1700U
+#define CH4_SWITCH_THRESHOLD_US_DEFAULT 1500U

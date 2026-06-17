@@ -58,9 +58,9 @@ typedef struct {
     uint16_t failsafe_timeout_ms;
     uint16_t reverse_neutral_dwell_ms; /* dwell at neutral on fwd<->rev flip */
 
-    /* CH4 mode switch (GPIO32 used as an ARMED<->DISARMED toggle button). */
-    bool ch4_mode_switch_enabled;      /* CH4 acts as a mode toggle when true */
-    uint16_t ch4_switch_threshold_us;  /* width >= this (in RC band) = pressed */
+    /* CH4 position switch (GPIO32): high=arm, low=disarm, one flick=one change. */
+    bool ch4_mode_switch_enabled;      /* CH4 drives arm/disarm when true */
+    uint16_t ch4_switch_threshold_us;  /* width >= this (in RC band) = high */
 } settings_params;
 
 #ifdef __cplusplus

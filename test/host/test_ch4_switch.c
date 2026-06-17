@@ -2,14 +2,14 @@
 #include "unity.h"
 
 /* Shared fixture constants: a threshold and band typical of the firmware. */
-#define TEST_THRESHOLD_US 1700U
+#define TEST_THRESHOLD_US 1500U
 #define TEST_SANITY_MIN_US 800U
 #define TEST_SANITY_MAX_US 2200U
 #define TEST_DEBOUNCE_FRAMES 3U
 
-#define PRESSED_US 1900U   /* >= threshold, in band */
-#define RELEASED_US 1100U  /* < threshold, in band */
-#define FLOATING_US 7322U  /* out of band (floating pin) */
+#define HIGH_US 1900U     /* >= threshold, in band */
+#define LOW_US 1100U      /* < threshold, in band */
+#define FLOATING_US 7322U /* out of band (floating pin) */
 
 static ch4_switch_cfg default_cfg(void)
 {
@@ -33,169 +33,193 @@ static rc_channel_sample sample_at(uint32_t width_us)
     return s;
 }
 
-/* Feed the same width for n frames; return the LAST pulse result. Used to settle
- * the debounce and to assert that holding emits nothing further. */
-static bool feed(ch4_switch_state *st, const ch4_switch_cfg *cfg,
-                 uint32_t width_us, int frames)
+/* Feed the same width for n frames; return the LAST event. Used to settle the
+ * debounce and to assert that holding a position emits nothing further. */
+static ch4_switch_event feed(ch4_switch_state *st, const ch4_switch_cfg *cfg,
+                             uint32_t width_us, int frames)
 {
     rc_channel_sample s = sample_at(width_us);
-    bool last = false;
+    ch4_switch_event last = CH4_SWITCH_NONE;
     for (int i = 0; i < frames; ++i) {
         last = ch4_switch_update(st, &s, cfg);
     }
     return last;
 }
 
-/* Drive the state past the initial baseline (released, established) so later
- * edges are real toggles. Returns once initialised at "released". */
-static void prime_released(ch4_switch_state *st, const ch4_switch_cfg *cfg)
+/* Drive the state past the initial baseline (low, established) so later edges
+ * are real directional events. Returns once initialised at "low". */
+static void prime_low(ch4_switch_state *st, const ch4_switch_cfg *cfg)
 {
-    bool pulse = feed(st, cfg, RELEASED_US, TEST_DEBOUNCE_FRAMES);
-    TEST_ASSERT_FALSE(pulse); /* baseline only, no pulse */
+    ch4_switch_event event = feed(st, cfg, LOW_US, TEST_DEBOUNCE_FRAMES);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, event); /* baseline only, no event */
 }
 
-static void test_rising_edge_emits_one_pulse_after_debounce(void)
+static void test_rising_edge_emits_to_high_after_debounce(void)
 {
-    /* Arrange: initialised at released. */
+    /* Arrange: initialised at low. */
     ch4_switch_state st;
     ch4_switch_init(&st);
     ch4_switch_cfg cfg = default_cfg();
-    prime_released(&st, &cfg);
-    rc_channel_sample pressed = sample_at(PRESSED_US);
+    prime_low(&st, &cfg);
+    rc_channel_sample high = sample_at(HIGH_US);
 
-    /* Act: press for fewer than debounce frames -> no pulse yet. */
-    bool early1 = ch4_switch_update(&st, &pressed, &cfg);
-    bool early2 = ch4_switch_update(&st, &pressed, &cfg);
-    bool edge = ch4_switch_update(&st, &pressed, &cfg); /* debounce reached */
+    /* Act: high for fewer than debounce frames -> no event yet. */
+    ch4_switch_event early1 = ch4_switch_update(&st, &high, &cfg);
+    ch4_switch_event early2 = ch4_switch_update(&st, &high, &cfg);
+    ch4_switch_event edge = ch4_switch_update(&st, &high, &cfg);
 
-    /* Assert: exactly one pulse, on the debounce-completing frame. */
-    TEST_ASSERT_FALSE(early1);
-    TEST_ASSERT_FALSE(early2);
-    TEST_ASSERT_TRUE(edge);
+    /* Assert: exactly one TO_HIGH, on the debounce-completing frame. */
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, early1);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, early2);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_TO_HIGH, edge);
 }
 
-static void test_holding_pressed_emits_no_repeat(void)
+static void test_falling_edge_emits_to_low_after_debounce(void)
 {
-    /* Arrange: initialised, then a real press edge. */
+    /* Arrange: initialised at low, then driven high. */
     ch4_switch_state st;
     ch4_switch_init(&st);
     ch4_switch_cfg cfg = default_cfg();
-    prime_released(&st, &cfg);
-    bool edge = feed(&st, &cfg, PRESSED_US, TEST_DEBOUNCE_FRAMES);
-    TEST_ASSERT_TRUE(edge);
+    prime_low(&st, &cfg);
+    ch4_switch_event up = feed(&st, &cfg, HIGH_US, TEST_DEBOUNCE_FRAMES);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_TO_HIGH, up);
 
-    /* Act: keep holding the button for many more frames. */
-    bool held = feed(&st, &cfg, PRESSED_US, 10);
+    /* Act: flick back down for the full debounce window. */
+    ch4_switch_event down = feed(&st, &cfg, LOW_US, TEST_DEBOUNCE_FRAMES);
 
-    /* Assert: no further toggle while held. */
-    TEST_ASSERT_FALSE(held);
+    /* Assert: high->low emits exactly TO_LOW. */
+    TEST_ASSERT_EQUAL(CH4_SWITCH_TO_LOW, down);
 }
 
-static void test_falling_edge_emits_no_pulse(void)
+static void test_holding_high_emits_no_repeat(void)
 {
-    /* Arrange: initialised, pressed, then release. */
+    /* Arrange: initialised, then a real TO_HIGH edge. */
     ch4_switch_state st;
     ch4_switch_init(&st);
     ch4_switch_cfg cfg = default_cfg();
-    prime_released(&st, &cfg);
-    feed(&st, &cfg, PRESSED_US, TEST_DEBOUNCE_FRAMES);
+    prime_low(&st, &cfg);
+    ch4_switch_event edge = feed(&st, &cfg, HIGH_US, TEST_DEBOUNCE_FRAMES);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_TO_HIGH, edge);
 
-    /* Act: release for the full debounce window. */
-    bool release_pulse = feed(&st, &cfg, RELEASED_US, TEST_DEBOUNCE_FRAMES);
+    /* Act: keep holding high for many more frames. */
+    ch4_switch_event held = feed(&st, &cfg, HIGH_US, 10);
 
-    /* Assert: releasing never toggles. */
-    TEST_ASSERT_FALSE(release_pulse);
+    /* Assert: no further event while held high. */
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, held);
 }
 
-static void test_short_noise_below_debounce_emits_no_pulse(void)
+static void test_holding_low_emits_no_repeat(void)
 {
-    /* Arrange: initialised at released. */
+    /* Arrange: initialised at low (baseline). */
     ch4_switch_state st;
     ch4_switch_init(&st);
     ch4_switch_cfg cfg = default_cfg();
-    prime_released(&st, &cfg);
-    rc_channel_sample pressed = sample_at(PRESSED_US);
-    rc_channel_sample released = sample_at(RELEASED_US);
+    prime_low(&st, &cfg);
 
-    /* Act: a single pressed frame (debounce is 3), then back to released. */
-    bool spike = ch4_switch_update(&st, &pressed, &cfg);
-    bool after1 = ch4_switch_update(&st, &released, &cfg);
-    bool after2 = ch4_switch_update(&st, &released, &cfg);
+    /* Act: keep holding low for many more frames. */
+    ch4_switch_event held = feed(&st, &cfg, LOW_US, 10);
 
-    /* Assert: a sub-debounce glitch never produces a toggle. */
-    TEST_ASSERT_FALSE(spike);
-    TEST_ASSERT_FALSE(after1);
-    TEST_ASSERT_FALSE(after2);
+    /* Assert: holding low never emits an event. */
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, held);
 }
 
-static void test_out_of_band_is_treated_as_released_no_pulse(void)
+static void test_short_noise_below_debounce_emits_none(void)
 {
-    /* Arrange: initialised at released. */
+    /* Arrange: initialised at low. */
     ch4_switch_state st;
     ch4_switch_init(&st);
     ch4_switch_cfg cfg = default_cfg();
-    prime_released(&st, &cfg);
+    prime_low(&st, &cfg);
+    rc_channel_sample high = sample_at(HIGH_US);
+    rc_channel_sample low = sample_at(LOW_US);
 
-    /* Act: a floating pin reads 7322 us (out of [800,2200]); above threshold
-     * numerically but out of band, so it must NOT count as pressed. */
-    bool pulse = feed(&st, &cfg, FLOATING_US, TEST_DEBOUNCE_FRAMES + 2);
+    /* Act: a single high frame (debounce is 3), then back to low. */
+    ch4_switch_event spike = ch4_switch_update(&st, &high, &cfg);
+    ch4_switch_event after1 = ch4_switch_update(&st, &low, &cfg);
+    ch4_switch_event after2 = ch4_switch_update(&st, &low, &cfg);
 
-    /* Assert: no toggle from an out-of-band signal. */
-    TEST_ASSERT_FALSE(pulse);
+    /* Assert: a sub-debounce glitch never produces an event. */
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, spike);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, after1);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, after2);
 }
 
-static void test_initialisation_baseline_pressed_emits_no_pulse(void)
+static void test_out_of_band_holds_level_no_false_edge(void)
 {
-    /* Arrange: button already held at power-up. */
+    /* Arrange: initialised at low, then driven high (accepted). */
+    ch4_switch_state st;
+    ch4_switch_init(&st);
+    ch4_switch_cfg cfg = default_cfg();
+    prime_low(&st, &cfg);
+    ch4_switch_event up = feed(&st, &cfg, HIGH_US, TEST_DEBOUNCE_FRAMES);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_TO_HIGH, up);
+
+    /* Act: a floating pin reads 7322 us (out of [800,2200]); it must NOT
+     * fabricate a TO_LOW edge from the previously-high level. */
+    ch4_switch_event floating = feed(&st, &cfg, FLOATING_US,
+                                     TEST_DEBOUNCE_FRAMES + 2);
+    /* Returning into band at high must also not re-emit (level unchanged). */
+    ch4_switch_event resume = feed(&st, &cfg, HIGH_US, TEST_DEBOUNCE_FRAMES);
+
+    /* Assert: out-of-band frames hold the level and emit nothing. */
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, floating);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, resume);
+}
+
+static void test_init_baseline_high_emits_none_then_real_edge(void)
+{
+    /* Arrange: switch already high at power-up. */
     ch4_switch_state st;
     ch4_switch_init(&st);
     ch4_switch_cfg cfg = default_cfg();
 
-    /* Act: first stable level is "pressed" -> baseline only, no toggle. A real
-     * release then re-press IS a toggle. */
-    bool baseline = feed(&st, &cfg, PRESSED_US, TEST_DEBOUNCE_FRAMES);
-    bool released = feed(&st, &cfg, RELEASED_US, TEST_DEBOUNCE_FRAMES);
-    bool repress = feed(&st, &cfg, PRESSED_US, TEST_DEBOUNCE_FRAMES);
+    /* Act: first stable level is "high" -> baseline only, no event (no auto-arm
+     * on boot). A real flick down then up IS a directional event. */
+    ch4_switch_event baseline = feed(&st, &cfg, HIGH_US, TEST_DEBOUNCE_FRAMES);
+    ch4_switch_event down = feed(&st, &cfg, LOW_US, TEST_DEBOUNCE_FRAMES);
+    ch4_switch_event up = feed(&st, &cfg, HIGH_US, TEST_DEBOUNCE_FRAMES);
 
-    /* Assert: booting with the button held does not arm; later edge does. */
-    TEST_ASSERT_FALSE(baseline);
-    TEST_ASSERT_FALSE(released);
-    TEST_ASSERT_TRUE(repress);
+    /* Assert: booting with the switch high does not arm; later edges do. */
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, baseline);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_TO_LOW, down);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_TO_HIGH, up);
 }
 
 static void test_threshold_is_configurable(void)
 {
-    /* Arrange: a width of 1600 us is "released" at the default 1700 threshold
-     * but "pressed" once the threshold is lowered to 1500. */
+    /* Arrange: 1600 us is "low" at a 1700 threshold but "high" at 1500. */
     const uint32_t mid_us = 1600U;
 
-    ch4_switch_state high;
-    ch4_switch_init(&high);
-    ch4_switch_cfg high_cfg = default_cfg(); /* threshold 1700 */
-    prime_released(&high, &high_cfg);
+    ch4_switch_state high_thr;
+    ch4_switch_init(&high_thr);
+    ch4_switch_cfg high_cfg = default_cfg();
+    high_cfg.threshold_us = 1700U;
+    prime_low(&high_thr, &high_cfg);
 
-    ch4_switch_state low;
-    ch4_switch_init(&low);
-    ch4_switch_cfg low_cfg = default_cfg();
-    low_cfg.threshold_us = 1500U;
-    prime_released(&low, &low_cfg);
+    ch4_switch_state low_thr;
+    ch4_switch_init(&low_thr);
+    ch4_switch_cfg low_cfg = default_cfg(); /* threshold 1500 */
+    prime_low(&low_thr, &low_cfg);
 
     /* Act */
-    bool high_pulse = feed(&high, &high_cfg, mid_us, TEST_DEBOUNCE_FRAMES + 1);
-    bool low_pulse = feed(&low, &low_cfg, mid_us, TEST_DEBOUNCE_FRAMES);
+    ch4_switch_event high_event =
+        feed(&high_thr, &high_cfg, mid_us, TEST_DEBOUNCE_FRAMES + 1);
+    ch4_switch_event low_event =
+        feed(&low_thr, &low_cfg, mid_us, TEST_DEBOUNCE_FRAMES);
 
-    /* Assert: same input, threshold decides the press. */
-    TEST_ASSERT_FALSE(high_pulse);
-    TEST_ASSERT_TRUE(low_pulse);
+    /* Assert: same input, threshold decides the high/low split. */
+    TEST_ASSERT_EQUAL(CH4_SWITCH_NONE, high_event);
+    TEST_ASSERT_EQUAL(CH4_SWITCH_TO_HIGH, low_event);
 }
 
 void run_ch4_switch_tests(void)
 {
-    RUN_TEST(test_rising_edge_emits_one_pulse_after_debounce);
-    RUN_TEST(test_holding_pressed_emits_no_repeat);
-    RUN_TEST(test_falling_edge_emits_no_pulse);
-    RUN_TEST(test_short_noise_below_debounce_emits_no_pulse);
-    RUN_TEST(test_out_of_band_is_treated_as_released_no_pulse);
-    RUN_TEST(test_initialisation_baseline_pressed_emits_no_pulse);
+    RUN_TEST(test_rising_edge_emits_to_high_after_debounce);
+    RUN_TEST(test_falling_edge_emits_to_low_after_debounce);
+    RUN_TEST(test_holding_high_emits_no_repeat);
+    RUN_TEST(test_holding_low_emits_no_repeat);
+    RUN_TEST(test_short_noise_below_debounce_emits_none);
+    RUN_TEST(test_out_of_band_holds_level_no_false_edge);
+    RUN_TEST(test_init_baseline_high_emits_none_then_real_edge);
     RUN_TEST(test_threshold_is_configurable);
 }

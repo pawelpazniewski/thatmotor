@@ -85,18 +85,27 @@ static ch4_switch_cfg make_ch4_switch_cfg(const settings_params *params)
     return cfg;
 }
 
-/* Resolve the CH4 mode-toggle for this cycle: read CH4, advance the debounced
- * button interpreter, and emit a one-shot toggle ONLY when the feature is
- * enabled in settings. Disabled -> always false (legacy behaviour). */
-static bool resolve_mode_toggle(void)
+/* Fold the CH4 position switch into the arm/disarm intent for this cycle. The
+ * switch position maps directly to intent: a low->high edge ORs in an arm
+ * request, a high->low edge ORs in a disarm request. The OR is intentional so
+ * the panel keeps working independently (it has already been applied upstream
+ * by apply_ui_events); CH4 only adds intent, never clears it. Disabled in
+ * settings -> CH4 has no influence (legacy behaviour). Arming still passes the
+ * full safety gate in the state machine. */
+static void apply_ch4_switch(loop_inputs *in)
 {
     if (!s_params.ch4_mode_switch_enabled) {
-        return false;
+        return;
     }
     rc_channel_sample ch4 = {0};
     rc_capture_read(RC_CAP_CH4, &ch4);
     ch4_switch_cfg cfg = make_ch4_switch_cfg(&s_params);
-    return ch4_switch_update(&s_ch4_switch, &ch4, &cfg);
+    ch4_switch_event event = ch4_switch_update(&s_ch4_switch, &ch4, &cfg);
+    if (event == CH4_SWITCH_TO_HIGH) {
+        in->ui_arm_request = true;
+    } else if (event == CH4_SWITCH_TO_LOW) {
+        in->ui_disarm_request = true;
+    }
 }
 
 esp_err_t control_loop_init(const settings_params *initial,
@@ -225,8 +234,10 @@ static loop_inputs read_inputs(void)
     rc_capture_read(RC_CAP_CH1, &in.ch1);
     rc_capture_read(RC_CAP_CH2, &in.ch2);
     in.now_ticks = rc_capture_now_ticks();
-    in.mode_toggle = resolve_mode_toggle();
+    /* Panel mailbox first, then OR in the CH4 position-switch intent so CH4
+     * augments (never overrides) an arm/disarm request from the panel. */
     apply_ui_events(&in);
+    apply_ch4_switch(&in);
     return in;
 }
 
