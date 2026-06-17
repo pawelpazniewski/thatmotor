@@ -391,10 +391,10 @@ static void test_start_from_neutral_ramps_immediately_without_dwell(void)
     /* Act: one cycle. */
     throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, &p, dwell_frames, &st);
 
-    /* Assert: ramped straight into reverse with no forced dwell. Moving from 0
-     * toward a negative target is a downward step (ramp_step uses rate_down when
-     * target < current), so the value drops by one ramp-down step. */
-    TEST_ASSERT_EQUAL_INT32(-(int32_t)p.esc_ramp_down_us_per_cycle, st.value);
+    /* Assert: ramped straight into reverse with no forced dwell. Spinning UP away
+     * from neutral uses the gentle accel rate (rate_up) in EITHER direction
+     * (magnitude-aware ramp), so reverse spin-up mirrors forward spin-up. */
+    TEST_ASSERT_EQUAL_INT32(-(int32_t)p.esc_ramp_up_us_per_cycle, st.value);
     TEST_ASSERT_EQUAL_UINT16(0, st.dwell_remaining);
 }
 

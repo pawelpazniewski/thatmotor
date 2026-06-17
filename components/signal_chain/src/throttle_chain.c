@@ -89,6 +89,27 @@ static bool is_reversing(int32_t target, int32_t current)
     return command_sign(target) != command_sign(current);
 }
 
+/* Magnitude (distance from neutral) of a signed command. */
+static int32_t command_magnitude(int32_t command)
+{
+    return command < 0 ? -command : command;
+}
+
+/* Ramp toward `target` choosing the rate by MAGNITUDE relative to neutral, not
+ * numeric sign: moving AWAY from neutral (spinning up, either direction) uses
+ * the gentle accel rate; moving TOWARD neutral (slowing down) uses the quick
+ * decel rate. This keeps forward and reverse symmetric in feel - a gentle
+ * spin-up and a quick decel on both sides - instead of swapping the rates for
+ * reverse the way a sign-based ramp would. */
+static int32_t accel_aware_step(int32_t value, int32_t target, int32_t accel_rate,
+                                int32_t decel_rate)
+{
+    int32_t rate = command_magnitude(target) >= command_magnitude(value)
+                       ? accel_rate
+                       : decel_rate;
+    return ramp_step(value, target, rate, rate);
+}
+
 /* Advance the ramp + dwell state by one cycle toward `target`.
  *
  * Three exclusive phases, in priority order:
@@ -115,7 +136,7 @@ static void advance_ramp(throttle_ramp_state *st, int32_t target,
         }
         return;
     }
-    st->value = ramp_step(st->value, target, rate_up, rate_down);
+    st->value = accel_aware_step(st->value, target, rate_up, rate_down);
 }
 
 bool throttle_is_neutral(uint32_t raw_ch2_us, const settings_params *params)
