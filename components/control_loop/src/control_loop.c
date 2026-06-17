@@ -19,13 +19,15 @@
 static const char *TAG = "control_loop";
 
 /* RC validity thresholds. The accepted pulse band brackets the 1000..2000 us
- * RC range with margin; the frame period is a placeholder pending the HW
- * measurement (kontekst: do NOT assume 20 ms), with a wide tolerance so a
- * provisional value never spuriously fails. edge_timeout drives failsafe. */
+ * RC range with margin. The frame period is validated against a BROAD band, not
+ * an assumed 20 ms (kontekst: do NOT assume 20 ms): receivers run ~40-500 Hz, so
+ * accept 2..30 ms and let width + edge recency + debounce reject garbage. A real
+ * measured fast receiver (~3 ms / 330 Hz) passes; a stuck line does not.
+ * edge_timeout drives failsafe. */
 #define RC_WIDTH_MIN_US 800U
 #define RC_WIDTH_MAX_US 2200U
-#define RC_PERIOD_EXPECTED_US 20000U
-#define RC_PERIOD_TOL_US 8000U
+#define RC_PERIOD_MIN_US 2000U
+#define RC_PERIOD_MAX_US 30000U
 
 /* Active params, owned exclusively by this loop (SI-6 single writer). */
 static settings_params s_params;
@@ -57,8 +59,8 @@ static rc_channel_cfg make_channel_cfg(const settings_params *params)
     rc_channel_cfg cfg = {
         .width_min_us = RC_WIDTH_MIN_US,
         .width_max_us = RC_WIDTH_MAX_US,
-        .period_expected_us = RC_PERIOD_EXPECTED_US,
-        .period_tol_us = RC_PERIOD_TOL_US,
+        .period_min_us = RC_PERIOD_MIN_US,
+        .period_max_us = RC_PERIOD_MAX_US,
         .edge_timeout_us = (uint32_t)params->failsafe_timeout_ms * 1000U,
     };
     return cfg;

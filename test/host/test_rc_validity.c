@@ -1,12 +1,12 @@
 #include "rc_validity.h"
 #include "unity.h"
 
-/* Representative thresholds (measured-period placeholder: 20 ms +/- 5 ms). */
+/* Representative thresholds (broad period band: ~33-500 Hz). */
 static const rc_channel_cfg CFG = {
     .width_min_us = 800U,
     .width_max_us = 2200U,
-    .period_expected_us = 20000U,
-    .period_tol_us = 5000U,
+    .period_min_us = 2000U,
+    .period_max_us = 30000U,
     .edge_timeout_us = 30000U,
 };
 
@@ -126,44 +126,55 @@ static void test_width_at_max_boundary_is_valid(void)
     TEST_ASSERT_TRUE(channel_valid(&s, NOW_TICKS, &CFG));
 }
 
-static void test_period_out_of_tolerance_is_invalid(void)
+static void test_period_below_min_is_invalid(void)
 {
-    /* Arrange: 30 ms period is 10 ms off expected, beyond 5 ms tolerance. */
+    /* Arrange: 1 us below the fastest accepted period. */
     rc_channel_sample s = valid_sample();
-    s.period_us = 30000U;
+    s.period_us = CFG.period_min_us - 1U;
 
     /* Act / Assert */
     TEST_ASSERT_FALSE(channel_valid(&s, NOW_TICKS, &CFG));
 }
 
-static void test_period_at_upper_tolerance_boundary_is_valid(void)
+static void test_period_at_min_boundary_is_valid(void)
 {
-    /* Arrange: period exactly at expected + tolerance (inclusive). */
+    /* Arrange: period exactly at the fast-end bound (inclusive). */
     rc_channel_sample s = valid_sample();
-    s.period_us = CFG.period_expected_us + CFG.period_tol_us;
+    s.period_us = CFG.period_min_us;
 
     /* Act / Assert */
     TEST_ASSERT_TRUE(channel_valid(&s, NOW_TICKS, &CFG));
 }
 
-static void test_period_at_lower_tolerance_boundary_is_valid(void)
+static void test_period_at_max_boundary_is_valid(void)
 {
-    /* Arrange: period exactly at expected - tolerance (inclusive). */
+    /* Arrange: period exactly at the slow-end bound (inclusive). */
     rc_channel_sample s = valid_sample();
-    s.period_us = CFG.period_expected_us - CFG.period_tol_us;
+    s.period_us = CFG.period_max_us;
 
     /* Act / Assert */
     TEST_ASSERT_TRUE(channel_valid(&s, NOW_TICKS, &CFG));
 }
 
-static void test_period_one_us_past_tolerance_is_invalid(void)
+static void test_period_above_max_is_invalid(void)
 {
-    /* Arrange: one microsecond beyond the upper tolerance bound. */
+    /* Arrange: one microsecond beyond the slow-end bound. */
     rc_channel_sample s = valid_sample();
-    s.period_us = CFG.period_expected_us + CFG.period_tol_us + 1U;
+    s.period_us = CFG.period_max_us + 1U;
 
     /* Act / Assert */
     TEST_ASSERT_FALSE(channel_valid(&s, NOW_TICKS, &CFG));
+}
+
+static void test_fast_receiver_3ms_period_is_valid(void)
+{
+    /* Regression: a measured ~330 Hz receiver (3031 us frame) must validate;
+     * the old 20 ms +/- 8 ms window wrongly rejected it -> stuck FAILSAFE. */
+    rc_channel_sample s = valid_sample();
+    s.period_us = 3031U;
+
+    /* Act / Assert */
+    TEST_ASSERT_TRUE(channel_valid(&s, NOW_TICKS, &CFG));
 }
 
 static void test_rc_valid_both_good(void)
@@ -247,10 +258,11 @@ void run_rc_validity_tests(void)
     RUN_TEST(test_width_too_high_is_invalid);
     RUN_TEST(test_width_at_min_boundary_is_valid);
     RUN_TEST(test_width_at_max_boundary_is_valid);
-    RUN_TEST(test_period_out_of_tolerance_is_invalid);
-    RUN_TEST(test_period_at_upper_tolerance_boundary_is_valid);
-    RUN_TEST(test_period_at_lower_tolerance_boundary_is_valid);
-    RUN_TEST(test_period_one_us_past_tolerance_is_invalid);
+    RUN_TEST(test_period_below_min_is_invalid);
+    RUN_TEST(test_period_at_min_boundary_is_valid);
+    RUN_TEST(test_period_at_max_boundary_is_valid);
+    RUN_TEST(test_period_above_max_is_invalid);
+    RUN_TEST(test_fast_receiver_3ms_period_is_valid);
     RUN_TEST(test_rc_valid_both_good);
     RUN_TEST(test_rc_valid_ch1_bad);
     RUN_TEST(test_rc_valid_ch2_bad);

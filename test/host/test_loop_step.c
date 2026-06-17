@@ -14,8 +14,8 @@ static loop_validity_cfg make_cfg(void)
     rc_channel_cfg ch = {
         .width_min_us = 800U,
         .width_max_us = 2200U,
-        .period_expected_us = 20000U,
-        .period_tol_us = 8000U,
+        .period_min_us = 2000U,
+        .period_max_us = 30000U,
         .edge_timeout_us = 30000U,
     };
     loop_validity_cfg cfg = {.ch1 = ch, .ch2 = ch};

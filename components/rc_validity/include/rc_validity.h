@@ -13,18 +13,20 @@ extern "C" {
  * Validity thresholds for a single RC channel. Framework-agnostic config so
  * the predicate stays pure and host-testable.
  *
- * The expected frame period is NOT hardcoded to 20 ms / 50 Hz: it is supplied
- * here from the measured receiver rate (kontekst: "NIE zakładać 20 ms"), with a
- * generous tolerance band. A pulse is valid only when its width is in
- * [width_min_us, width_max_us], its frame period is within tolerance of
- * expected, and an edge was seen within edge_timeout_us.
+ * The frame period is NOT matched against a hardcoded 20 ms / 50 Hz (kontekst:
+ * "NIE zakładać 20 ms"). Receivers run anywhere from ~40 Hz to ~500 Hz, so the
+ * period is validated against a broad plausibility band [period_min_us,
+ * period_max_us] instead of a narrow expected+/-tolerance: this accepts any real
+ * receiver rate while still rejecting a stuck/garbage line. A pulse is valid
+ * only when its width is in [width_min_us, width_max_us], its frame period is in
+ * [period_min_us, period_max_us], and an edge was seen within edge_timeout_us.
  */
 typedef struct {
-    uint32_t width_min_us;       /* min accepted pulse width */
-    uint32_t width_max_us;       /* max accepted pulse width */
-    uint32_t period_expected_us; /* measured frame period */
-    uint32_t period_tol_us;      /* +/- tolerance around expected period */
-    uint32_t edge_timeout_us;    /* max age of the last edge to still count */
+    uint32_t width_min_us;    /* min accepted pulse width */
+    uint32_t width_max_us;    /* max accepted pulse width */
+    uint32_t period_min_us;   /* min accepted frame period (fastest rate) */
+    uint32_t period_max_us;   /* max accepted frame period (slowest rate) */
+    uint32_t edge_timeout_us; /* max age of the last edge to still count */
 } rc_channel_cfg;
 
 /**
