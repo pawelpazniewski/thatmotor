@@ -68,7 +68,8 @@ static void serialize_fields(const settings_params *p, uint8_t *buf, size_t *pos
     put_u16(buf, pos, p->esc_ramp_up_us_per_cycle);
     put_u16(buf, pos, p->esc_ramp_down_us_per_cycle);
     put_u16(buf, pos, p->throttle_deadband_us);
-    put_u16(buf, pos, p->max_throttle_pct);
+    put_u16(buf, pos, p->max_throttle_fwd_pct);
+    put_u16(buf, pos, p->max_throttle_rev_pct);
     put_bool(buf, pos, p->throttle_reverse);
 
     put_u16(buf, pos, p->esc_neutral_us);
@@ -100,7 +101,8 @@ static void deserialize_fields(const uint8_t *buf, size_t *pos, settings_params 
     p->esc_ramp_up_us_per_cycle = get_u16(buf, pos);
     p->esc_ramp_down_us_per_cycle = get_u16(buf, pos);
     p->throttle_deadband_us = get_u16(buf, pos);
-    p->max_throttle_pct = get_u16(buf, pos);
+    p->max_throttle_fwd_pct = get_u16(buf, pos);
+    p->max_throttle_rev_pct = get_u16(buf, pos);
     p->throttle_reverse = get_bool(buf, pos);
 
     p->esc_neutral_us = get_u16(buf, pos);

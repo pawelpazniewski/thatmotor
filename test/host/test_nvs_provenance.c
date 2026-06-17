@@ -19,8 +19,10 @@ static void assert_within_sanity_window(const settings_params *p)
     TEST_ASSERT_TRUE(p->rc_min_us < p->rc_mid_us && p->rc_mid_us < p->rc_max_us);
     TEST_ASSERT_TRUE(p->esc_neutral_us >= ESC_NEUTRAL_MIN &&
                      p->esc_neutral_us <= ESC_NEUTRAL_MAX);
-    TEST_ASSERT_TRUE(p->max_throttle_pct >= MAX_THROTTLE_PCT_MIN &&
-                     p->max_throttle_pct <= MAX_THROTTLE_PCT_MAX);
+    TEST_ASSERT_TRUE(p->max_throttle_fwd_pct >= MAX_THROTTLE_PCT_MIN &&
+                     p->max_throttle_fwd_pct <= MAX_THROTTLE_PCT_MAX);
+    TEST_ASSERT_TRUE(p->max_throttle_rev_pct >= MAX_THROTTLE_PCT_MIN &&
+                     p->max_throttle_rev_pct <= MAX_THROTTLE_PCT_MAX);
     TEST_ASSERT_TRUE(p->failsafe_timeout_ms >= FAILSAFE_TIMEOUT_MS_MIN &&
                      p->failsafe_timeout_ms <= FAILSAFE_TIMEOUT_MS_MAX);
 }
@@ -34,7 +36,8 @@ static settings_params make_valid_stored(void)
     p.rc_min_us = 1010;
     p.rc_mid_us = 1500;
     p.rc_max_us = 1990;
-    p.max_throttle_pct = 42;
+    p.max_throttle_fwd_pct = 85;
+    p.max_throttle_rev_pct = 42;
     return p;
 }
 
@@ -125,7 +128,10 @@ static void test_valid_blob_yields_nvs_source_and_keeps_params(void)
     TEST_ASSERT_FALSE(result.nvs_error);
     TEST_ASSERT_EQUAL_UINT16(stored.rc_min_us, out.rc_min_us);
     TEST_ASSERT_EQUAL_UINT16(stored.rc_max_us, out.rc_max_us);
-    TEST_ASSERT_EQUAL_UINT16(stored.max_throttle_pct, out.max_throttle_pct);
+    TEST_ASSERT_EQUAL_UINT16(stored.max_throttle_fwd_pct,
+                             out.max_throttle_fwd_pct);
+    TEST_ASSERT_EQUAL_UINT16(stored.max_throttle_rev_pct,
+                             out.max_throttle_rev_pct);
 }
 
 /* ---- valid-but-out-of-range blob: Unit 4 recovery, no nvs_error ---- */
@@ -136,7 +142,7 @@ static void test_decoded_out_of_range_yields_mixed_recovered_no_error(void)
      * Unit 4 validator must repair it (MIXED_RECOVERED), and this is NOT an
      * nvs read error (the blob was perfectly readable). */
     settings_params stored = make_valid_stored();
-    stored.max_throttle_pct = MAX_THROTTLE_PCT_MAX + 50U; /* out of range */
+    stored.max_throttle_fwd_pct = MAX_THROTTLE_PCT_MAX + 50U; /* out of range */
     settings_params out;
 
     /* Act */

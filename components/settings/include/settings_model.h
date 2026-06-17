@@ -8,8 +8,10 @@ extern "C" {
 #endif
 
 /* Bump whenever the on-NVS layout of settings_params changes. A stored blob
- * with a different schema_version is rejected at load (-> defaults). */
-#define SETTINGS_SCHEMA_VERSION 1U
+ * with a different schema_version is rejected at load (-> defaults).
+ * v2: split the symmetric max_throttle_pct into asymmetric forward/reverse
+ * power limits (max_throttle_fwd_pct / max_throttle_rev_pct). */
+#define SETTINGS_SCHEMA_VERSION 2U
 
 /**
  * Persisted control parameters.
@@ -38,7 +40,8 @@ typedef struct {
     uint16_t esc_ramp_up_us_per_cycle;   /* accel rate */
     uint16_t esc_ramp_down_us_per_cycle; /* decel rate */
     uint16_t throttle_deadband_us;       /* deadband around centre */
-    uint16_t max_throttle_pct;           /* power limit, percent of full */
+    uint16_t max_throttle_fwd_pct;       /* forward power limit, percent */
+    uint16_t max_throttle_rev_pct;       /* reverse power limit, percent */
     bool throttle_reverse;
 
     /* ESC output calibration (maps logical command to WP880 pulse widths). */

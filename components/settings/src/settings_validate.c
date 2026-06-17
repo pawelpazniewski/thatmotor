@@ -51,9 +51,14 @@ static void validate_fields(settings_params *p, const settings_params *def,
     p->throttle_deadband_us =
         field_or_default(p->throttle_deadband_us, 0U, DEADBAND_MAX,
                          def->throttle_deadband_us, repaired);
-    p->max_throttle_pct =
-        field_or_default(p->max_throttle_pct, MAX_THROTTLE_PCT_MIN,
-                         MAX_THROTTLE_PCT_MAX, def->max_throttle_pct, repaired);
+    p->max_throttle_fwd_pct =
+        field_or_default(p->max_throttle_fwd_pct, MAX_THROTTLE_PCT_MIN,
+                         MAX_THROTTLE_PCT_MAX, def->max_throttle_fwd_pct,
+                         repaired);
+    p->max_throttle_rev_pct =
+        field_or_default(p->max_throttle_rev_pct, MAX_THROTTLE_PCT_MIN,
+                         MAX_THROTTLE_PCT_MAX, def->max_throttle_rev_pct,
+                         repaired);
 
     p->esc_neutral_us = field_or_default(p->esc_neutral_us, ESC_NEUTRAL_MIN,
                                          ESC_NEUTRAL_MAX, def->esc_neutral_us,

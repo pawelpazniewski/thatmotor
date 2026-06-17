@@ -6,6 +6,13 @@ const SOURCE_NAMES = ["DEFAULTS", "NVS", "MIXED_RECOVERED"];
 
 const BOOL_KEYS = new Set(["servo_reverse", "throttle_reverse"]);
 
+// Friendly labels for params whose JSON key alone is not self-explanatory.
+// Any key not listed falls back to the raw key (the existing behaviour).
+const PARAM_LABELS = {
+  max_throttle_fwd_pct: "Max throttle forward (%)",
+  max_throttle_rev_pct: "Max throttle reverse (%)",
+};
+
 let lastState = null;
 
 function $(id) { return document.getElementById(id); }
@@ -76,7 +83,7 @@ function buildForm(params) {
   Object.keys(params).forEach((key) => {
     if (key === "schema_version") return;
     const label = document.createElement("label");
-    label.textContent = key;
+    label.textContent = PARAM_LABELS[key] || key;
     const input = document.createElement("input");
     input.name = key;
     if (BOOL_KEYS.has(key)) {

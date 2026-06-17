@@ -39,7 +39,8 @@ static settings_params make_sample(void)
     p.rc_max_us = 1990;
     p.servo_reverse = true;
     p.throttle_reverse = true;
-    p.max_throttle_pct = 25;
+    p.max_throttle_fwd_pct = 85;
+    p.max_throttle_rev_pct = 25;
     p.esc_neutral_us = 1480;
     return p;
 }
@@ -74,7 +75,8 @@ static void test_round_trip_preserves_every_field(void)
     TEST_ASSERT_EQUAL_UINT16(in.esc_ramp_down_us_per_cycle,
                              out.esc_ramp_down_us_per_cycle);
     TEST_ASSERT_EQUAL_UINT16(in.throttle_deadband_us, out.throttle_deadband_us);
-    TEST_ASSERT_EQUAL_UINT16(in.max_throttle_pct, out.max_throttle_pct);
+    TEST_ASSERT_EQUAL_UINT16(in.max_throttle_fwd_pct, out.max_throttle_fwd_pct);
+    TEST_ASSERT_EQUAL_UINT16(in.max_throttle_rev_pct, out.max_throttle_rev_pct);
     TEST_ASSERT_EQUAL_INT(in.throttle_reverse, out.throttle_reverse);
     TEST_ASSERT_EQUAL_UINT16(in.esc_neutral_us, out.esc_neutral_us);
     TEST_ASSERT_EQUAL_UINT16(in.esc_neutral_band_us, out.esc_neutral_band_us);

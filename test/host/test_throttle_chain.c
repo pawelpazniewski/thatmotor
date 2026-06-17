@@ -75,7 +75,8 @@ static void test_offcenter_deadband_is_consistent_both_sides(void)
     p.rc_mid_us = 1300U;
     p.rc_max_us = 2000U;
     p.throttle_deadband_us = 80U;
-    p.max_throttle_pct = 100U;
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 100U;
 
     /* Act + Assert: exactly 80 us off mid (both sides) stays neutral. */
     TEST_ASSERT_EQUAL_UINT32(
@@ -111,7 +112,8 @@ static void test_reverse_flips_direction_of_a_nonzero_command(void)
      * reverse side of neutral. */
     settings_params p = defaults_params();
     p.throttle_reverse = true;
-    p.max_throttle_pct = 100U;
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 100U;
 
     /* Act: full forward stick, reversed. */
     uint32_t esc_us = settle_throttle(2000U, THROTTLE_TARGET_TRACK, &p);
@@ -120,10 +122,13 @@ static void test_reverse_flips_direction_of_a_nonzero_command(void)
     TEST_ASSERT_LESS_THAN_UINT32(p.esc_neutral_us, esc_us);
 }
 
-static void test_power_limit_caps_target_before_ramp(void)
+static void test_power_limit_forward_caps_target_before_ramp(void)
 {
-    /* Arrange: full forward stick but 30% power limit. */
-    settings_params p = defaults_params(); /* max_throttle_pct 30 */
+    /* Arrange: full forward stick with an explicit 30% forward limit (reverse
+     * opened so only the forward cap is exercised). */
+    settings_params p = defaults_params();
+    p.max_throttle_fwd_pct = 30U;
+    p.max_throttle_rev_pct = 100U;
 
     /* Act: full forward (2000 us). */
     uint32_t esc_us = settle_throttle(2000U, THROTTLE_TARGET_TRACK, &p);
@@ -134,11 +139,46 @@ static void test_power_limit_caps_target_before_ramp(void)
     TEST_ASSERT_EQUAL_UINT32(1620U, esc_us);
 }
 
+static void test_power_limit_reverse_caps_independently_of_forward(void)
+{
+    /* Arrange: full reverse stick with a 50% reverse limit but the forward limit
+     * wide open, proving the caps are asymmetric and direction-specific. */
+    settings_params p = defaults_params();
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 50U;
+
+    /* Act: full reverse (1000 us). */
+    uint32_t esc_us = settle_throttle(1000U, THROTTLE_TARGET_TRACK, &p);
+
+    /* Assert: limited to 50% of the reverse span.
+     * reverse span = esc_neutral - esc_reverse_max = 1500 - 1100 = 400.
+     * 50% command -> 0.50 * 400 = 200 us below neutral = 1300 us. */
+    TEST_ASSERT_EQUAL_UINT32(1300U, esc_us);
+}
+
+static void test_power_limit_in_band_command_passes_through(void)
+{
+    /* Arrange: forward and reverse limits both at 90%, full forward stick whose
+     * 100% command exceeds 90% -> capped, but a command at exactly the limit
+     * passes unchanged (inclusive boundary). Use a 90% forward cap and verify
+     * the output equals 90% of the forward span. */
+    settings_params p = defaults_params();
+    p.max_throttle_fwd_pct = 90U;
+    p.max_throttle_rev_pct = 90U;
+
+    /* Act: full forward (2000 us). */
+    uint32_t esc_us = settle_throttle(2000U, THROTTLE_TARGET_TRACK, &p);
+
+    /* Assert: 90% of the 400 us forward span -> 360 us above neutral = 1860 us. */
+    TEST_ASSERT_EQUAL_UINT32(1860U, esc_us);
+}
+
 static void test_power_limit_full_forward_without_limit(void)
 {
     /* Arrange: full forward with the power limit opened to 100%. */
     settings_params p = defaults_params();
-    p.max_throttle_pct = 100U;
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 100U;
 
     /* Act */
     uint32_t esc_us = settle_throttle(2000U, THROTTLE_TARGET_TRACK, &p);
@@ -151,7 +191,8 @@ static void test_ramp_up_climbs_with_ramp_up_rate(void)
 {
     /* Arrange: full forward, fresh ramp at neutral command. */
     settings_params p = defaults_params();
-    p.max_throttle_pct = 100U;
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 100U;
     int32_t ramp = 0;
 
     /* Act: one cycle only. */
@@ -168,7 +209,8 @@ static void test_ramp_down_uses_ramp_down_rate(void)
 {
     /* Arrange: start ramped at full forward command, then command neutral. */
     settings_params p = defaults_params();
-    p.max_throttle_pct = 100U;
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 100U;
     int32_t ramp = SIGNAL_NORMALIZED_FULL_SCALE; /* at full */
 
     /* Act: command center -> target 0, one cycle. */
@@ -184,7 +226,8 @@ static void test_ramp_never_overshoots_target(void)
 {
     /* Arrange: full forward stick, 100% limit, settle. */
     settings_params p = defaults_params();
-    p.max_throttle_pct = 100U;
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 100U;
     int32_t ramp = 0;
     for (int i = 0; i < SETTLE_CYCLES; i++) {
         throttle_chain_step(2000U, THROTTLE_TARGET_TRACK, &p, &ramp);
@@ -198,7 +241,8 @@ static void test_failsafe_override_soft_stops_to_neutral(void)
 {
     /* Arrange: ramped at full forward, then FAILSAFE forces target 0. */
     settings_params p = defaults_params();
-    p.max_throttle_pct = 100U;
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 100U;
     int32_t ramp = SIGNAL_NORMALIZED_FULL_SCALE;
 
     /* Act: one FAILSAFE cycle must NOT jump straight to neutral. */
@@ -222,7 +266,8 @@ static void test_disarmed_holds_neutral_regardless_of_stick(void)
 {
     /* Arrange: full forward stick but DISARMED (target forced to 0). */
     settings_params p = defaults_params();
-    p.max_throttle_pct = 100U;
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 100U;
 
     /* Act */
     uint32_t esc_us = settle_throttle(2000U, THROTTLE_TARGET_NEUTRAL, &p);
@@ -236,7 +281,8 @@ static void test_output_never_exceeds_clamp_window(void)
     /* Arrange: absurd input and an inverted/extreme calibration cannot push the
      * output past the hard clamp window [1000, 2000]. */
     settings_params p = defaults_params();
-    p.max_throttle_pct = 100U;
+    p.max_throttle_fwd_pct = 100U;
+    p.max_throttle_rev_pct = 100U;
     p.esc_forward_max_us = 2000U;
 
     /* Act: out-of-band raw width. */
@@ -255,7 +301,9 @@ void run_throttle_chain_tests(void)
     RUN_TEST(test_offcenter_deadband_is_consistent_both_sides);
     RUN_TEST(test_reverse_keeps_neutral_neutral);
     RUN_TEST(test_reverse_flips_direction_of_a_nonzero_command);
-    RUN_TEST(test_power_limit_caps_target_before_ramp);
+    RUN_TEST(test_power_limit_forward_caps_target_before_ramp);
+    RUN_TEST(test_power_limit_reverse_caps_independently_of_forward);
+    RUN_TEST(test_power_limit_in_band_command_passes_through);
     RUN_TEST(test_power_limit_full_forward_without_limit);
     RUN_TEST(test_ramp_up_climbs_with_ramp_up_rate);
     RUN_TEST(test_ramp_down_uses_ramp_down_rate);

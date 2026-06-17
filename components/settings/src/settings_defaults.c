@@ -24,7 +24,8 @@ void settings_load_defaults(settings_params *out)
         .esc_ramp_up_us_per_cycle = ESC_RAMP_UP_DEFAULT,
         .esc_ramp_down_us_per_cycle = ESC_RAMP_DOWN_DEFAULT,
         .throttle_deadband_us = THROTTLE_DEADBAND_DEFAULT,
-        .max_throttle_pct = MAX_THROTTLE_PCT_DEFAULT,
+        .max_throttle_fwd_pct = MAX_THROTTLE_FWD_PCT_DEFAULT,
+        .max_throttle_rev_pct = MAX_THROTTLE_REV_PCT_DEFAULT,
         .throttle_reverse = false,
 
         .esc_neutral_us = ESC_NEUTRAL_DEFAULT,

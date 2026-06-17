@@ -26,17 +26,21 @@ static int32_t shape_command(uint32_t raw_us, const settings_params *params)
     return apply_reverse(after_deadband, params->throttle_reverse);
 }
 
-/* Step 6: power limit (forward/reverse) BEFORE the ramp. Scales the magnitude
- * to at most max_throttle_pct of full scale. */
-static int32_t apply_power_limit(int32_t command, uint16_t max_throttle_pct)
+/* Step 6: asymmetric power limit BEFORE the ramp. A forward (positive) command
+ * is capped to fwd_pct of full scale; a reverse (negative) command to rev_pct.
+ * In-band commands pass through unchanged. */
+static int32_t apply_power_limit(int32_t command, uint16_t fwd_pct,
+                                 uint16_t rev_pct)
 {
-    int32_t limit = SIGNAL_NORMALIZED_FULL_SCALE * (int32_t)max_throttle_pct /
-                    PERCENT_FULL;
-    if (command > limit) {
-        return limit;
+    int32_t fwd_limit =
+        SIGNAL_NORMALIZED_FULL_SCALE * (int32_t)fwd_pct / PERCENT_FULL;
+    int32_t rev_limit =
+        SIGNAL_NORMALIZED_FULL_SCALE * (int32_t)rev_pct / PERCENT_FULL;
+    if (command > fwd_limit) {
+        return fwd_limit;
     }
-    if (command < -limit) {
-        return -limit;
+    if (command < -rev_limit) {
+        return -rev_limit;
     }
     return command;
 }
@@ -74,7 +78,8 @@ uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
                              const settings_params *params, int32_t *ramp_state)
 {
     int32_t command = shape_command(raw_ch2_us, params);
-    int32_t limited = apply_power_limit(command, params->max_throttle_pct);
+    int32_t limited = apply_power_limit(command, params->max_throttle_fwd_pct,
+                                        params->max_throttle_rev_pct);
     int32_t target = resolve_target(limited, mode);
 
     *ramp_state = ramp_step(*ramp_state, target,

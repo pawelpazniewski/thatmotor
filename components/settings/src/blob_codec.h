@@ -28,9 +28,9 @@ extern "C" {
  * reload-defaults over migration in this safety-critical path).
  */
 
-/* Encoded blob size: 20 u16 fields (2 bytes each) + 2 bool fields (1 byte each)
+/* Encoded blob size: 21 u16 fields (2 bytes each) + 2 bool fields (1 byte each)
  * + u32 CRC. Kept as a compile-time constant so callers size buffers exactly. */
-#define BLOB_CODEC_FIELD_BYTES 42U
+#define BLOB_CODEC_FIELD_BYTES 44U
 #define BLOB_CODEC_CRC_BYTES 4U
 #define BLOB_CODEC_SIZE (BLOB_CODEC_FIELD_BYTES + BLOB_CODEC_CRC_BYTES)
 

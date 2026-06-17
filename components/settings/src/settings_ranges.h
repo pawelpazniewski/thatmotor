@@ -34,10 +34,13 @@
 #define ESC_RAMP_UP_DEFAULT 5U
 #define ESC_RAMP_DOWN_DEFAULT 10U
 
-/* Power limit: low max throttle by default (conservative; R16). */
-#define MAX_THROTTLE_PCT_MIN 1U
+/* Power limit: asymmetric forward/reverse caps (percent of full scale). 0..100
+ * for both; 0 simply disables that direction. Forward default higher than
+ * reverse (a kayak motor needs more forward authority than reverse). */
+#define MAX_THROTTLE_PCT_MIN 0U
 #define MAX_THROTTLE_PCT_MAX 100U
-#define MAX_THROTTLE_PCT_DEFAULT 30U
+#define MAX_THROTTLE_FWD_PCT_DEFAULT 90U
+#define MAX_THROTTLE_REV_PCT_DEFAULT 50U
 
 /* ESC output calibration band (WP880 maps inside the actuator pulse range). */
 #define ESC_US_MIN 1000U
