@@ -196,6 +196,64 @@ static void test_ch4_enabled_bool_preserved_when_valid(void)
     TEST_ASSERT_EQUAL_UINT16(1800U, out.ch4_switch_threshold_us);
 }
 
+static void test_servo_180deg_endpoints_accepted(void)
+{
+    /* Arrange: ~180 deg endpoints on a 270 deg servo (833/2167 us) are inside
+     * the widened [500,2500] validation range and must be accepted verbatim. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.servo_min_us = 833U;
+    stored.servo_max_us = 2167U;
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: clean NVS load, endpoints preserved. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_NVS, result.source);
+    TEST_ASSERT_TRUE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(833U, out.servo_min_us);
+    TEST_ASSERT_EQUAL_UINT16(2167U, out.servo_max_us);
+}
+
+static void test_servo_endpoint_out_of_range_recovers(void)
+{
+    /* Arrange: servo_max above the electrical ceiling (2600 > 2500) is invalid;
+     * it must fall back to its default. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.servo_max_us = 2600U; /* > SERVO_US_MAX */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: mixed recovery, bad field replaced by its default (1900). */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_FALSE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(1900U, out.servo_max_us);
+}
+
+static void test_servo_endpoints_inverted_rejected(void)
+{
+    /* Arrange: servo_min >= servo_max breaks the ascending cross-field rule
+     * even though both are individually in range. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.servo_min_us = 2000U;
+    stored.servo_max_us = 800U;
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: group restored to ascending defaults. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_TRUE(out.servo_min_us < out.servo_max_us);
+}
+
 void run_settings_validate_tests(void)
 {
     RUN_TEST(test_empty_nvs_yields_defaults);
@@ -208,4 +266,7 @@ void run_settings_validate_tests(void)
     RUN_TEST(test_cross_field_esc_map_inverted_rejected);
     RUN_TEST(test_ch4_threshold_out_of_range_recovers);
     RUN_TEST(test_ch4_enabled_bool_preserved_when_valid);
+    RUN_TEST(test_servo_180deg_endpoints_accepted);
+    RUN_TEST(test_servo_endpoint_out_of_range_recovers);
+    RUN_TEST(test_servo_endpoints_inverted_rejected);
 }

@@ -154,19 +154,57 @@ static void test_reverse_flips_steering_direction(void)
     TEST_ASSERT_EQUAL_UINT32(p.servo_min_us, servo_us);
 }
 
+/* Hard SI-3 clamp window for the servo pin (full 270 deg electrical range). */
+#define SERVO_HARD_MIN_US 500U
+#define SERVO_HARD_MAX_US 2500U
+
 static void test_output_stays_within_clamp_window(void)
 {
-    /* Arrange: endpoints opened to the full actuator band. */
+    /* Arrange: endpoints opened to the full electrical band. */
     settings_params p = defaults_params();
-    p.servo_min_us = 1000U;
-    p.servo_max_us = 2000U;
+    p.servo_min_us = SERVO_HARD_MIN_US;
+    p.servo_max_us = SERVO_HARD_MAX_US;
 
     /* Act: absurd input. */
     uint32_t servo_us = settle_servo(50000U, SERVO_TARGET_TRACK, &p);
 
-    /* Assert: within the hard clamp window [1000, 2000]. */
-    TEST_ASSERT_LESS_OR_EQUAL_UINT32(2000U, servo_us);
-    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(1000U, servo_us);
+    /* Assert: within the hard clamp window [500, 2500]. */
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(SERVO_HARD_MAX_US, servo_us);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(SERVO_HARD_MIN_US, servo_us);
+}
+
+static void test_180deg_endpoints_pass_unclamped(void)
+{
+    /* Arrange: ~180 deg endpoints (833/2167 us) on a 270 deg servo. The old
+     * [1000,2000] clamp would have cut these to 1000/2000; the widened window
+     * must let them reach the configured endpoints. */
+    settings_params p = defaults_params();
+    p.servo_min_us = 833U;
+    p.servo_max_us = 2167U;
+
+    /* Act: full left and full right. */
+    uint32_t left_us = settle_servo(1000U, SERVO_TARGET_TRACK, &p);
+    uint32_t right_us = settle_servo(2000U, SERVO_TARGET_TRACK, &p);
+
+    /* Assert: endpoints reached, NOT clamped to the old 1000/2000 band. */
+    TEST_ASSERT_EQUAL_UINT32(833U, left_us);
+    TEST_ASSERT_EQUAL_UINT32(2167U, right_us);
+}
+
+static void test_hard_window_bounds_extreme_endpoints(void)
+{
+    /* Arrange: endpoints pushed to the electrical limits. */
+    settings_params p = defaults_params();
+    p.servo_min_us = SERVO_HARD_MIN_US;
+    p.servo_max_us = SERVO_HARD_MAX_US;
+
+    /* Act: settle full left and full right. */
+    uint32_t left_us = settle_servo(1000U, SERVO_TARGET_TRACK, &p);
+    uint32_t right_us = settle_servo(2000U, SERVO_TARGET_TRACK, &p);
+
+    /* Assert: 500/2500 is the hard boundary and is reachable. */
+    TEST_ASSERT_EQUAL_UINT32(SERVO_HARD_MIN_US, left_us);
+    TEST_ASSERT_EQUAL_UINT32(SERVO_HARD_MAX_US, right_us);
 }
 
 void run_servo_chain_tests(void)
@@ -181,4 +219,6 @@ void run_servo_chain_tests(void)
     RUN_TEST(test_reverse_keeps_center_centered);
     RUN_TEST(test_reverse_flips_steering_direction);
     RUN_TEST(test_output_stays_within_clamp_window);
+    RUN_TEST(test_180deg_endpoints_pass_unclamped);
+    RUN_TEST(test_hard_window_bounds_extreme_endpoints);
 }

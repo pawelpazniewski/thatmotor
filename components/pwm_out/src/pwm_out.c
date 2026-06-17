@@ -16,10 +16,13 @@ _Static_assert(PWM_OUT_LOGIC_CHANNEL_COUNT == PWM_OUT_CHANNEL_COUNT,
 #define PWM_OUT_SPEED_MODE LEDC_LOW_SPEED_MODE
 #define PWM_OUT_TIMER LEDC_TIMER_0
 
-/* The single hard-clamp window shared by every output write (SI-3). */
-static const PwmWindow PWM_OUT_WINDOW = {
-    .min_us = PWM_OUT_MIN_US,
-    .max_us = PWM_OUT_MAX_US,
+/* Per-channel hard-clamp windows (SI-3). The servo gets the full 270 deg
+ * electrical range; the ESC stays in the conservative actuator band. The ESC
+ * window must never be widened to the servo window (WP880 safety). */
+static const PwmWindow PWM_OUT_WINDOWS[PWM_OUT_CHANNEL_COUNT] = {
+    [PWM_OUT_SERVO] = {.min_us = PWM_OUT_SERVO_MIN_US,
+                       .max_us = PWM_OUT_SERVO_MAX_US},
+    [PWM_OUT_ESC] = {.min_us = PWM_OUT_ESC_MIN_US, .max_us = PWM_OUT_ESC_MAX_US},
 };
 
 static const ledc_channel_t CHANNEL_MAP[PWM_OUT_CHANNEL_COUNT] = {
@@ -70,11 +73,24 @@ esp_err_t pwm_out_init(void)
     return ESP_OK;
 }
 
+/* Select the SI-3 clamp window for a channel. Guards the array lookup so an
+ * out-of-range channel never indexes past PWM_OUT_WINDOWS; the conversion call
+ * then rejects it. The fallback window is the narrow ESC band (safest). */
+static PwmWindow window_for_channel(PwmOutChannel channel)
+{
+    if (channel < 0 || channel >= PWM_OUT_CHANNEL_COUNT) {
+        return (PwmWindow){.min_us = PWM_OUT_ESC_MIN_US,
+                           .max_us = PWM_OUT_ESC_MAX_US};
+    }
+    return PWM_OUT_WINDOWS[channel];
+}
+
 esp_err_t pwm_out_write_us(PwmOutChannel channel, uint32_t value_us)
 {
     uint32_t duty = 0;
+    PwmWindow window = window_for_channel(channel);
     PwmOutLogicResult result =
-        pwm_out_resolve_duty(channel, value_us, PWM_OUT_WINDOW, &duty);
+        pwm_out_resolve_duty(channel, value_us, window, &duty);
     if (result != PWM_OUT_LOGIC_OK) {
         return ESP_ERR_INVALID_ARG;
     }

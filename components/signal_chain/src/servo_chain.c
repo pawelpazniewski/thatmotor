@@ -6,9 +6,12 @@
 #include "ramp.h"
 #include "safety_clamp.h"
 
-/* Output sanity window for the servo pin (SI-3); clamp is the last step. */
-#define SERVO_WINDOW_MIN_US 1000U
-#define SERVO_WINDOW_MAX_US 2000U
+/* Output sanity window for the servo pin (SI-3); clamp is the last step. Spans
+ * the full electrical range of a 270 deg servo (500..2500 us) so configured
+ * endpoints (e.g. ~833/2167 us for ~180 deg) pass through unclamped; 500/2500
+ * is the hard electrical limit. */
+#define SERVO_WINDOW_MIN_US 500U
+#define SERVO_WINDOW_MAX_US 2500U
 
 /* Servo center is the midpoint of the configured endpoints. */
 static uint32_t servo_center_us(const settings_params *params)

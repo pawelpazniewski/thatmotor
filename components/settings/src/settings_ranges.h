@@ -12,9 +12,11 @@
 #define RC_MID_DEFAULT 1500U
 #define RC_MAX_DEFAULT 2000U
 
-/* Servo endpoints and slew. Servo endpoints live in the actuator pulse band. */
-#define SERVO_US_MIN 1000U
-#define SERVO_US_MAX 2000U
+/* Servo endpoints and slew. Endpoints span the full 270 deg servo electrical
+ * range (500..2500 us) so the user can set wide endpoints (e.g. ~833/2167 us
+ * for ~180 deg). Cross-field servo_min < servo_max is still enforced. */
+#define SERVO_US_MIN 500U
+#define SERVO_US_MAX 2500U
 #define SERVO_MIN_DEFAULT 1100U
 #define SERVO_MAX_DEFAULT 1900U
 /* Slew default is gentle (smooth steering); 1..200 us/cycle is a wide window. */

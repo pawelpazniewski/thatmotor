@@ -9,12 +9,19 @@
 extern "C" {
 #endif
 
-/* Conservative hard-clamp window for RC actuator pulses (microseconds).
- * SI-3: every output is forced into this inclusive range. These bounds bracket
- * the standard 1000..2000 us RC band with a small margin and are the last line
- * of defence regardless of upstream logic. */
-#define PWM_OUT_MIN_US 900U
-#define PWM_OUT_MAX_US 2100U
+/* Per-channel hard-clamp windows for RC actuator pulses (microseconds).
+ * SI-3: every output is forced into the inclusive range of its channel before
+ * conversion to duty. These are the last line of defence regardless of upstream
+ * logic; pwm_out_write_us selects the window from the target channel.
+ *
+ * Servo window is the full electrical range of a 270 deg servo (500..2500 us)
+ * so the user can drive wide endpoints (e.g. ~833/2167 us for ~180 deg).
+ * ESC window stays at the conservative 1000..2000 us actuator band the WP880
+ * calibration lives in and must NOT be widened (safety). */
+#define PWM_OUT_SERVO_MIN_US 500U
+#define PWM_OUT_SERVO_MAX_US 2500U
+#define PWM_OUT_ESC_MIN_US 1000U
+#define PWM_OUT_ESC_MAX_US 2000U
 
 /* Neutral / center pulse width applied at boot (servo center, ESC neutral). */
 #define PWM_OUT_NEUTRAL_US 1500U
@@ -47,8 +54,9 @@ esp_err_t pwm_out_init(void);
  * clamp internally before conversion to duty. No code path reaches the LEDC
  * duty register without passing through clamp_pwm_us.
  *
- * @param channel   Target output channel.
- * @param value_us  Requested pulse width; clamped to [PWM_OUT_MIN_US, PWM_OUT_MAX_US].
+ * @param channel   Target output channel (selects the clamp window).
+ * @param value_us  Requested pulse width; clamped to the channel's window
+ *                  (servo [500,2500], ESC [1000,2000]).
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG for an unknown channel,
  *         otherwise the failing esp_err_t from the LEDC driver.
  */
