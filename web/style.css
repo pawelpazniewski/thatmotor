@@ -86,6 +86,20 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .confirm { display: block; margin: 0.5rem 0; font-size: 0.85rem; }
 
+/* Arm/Disarm result + readiness. Color-coded, no motion (static text swap), so
+ * it is safe under prefers-reduced-motion by construction. */
+.cmd-status {
+  font-size: 0.9rem;
+  font-weight: 600;
+  min-height: 1.3em;
+  margin-top: 0.6rem;
+}
+.cmd-status:empty { margin-top: 0; }
+.cmd-ok { color: var(--ok); }
+.cmd-warn { color: var(--warn); }
+.cmd-err { color: var(--danger); }
+.cmd-pending { color: var(--accent); }
+
 #params-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

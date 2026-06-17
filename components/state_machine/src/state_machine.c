@@ -1,14 +1,36 @@
 #include "state_machine.h"
 
+/* Why arming would be refused, in the EXACT priority order of the can_arm guard
+ * (R7): RC dominates, then throttle neutrality, then calibration, then a pending
+ * settings apply. Pure and intent-agnostic so the panel can show the reason even
+ * before any arm request. */
+sm_arm_reason sm_arm_block_reason(const sm_inputs *inputs)
+{
+    if (!inputs->rc_valid) {
+        return SM_ARM_NO_RC;
+    }
+    if (!inputs->throttle_neutral) {
+        return SM_ARM_THROTTLE_NOT_NEUTRAL;
+    }
+    if (inputs->calib_in_progress) {
+        return SM_ARM_CALIBRATING;
+    }
+    if (inputs->settings_apply_in_progress) {
+        return SM_ARM_SETTINGS_APPLYING;
+    }
+    return SM_ARM_READY;
+}
+
 /* Arming guard (R7): every condition must hold to leave DISARMED for ARMED. An
  * arm intent comes from EITHER the panel arm request OR the CH4 mode toggle;
  * both pass through the identical safety gate, so a toggle while the throttle is
- * off-neutral (or RC invalid / calibrating / applying) does NOT arm. */
+ * off-neutral (or RC invalid / calibrating / applying) does NOT arm. The safety
+ * conditions are exactly those reported by sm_arm_block_reason (single source of
+ * truth: armable iff there is an intent AND the block reason is READY). */
 static bool can_arm(const sm_inputs *inputs)
 {
     bool arm_intent = inputs->ui_arm_request || inputs->mode_toggle;
-    return arm_intent && inputs->rc_valid && inputs->throttle_neutral &&
-           !inputs->calib_in_progress && !inputs->settings_apply_in_progress;
+    return arm_intent && sm_arm_block_reason(inputs) == SM_ARM_READY;
 }
 
 /* ESC calibration entry guard (R15/SI-5): every condition must hold, including

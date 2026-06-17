@@ -181,6 +181,7 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
             .rc_valid = rc_is_valid,
             .esc_us = esc_us,
             .servo_us = servo_us,
+            .arm_reason = sm_arm_block_reason(&si),
         },
     };
     return out;

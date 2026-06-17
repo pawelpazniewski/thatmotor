@@ -25,6 +25,7 @@ extern "C" {
  */
 typedef struct {
     sm_state state;            /* current control state (R8) */
+    sm_arm_reason arm_reason;  /* why arming is blocked, else READY (R7 gate) */
     bool rc_valid;             /* debounced RC validity */
     uint32_t ch1_us;           /* steering raw pulse width */
     uint32_t ch2_us;           /* throttle raw pulse width */

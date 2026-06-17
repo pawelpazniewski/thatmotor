@@ -4,6 +4,28 @@
 const STATE_NAMES = ["DISARMED", "ARMED", "FAILSAFE", "ESC_CALIBRATION"];
 const SOURCE_NAMES = ["DEFAULTS", "NVS", "MIXED_RECOVERED"];
 
+// Numeric state aliases (mirror sm_state) for readable comparisons.
+const STATE_DISARMED = 0;
+const STATE_ARMED = 1;
+
+// arm_reason mapping mirrors sm_arm_reason in firmware (index == enum value).
+const ARM_REASON_TEXT = [
+  "Ready", // SM_ARM_READY
+  "No valid RC signal", // SM_ARM_NO_RC
+  "Throttle not at neutral", // SM_ARM_THROTTLE_NOT_NEUTRAL
+  "Calibration in progress", // SM_ARM_CALIBRATING
+  "Applying settings", // SM_ARM_SETTINGS_APPLYING
+];
+const ARM_READY = 0;
+
+// How long to wait for telemetry to confirm an arm/disarm before declaring it
+// failed. ~1 s comfortably covers the ~10 Hz telemetry + ~50 Hz control loop.
+const CMD_CONFIRM_MS = 1000;
+
+function armReasonText(reason) {
+  return ARM_REASON_TEXT[reason] || `reason ${reason}`;
+}
+
 const BOOL_KEYS = new Set([
   "servo_reverse",
   "throttle_reverse",
@@ -20,6 +42,11 @@ const PARAM_LABELS = {
 };
 
 let lastState = null;
+let lastArmReason = ARM_READY;
+
+// Pending arm/disarm command awaiting telemetry confirmation. null when idle.
+// Shape: { kind: "arm" | "disarm", target: stateValue, timer: timeoutId }.
+let cmdPending = null;
 
 function $(id) { return document.getElementById(id); }
 
@@ -32,6 +59,8 @@ function setText(id, value) {
 
 function applyTelemetry(t) {
   lastState = t.state;
+  lastArmReason = t.arm_reason;
+  resolvePendingCommand(t.state);
   setText("state", STATE_NAMES[t.state] || t.state);
   setText("rc_valid", t.rc_valid ? "yes" : "NO");
   setText("ch1_us", t.ch1_us);
@@ -45,7 +74,62 @@ function applyTelemetry(t) {
   setText("defaults_used", t.defaults_used ? "yes" : "no");
   setText("nvs_error", t.nvs_error ? "YES" : "no");
   $("uncal_warn").classList.toggle("hidden", t.calibrated);
-  updateEditLock(t.state === 0);
+  updateEditLock(t.state === STATE_DISARMED);
+  renderIdleArmHint(t.state, t.arm_reason);
+}
+
+// --- Arm/Disarm result status ---
+
+function setCmdStatus(text, kind) {
+  const el = $("cmd-status");
+  if (!el) return;
+  el.textContent = text;
+  el.className = kind ? `cmd-status cmd-${kind}` : "cmd-status";
+}
+
+// While no command is in flight, show the live readiness derived from telemetry.
+function renderIdleArmHint(state, reason) {
+  if (cmdPending) return; // a command result is being shown; don't overwrite
+  if (state !== STATE_DISARMED) {
+    setCmdStatus("");
+    return;
+  }
+  if (reason === ARM_READY) {
+    setCmdStatus("Ready to arm", "ok");
+  } else {
+    setCmdStatus(`Cannot arm: ${armReasonText(reason)}`, "warn");
+  }
+}
+
+// Resolve an in-flight arm/disarm once telemetry reaches the target state.
+function resolvePendingCommand(state) {
+  if (!cmdPending || state !== cmdPending.target) return;
+  if (cmdPending.kind === "arm") {
+    setCmdStatus("✓ Armed", "ok");
+  } else {
+    setCmdStatus("✓ Disarmed", "ok");
+  }
+  clearTimeout(cmdPending.timer);
+  cmdPending = null;
+}
+
+// Fired ~1 s after an arm/disarm if telemetry never reached the target state.
+function onCommandTimeout() {
+  if (!cmdPending) return;
+  const kind = cmdPending.kind;
+  cmdPending = null;
+  if (kind === "arm") {
+    setCmdStatus(`✗ Not armed — ${armReasonText(lastArmReason)}`, "err");
+  } else {
+    setCmdStatus("✗ Still armed", "err");
+  }
+}
+
+function startPendingCommand(kind, target, pendingText) {
+  if (cmdPending) clearTimeout(cmdPending.timer);
+  setCmdStatus(pendingText, "pending");
+  const timer = setTimeout(onCommandTimeout, CMD_CONFIRM_MS);
+  cmdPending = { kind, target, timer };
 }
 
 function updateEditLock(isDisarmed) {
@@ -130,22 +214,67 @@ async function saveParams() {
 
 // --- Commands ---
 
+// POST a command. Returns the parsed envelope; throws on a non-OK envelope so
+// callers can surface error.code/message instead of a bogus "success".
 async function sendCommand(cmd) {
-  await fetch("/api/command", {
+  const res = await fetch("/api/command", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cmd }),
   });
+  const env = await res.json().catch(() => ({}));
+  if (env.error) {
+    throw new Error(`${env.error.code} - ${env.error.message}`);
+  }
+  return env;
+}
+
+// Arm is asynchronous: the POST only acknowledges receipt; the result lands in
+// telemetry (state). Show "Arming…", then let telemetry confirm or time out.
+async function handleArm() {
+  startPendingCommand("arm", STATE_ARMED, "Arming…");
+  try {
+    await sendCommand("arm");
+  } catch (e) {
+    abortPendingCommand();
+    setCmdStatus(`✗ Command rejected: ${e.message}`, "err");
+  }
+}
+
+async function handleDisarm() {
+  startPendingCommand("disarm", STATE_DISARMED, "Disarming…");
+  try {
+    await sendCommand("disarm");
+  } catch (e) {
+    abortPendingCommand();
+    setCmdStatus(`✗ Command rejected: ${e.message}`, "err");
+  }
+}
+
+function abortPendingCommand() {
+  if (!cmdPending) return;
+  clearTimeout(cmdPending.timer);
+  cmdPending = null;
+}
+
+// Calibration commands have their own status surface in the calibration card;
+// here we only need to report a rejected envelope, not track a target state.
+async function sendCalibCommand(cmd) {
+  try {
+    await sendCommand(cmd);
+  } catch (e) {
+    setCmdStatus(`✗ Command rejected: ${e.message}`, "err");
+  }
 }
 
 function wireButtons() {
-  $("btn-arm").onclick = () => sendCommand("arm");
-  $("btn-disarm").onclick = () => sendCommand("disarm");
+  $("btn-arm").onclick = handleArm;
+  $("btn-disarm").onclick = handleDisarm;
   $("btn-save").onclick = saveParams;
-  $("btn-calib-start").onclick = () => sendCommand("calib_start");
-  $("btn-calib-next").onclick = () => sendCommand("calib_next");
-  $("btn-calib-cancel").onclick = () => sendCommand("calib_cancel");
-  $("calib-ack").onchange = () => updateEditLock(lastState === 0);
+  $("btn-calib-start").onclick = () => sendCalibCommand("calib_start");
+  $("btn-calib-next").onclick = () => sendCalibCommand("calib_next");
+  $("btn-calib-cancel").onclick = () => sendCalibCommand("calib_cancel");
+  $("calib-ack").onchange = () => updateEditLock(lastState === STATE_DISARMED);
 }
 
 window.addEventListener("DOMContentLoaded", () => {

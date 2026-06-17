@@ -234,6 +234,7 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     rc_channel_sample ch4 = {0};
     rc_capture_read(RC_CAP_CH4, &ch4);
     s_snapshot.state = out->telemetry.state;
+    s_snapshot.arm_reason = out->telemetry.arm_reason;
     s_snapshot.rc_valid = out->telemetry.rc_valid;
     s_snapshot.ch1_us = in->ch1.width_us;
     s_snapshot.ch2_us = in->ch2.width_us;

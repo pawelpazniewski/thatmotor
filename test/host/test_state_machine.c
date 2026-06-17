@@ -312,6 +312,68 @@ static void test_calib_entry_rc_invalid_goes_failsafe_not_calib(void)
     TEST_ASSERT_EQUAL(SM_STATE_FAILSAFE, out.state);
 }
 
+/* --- Arm block reason (panel hint, same gate as can_arm) --- */
+
+static void test_arm_reason_all_conditions_ready(void)
+{
+    sm_inputs in = armable_inputs();
+
+    TEST_ASSERT_EQUAL(SM_ARM_READY, sm_arm_block_reason(&in));
+}
+
+static void test_arm_reason_no_rc(void)
+{
+    sm_inputs in = armable_inputs();
+    in.rc_valid = false;
+
+    TEST_ASSERT_EQUAL(SM_ARM_NO_RC, sm_arm_block_reason(&in));
+}
+
+static void test_arm_reason_throttle_not_neutral(void)
+{
+    sm_inputs in = armable_inputs();
+    in.throttle_neutral = false;
+
+    TEST_ASSERT_EQUAL(SM_ARM_THROTTLE_NOT_NEUTRAL, sm_arm_block_reason(&in));
+}
+
+static void test_arm_reason_calibrating(void)
+{
+    sm_inputs in = armable_inputs();
+    in.calib_in_progress = true;
+
+    TEST_ASSERT_EQUAL(SM_ARM_CALIBRATING, sm_arm_block_reason(&in));
+}
+
+static void test_arm_reason_settings_applying(void)
+{
+    sm_inputs in = armable_inputs();
+    in.settings_apply_in_progress = true;
+
+    TEST_ASSERT_EQUAL(SM_ARM_SETTINGS_APPLYING, sm_arm_block_reason(&in));
+}
+
+static void test_arm_reason_rc_dominates_throttle(void)
+{
+    /* Priority: with BOTH RC invalid AND throttle off-neutral, RC wins (the
+     * same order as can_arm short-circuits). */
+    sm_inputs in = armable_inputs();
+    in.rc_valid = false;
+    in.throttle_neutral = false;
+
+    TEST_ASSERT_EQUAL(SM_ARM_NO_RC, sm_arm_block_reason(&in));
+}
+
+static void test_arm_reason_ready_regardless_of_intent(void)
+{
+    /* Intent-agnostic: READY even with no arm request (answers "could it arm?"). */
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;
+    in.mode_toggle = false;
+
+    TEST_ASSERT_EQUAL(SM_ARM_READY, sm_arm_block_reason(&in));
+}
+
 void run_state_machine_tests(void)
 {
     RUN_TEST(test_boot_disarmed_regardless_of_inputs);
@@ -338,4 +400,11 @@ void run_state_machine_tests(void)
     RUN_TEST(test_calib_entry_without_request_refused);
     RUN_TEST(test_calib_entry_without_neutral_refused);
     RUN_TEST(test_calib_entry_rc_invalid_goes_failsafe_not_calib);
+    RUN_TEST(test_arm_reason_all_conditions_ready);
+    RUN_TEST(test_arm_reason_no_rc);
+    RUN_TEST(test_arm_reason_throttle_not_neutral);
+    RUN_TEST(test_arm_reason_calibrating);
+    RUN_TEST(test_arm_reason_settings_applying);
+    RUN_TEST(test_arm_reason_rc_dominates_throttle);
+    RUN_TEST(test_arm_reason_ready_regardless_of_intent);
 }

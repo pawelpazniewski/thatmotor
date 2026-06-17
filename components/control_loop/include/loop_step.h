@@ -63,9 +63,10 @@ typedef struct {
 /** Telemetry snapshot produced each cycle (read-only view for the web panel). */
 typedef struct {
     sm_state state;
-    bool rc_valid;     /* debounced RC validity this cycle */
-    uint32_t esc_us;   /* commanded ESC pulse width (post-clamp) */
-    uint32_t servo_us; /* commanded servo pulse width (post-clamp) */
+    bool rc_valid;            /* debounced RC validity this cycle */
+    uint32_t esc_us;          /* commanded ESC pulse width (post-clamp) */
+    uint32_t servo_us;        /* commanded servo pulse width (post-clamp) */
+    sm_arm_reason arm_reason; /* why arming is blocked this cycle (R7 gate) */
 } loop_telemetry;
 
 /** Actuator commands plus telemetry for one cycle. */

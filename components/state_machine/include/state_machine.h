@@ -38,6 +38,19 @@ typedef enum {
 } sm_state;
 
 /**
+ * Why an arm request would be refused, for the panel to surface (R7 gate). The
+ * order mirrors the can_arm guard exactly, so the FIRST unmet condition wins;
+ * SM_ARM_READY means every condition holds and a fresh arm intent would arm.
+ */
+typedef enum {
+    SM_ARM_READY = 0,                /* all arm conditions satisfied */
+    SM_ARM_NO_RC = 1,                /* RC signal invalid */
+    SM_ARM_THROTTLE_NOT_NEUTRAL = 2, /* throttle stick off the neutral band */
+    SM_ARM_CALIBRATING = 3,          /* ESC calibration sequence running */
+    SM_ARM_SETTINGS_APPLYING = 4,    /* a settings apply is mid-flight */
+} sm_arm_reason;
+
+/**
  * Snapshot of the decision inputs for one transition. Booleans are debounced /
  * resolved upstream (rc_validity, UI edge detection); this struct carries no
  * timing of its own.
@@ -75,6 +88,17 @@ typedef struct {
  * @return The next state and the per-state actuator target overrides.
  */
 sm_outputs sm_step(sm_state current, const sm_inputs *inputs);
+
+/**
+ * Report why arming would be blocked (pure), independent of the current state.
+ * Evaluates the SAME conditions, in the SAME priority order, as the can_arm
+ * guard: the first unmet condition is returned, or SM_ARM_READY when all hold.
+ * Does NOT consider arm intent (it answers "could an arm intent succeed now?").
+ *
+ * @param inputs  Decision inputs for this cycle (must be non-NULL).
+ * @return The first blocking reason, or SM_ARM_READY if none.
+ */
+sm_arm_reason sm_arm_block_reason(const sm_inputs *inputs);
 
 #ifdef __cplusplus
 }

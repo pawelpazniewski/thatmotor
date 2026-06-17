@@ -21,11 +21,11 @@ static atomic_bool s_push_in_flight;
 static int snapshot_to_json(const control_loop_snapshot *s, char *buf, size_t n)
 {
     return snprintf(buf, n,
-        "{\"state\":%d,\"rc_valid\":%s,\"ch1_us\":%u,\"ch2_us\":%u,"
-        "\"ch4_us\":%u,\"servo_us\":%u,\"esc_us\":%u,\"source\":%d,"
-        "\"settings_valid\":%s,\"calibrated\":%s,\"defaults_used\":%s,"
-        "\"nvs_error\":%s}",
-        (int)s->state, s->rc_valid ? "true" : "false",
+        "{\"state\":%d,\"arm_reason\":%u,\"rc_valid\":%s,\"ch1_us\":%u,"
+        "\"ch2_us\":%u,\"ch4_us\":%u,\"servo_us\":%u,\"esc_us\":%u,"
+        "\"source\":%d,\"settings_valid\":%s,\"calibrated\":%s,"
+        "\"defaults_used\":%s,\"nvs_error\":%s}",
+        (int)s->state, (unsigned)s->arm_reason, s->rc_valid ? "true" : "false",
         (unsigned)s->ch1_us, (unsigned)s->ch2_us, (unsigned)s->ch4_us,
         (unsigned)s->servo_us, (unsigned)s->esc_us, (int)s->source,
         s->settings_valid ? "true" : "false",
