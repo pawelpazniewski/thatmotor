@@ -85,13 +85,15 @@ static ch4_switch_cfg make_ch4_switch_cfg(const settings_params *params)
     return cfg;
 }
 
-/* Fold the CH4 position switch into the arm/disarm intent for this cycle. The
- * switch position maps directly to intent: a low->high edge ORs in an arm
- * request, a high->low edge ORs in a disarm request. The OR is intentional so
- * the panel keeps working independently (it has already been applied upstream
- * by apply_ui_events); CH4 only adds intent, never clears it. Disabled in
- * settings -> CH4 has no influence (legacy behaviour). Arming still passes the
- * full safety gate in the state machine. */
+/* Fold the CH4 momentary toggle button into the arm/disarm intent for this
+ * cycle. Each press flips CH4, so ANY accepted edge is one press; it toggles
+ * against the CURRENT state (disarmed -> arm, armed -> disarm) rather than mapping
+ * the raw value to a state. This keeps panel and CH4 interchangeable (toggle is
+ * relative to whatever set the state last) and means the CH4 value never forces a
+ * state: after boot or failsafe the loop stays DISARMED until a deliberate press.
+ * The OR is intentional - the panel request was applied upstream and CH4 only
+ * adds intent, never clears it. Disabled -> CH4 has no influence. Arming still
+ * passes the full safety gate in the state machine. */
 static void apply_ch4_switch(loop_inputs *in)
 {
     if (!s_params.ch4_mode_switch_enabled) {
@@ -101,9 +103,11 @@ static void apply_ch4_switch(loop_inputs *in)
     rc_capture_read(RC_CAP_CH4, &ch4);
     ch4_switch_cfg cfg = make_ch4_switch_cfg(&s_params);
     ch4_switch_event event = ch4_switch_update(&s_ch4_switch, &ch4, &cfg);
-    if (event == CH4_SWITCH_TO_HIGH) {
+    ch4_intent intent = ch4_toggle_intent(event, s_loop.state == SM_STATE_DISARMED,
+                                          s_loop.state == SM_STATE_ARMED);
+    if (intent == CH4_INTENT_ARM) {
         in->ui_arm_request = true;
-    } else if (event == CH4_SWITCH_TO_LOW) {
+    } else if (intent == CH4_INTENT_DISARM) {
         in->ui_disarm_request = true;
     }
 }

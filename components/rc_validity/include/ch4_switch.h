@@ -13,10 +13,13 @@ extern "C" {
  * Pure CH4-as-position-switch interpreter (framework-agnostic, no IDF includes).
  *
  * CH4 (GPIO32) is read by rc_capture as a normal RC channel but here it is
- * interpreted as a 2-position toggle switch whose POSITION maps to intent: each
- * switch movement is one state change. The interpreter emits a directional edge
- * event so the caller can drive arm/disarm intent (high = arm, low = disarm):
- * one flick of the switch = one state change (no "double toggle" needed).
+ * interpreted as a momentary TOGGLE button: the physical button flips the CH4
+ * pulse between ~1000 and ~2000 us on every press, so each press is exactly one
+ * accepted edge. The interpreter emits that directional edge; ch4_toggle_intent
+ * then turns ANY edge (either direction) into a toggle of the CURRENT state
+ * (disarmed -> arm intent, armed -> disarm intent). One press = one state change,
+ * and the CH4 *value* never forces a state - only a change toggles it - so after
+ * boot or failsafe the controller stays DISARMED regardless of where CH4 sits.
  *
  * Determinism / timing: this module owns NO clock. It works purely per frame
  * (one ch4_switch_update call per control cycle). Debounce is expressed in
@@ -98,6 +101,31 @@ void ch4_switch_init(ch4_switch_state *st);
 ch4_switch_event ch4_switch_update(ch4_switch_state *st,
                                    const rc_channel_sample *ch4,
                                    const ch4_switch_cfg *cfg);
+
+/** Arm/disarm intent produced by toggling against the current state. */
+typedef enum {
+    CH4_INTENT_NONE = 0,   /* no edge this frame, or state not toggleable */
+    CH4_INTENT_ARM = 1,    /* toggle while disarmed -> request arm */
+    CH4_INTENT_DISARM = 2, /* toggle while armed -> request disarm */
+} ch4_intent;
+
+/**
+ * Map a CH4 edge into a toggle of the CURRENT control state. ANY accepted edge
+ * (high or low) is treated as one button press that flips the state:
+ *  - disarmed -> CH4_INTENT_ARM
+ *  - armed    -> CH4_INTENT_DISARM
+ *  - any other state (FAILSAFE / calibration) or no edge -> CH4_INTENT_NONE,
+ *    so the CH4 value can never force arming out of failsafe; only a deliberate
+ *    press once already DISARMED can arm (and the state machine's arm gate still
+ *    applies).
+ *
+ * @param event              The edge reported by ch4_switch_update this frame.
+ * @param currently_disarmed True if the live state is DISARMED.
+ * @param currently_armed    True if the live state is ARMED.
+ * @return The arm/disarm intent to OR into the cycle's UI requests.
+ */
+ch4_intent ch4_toggle_intent(ch4_switch_event event, bool currently_disarmed,
+                             bool currently_armed);
 
 #ifdef __cplusplus
 }
