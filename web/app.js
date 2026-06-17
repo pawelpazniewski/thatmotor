@@ -7,6 +7,7 @@ const SOURCE_NAMES = ["DEFAULTS", "NVS", "MIXED_RECOVERED"];
 // Numeric state aliases (mirror sm_state) for readable comparisons.
 const STATE_DISARMED = 0;
 const STATE_ARMED = 1;
+const STATE_FAILSAFE = 2;
 
 // arm_reason mapping mirrors sm_arm_reason in firmware (index == enum value).
 const ARM_REASON_TEXT = [
@@ -21,6 +22,10 @@ const ARM_READY = 0;
 // How long to wait for telemetry to confirm an arm/disarm before declaring it
 // failed. ~1 s comfortably covers the ~10 Hz telemetry + ~50 Hz control loop.
 const CMD_CONFIRM_MS = 1000;
+
+// How long a resolved arm/disarm result stays pinned before the live readiness
+// hint resumes, so a success/error is readable instead of vanishing next frame.
+const RESULT_STICKY_MS = 5000;
 
 function armReasonText(reason) {
   return ARM_REASON_TEXT[reason] || `reason ${reason}`;
@@ -47,6 +52,9 @@ let lastArmReason = ARM_READY;
 // Pending arm/disarm command awaiting telemetry confirmation. null when idle.
 // Shape: { kind: "arm" | "disarm", target: stateValue, timer: timeoutId }.
 let cmdPending = null;
+
+// Epoch (ms) until which the last command result stays pinned over the live hint.
+let cmdResultUntil = 0;
 
 function $(id) { return document.getElementById(id); }
 
@@ -87,9 +95,17 @@ function setCmdStatus(text, kind) {
   el.className = kind ? `cmd-status cmd-${kind}` : "cmd-status";
 }
 
+// A terminal result (success/failure): show it and pin it for RESULT_STICKY_MS
+// so the live readiness hint does not wipe it on the next telemetry frame.
+function setCmdResult(text, kind) {
+  setCmdStatus(text, kind);
+  cmdResultUntil = Date.now() + RESULT_STICKY_MS;
+}
+
 // While no command is in flight, show the live readiness derived from telemetry.
 function renderIdleArmHint(state, reason) {
   if (cmdPending) return; // a command result is being shown; don't overwrite
+  if (Date.now() < cmdResultUntil) return; // keep the last result readable
   if (state !== STATE_DISARMED) {
     setCmdStatus("");
     return;
@@ -101,32 +117,48 @@ function renderIdleArmHint(state, reason) {
   }
 }
 
-// Resolve an in-flight arm/disarm once telemetry reaches the target state.
+// Resolve an in-flight arm/disarm once telemetry shows the intent satisfied.
+// Disarm is satisfied by DISARMED *or* FAILSAFE: both mean the drive is stopped
+// at neutral, so a disarm in failsafe is a stop, not a "still armed" failure.
 function resolvePendingCommand(state) {
-  if (!cmdPending || state !== cmdPending.target) return;
+  if (!cmdPending) return;
   if (cmdPending.kind === "arm") {
-    setCmdStatus("✓ Armed", "ok");
-  } else {
-    setCmdStatus("✓ Disarmed", "ok");
+    if (state !== STATE_ARMED) return;
+    clearPendingTimer();
+    setCmdResult("✓ Armed", "ok");
+    return;
   }
-  clearTimeout(cmdPending.timer);
-  cmdPending = null;
+  if (state === STATE_DISARMED) {
+    clearPendingTimer();
+    setCmdResult("✓ Disarmed", "ok");
+  } else if (state === STATE_FAILSAFE) {
+    clearPendingTimer();
+    setCmdResult("✓ Drive stopped — failsafe (RC lost)", "warn");
+  }
 }
 
-// Fired ~1 s after an arm/disarm if telemetry never reached the target state.
+// Fired ~1 s after an arm/disarm if telemetry never confirmed the intent.
 function onCommandTimeout() {
   if (!cmdPending) return;
   const kind = cmdPending.kind;
   cmdPending = null;
   if (kind === "arm") {
-    setCmdStatus(`✗ Not armed — ${armReasonText(lastArmReason)}`, "err");
+    setCmdResult(`✗ Not armed — ${armReasonText(lastArmReason)}`, "err");
+  } else if (lastState === STATE_FAILSAFE) {
+    setCmdResult("✓ Drive stopped — failsafe (RC lost)", "warn");
   } else {
-    setCmdStatus("✗ Still armed", "err");
+    setCmdResult("✗ Still armed", "err");
   }
+}
+
+function clearPendingTimer() {
+  if (cmdPending) clearTimeout(cmdPending.timer);
+  cmdPending = null;
 }
 
 function startPendingCommand(kind, target, pendingText) {
   if (cmdPending) clearTimeout(cmdPending.timer);
+  cmdResultUntil = 0; // this flow now owns the status surface
   setCmdStatus(pendingText, "pending");
   const timer = setTimeout(onCommandTimeout, CMD_CONFIRM_MS);
   cmdPending = { kind, target, timer };
@@ -236,8 +268,8 @@ async function handleArm() {
   try {
     await sendCommand("arm");
   } catch (e) {
-    abortPendingCommand();
-    setCmdStatus(`✗ Command rejected: ${e.message}`, "err");
+    clearPendingTimer();
+    setCmdResult(`✗ Command rejected: ${e.message}`, "err");
   }
 }
 
@@ -246,15 +278,9 @@ async function handleDisarm() {
   try {
     await sendCommand("disarm");
   } catch (e) {
-    abortPendingCommand();
-    setCmdStatus(`✗ Command rejected: ${e.message}`, "err");
+    clearPendingTimer();
+    setCmdResult(`✗ Command rejected: ${e.message}`, "err");
   }
-}
-
-function abortPendingCommand() {
-  if (!cmdPending) return;
-  clearTimeout(cmdPending.timer);
-  cmdPending = null;
 }
 
 // Calibration commands have their own status surface in the calibration card;
@@ -263,7 +289,7 @@ async function sendCalibCommand(cmd) {
   try {
     await sendCommand(cmd);
   } catch (e) {
-    setCmdStatus(`✗ Command rejected: ${e.message}`, "err");
+    setCmdResult(`✗ Command rejected: ${e.message}`, "err");
   }
 }
 
