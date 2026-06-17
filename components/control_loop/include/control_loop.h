@@ -5,6 +5,7 @@
 
 #include "esc_calibration.h"
 #include "esp_err.h"
+#include "loop_step.h"
 #include "settings_model.h"
 #include "settings_validate.h"
 #include "state_machine.h"
@@ -13,9 +14,8 @@
 extern "C" {
 #endif
 
-/* Control cycle target rate. ~50 Hz: a 20 ms period matches the RC frame rate
- * and the LEDC update granularity. */
-#define CONTROL_LOOP_PERIOD_MS 20U
+/* CONTROL_LOOP_PERIOD_MS is defined in loop_step.h (the IDF-free header) and
+ * re-exported here via that include so existing users keep working. */
 
 /**
  * Lossy telemetry snapshot for the web panel (R16/R12). The control loop writes

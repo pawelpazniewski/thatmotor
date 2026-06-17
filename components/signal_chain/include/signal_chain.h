@@ -53,21 +53,42 @@ typedef enum {
 } servo_target_mode;
 
 /**
- * Run one throttle control cycle.
+ * Carry-over state for the throttle ramp with anti-plugging direction manager.
  *
- * Steps 3-10 of the throttle chain. The result is the ESC pulse width AFTER the
- * SI-3 hard clamp; no chain output bypasses the clamp.
+ * `value` is the ramped command in normalized units (signed, 0 = neutral).
+ * `dwell_remaining` is the number of cycles the output is held at neutral after
+ * a forward<->reverse flip reaches neutral, counted down to 0. While it is
+ * non-zero the output cannot cross to the other side of neutral (anti-plugging
+ * invariant: the prop fully stops before it spins up the other way).
+ */
+typedef struct {
+    int32_t value;           /* ramped command, normalized signed units */
+    uint16_t dwell_remaining; /* cycles still held at neutral after a flip */
+} throttle_ramp_state;
+
+/**
+ * Run one throttle control cycle with the direction-change manager.
  *
- * @param raw_ch2_us  Raw CH2 pulse width in microseconds.
- * @param mode        Per-state target override.
- * @param params      Active control parameters (must be non-NULL).
- * @param ramp_state  Previous ramped command in normalized units; updated in
- *                    place to the new ramped command (must be non-NULL).
+ * Steps 3-10 of the throttle chain plus the reverse-direction manager. When the
+ * requested direction opposes the current spin, the output first ramps down to
+ * neutral, is then held at neutral for `reverse_dwell_frames` cycles, and only
+ * afterwards ramps up in the new direction. The output NEVER crosses to the
+ * other side of neutral until the full dwell has elapsed. The result is the ESC
+ * pulse width AFTER the SI-3 hard clamp; no chain output bypasses the clamp.
+ *
+ * @param raw_ch2_us           Raw CH2 pulse width in microseconds.
+ * @param mode                 Per-state target override.
+ * @param params               Active control parameters (must be non-NULL).
+ * @param reverse_dwell_frames Neutral dwell expressed in cycles (computed by the
+ *                             caller so this function stays period-agnostic).
+ * @param st                   Ramp + dwell carry-over state, updated in place
+ *                             (must be non-NULL).
  * @return ESC pulse width in microseconds, clamped to the actuator window.
  */
 uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
                              const settings_params *params,
-                             int32_t *ramp_state);
+                             uint16_t reverse_dwell_frames,
+                             throttle_ramp_state *st);
 
 /**
  * Run one servo control cycle.

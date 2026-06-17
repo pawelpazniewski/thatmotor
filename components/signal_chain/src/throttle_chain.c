@@ -63,6 +63,61 @@ static uint32_t map_to_esc_us(int32_t command, const settings_params *params)
                                 params->esc_forward_max_us);
 }
 
+/* Neutral reference for the signed normalized command (0 = no spin). */
+#define COMMAND_NEUTRAL 0
+
+/* Sign of a signed command relative to neutral: -1, 0 or +1. */
+static int32_t command_sign(int32_t command)
+{
+    if (command > COMMAND_NEUTRAL) {
+        return 1;
+    }
+    if (command < COMMAND_NEUTRAL) {
+        return -1;
+    }
+    return 0;
+}
+
+/* A flip is requested when the target opposes the current spin (both non-zero,
+ * opposite signs). Starting from neutral in any direction is NOT a flip: the
+ * motor is already stopped, so no anti-plugging dwell is needed. */
+static bool is_reversing(int32_t target, int32_t current)
+{
+    if (target == COMMAND_NEUTRAL || current == COMMAND_NEUTRAL) {
+        return false;
+    }
+    return command_sign(target) != command_sign(current);
+}
+
+/* Advance the ramp + dwell state by one cycle toward `target`.
+ *
+ * Three exclusive phases, in priority order:
+ *   1. Dwell active  -> hold neutral, count the dwell down (motor parked).
+ *   2. Reversing     -> ramp down to neutral; when it lands, arm the dwell.
+ *   3. Normal        -> ramp toward the target.
+ * The output value never crosses neutral while a dwell is pending. */
+static void advance_ramp(throttle_ramp_state *st, int32_t target,
+                         uint16_t reverse_dwell_frames,
+                         const settings_params *params)
+{
+    int32_t rate_up = (int32_t)params->esc_ramp_up_us_per_cycle;
+    int32_t rate_down = (int32_t)params->esc_ramp_down_us_per_cycle;
+
+    if (st->dwell_remaining > 0) {
+        st->value = COMMAND_NEUTRAL;
+        st->dwell_remaining--;
+        return;
+    }
+    if (is_reversing(target, st->value)) {
+        st->value = ramp_step(st->value, COMMAND_NEUTRAL, rate_down, rate_down);
+        if (st->value == COMMAND_NEUTRAL) {
+            st->dwell_remaining = reverse_dwell_frames;
+        }
+        return;
+    }
+    st->value = ramp_step(st->value, target, rate_up, rate_down);
+}
+
 bool throttle_is_neutral(uint32_t raw_ch2_us, const settings_params *params)
 {
     int32_t normalized = normalize_us(raw_ch2_us, params->rc_min_us,
@@ -75,18 +130,18 @@ bool throttle_is_neutral(uint32_t raw_ch2_us, const settings_params *params)
 }
 
 uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
-                             const settings_params *params, int32_t *ramp_state)
+                             const settings_params *params,
+                             uint16_t reverse_dwell_frames,
+                             throttle_ramp_state *st)
 {
     int32_t command = shape_command(raw_ch2_us, params);
     int32_t limited = apply_power_limit(command, params->max_throttle_fwd_pct,
                                         params->max_throttle_rev_pct);
     int32_t target = resolve_target(limited, mode);
 
-    *ramp_state = ramp_step(*ramp_state, target,
-                            (int32_t)params->esc_ramp_up_us_per_cycle,
-                            (int32_t)params->esc_ramp_down_us_per_cycle);
+    advance_ramp(st, target, reverse_dwell_frames, params);
 
-    uint32_t esc_us = map_to_esc_us(*ramp_state, params);
+    uint32_t esc_us = map_to_esc_us(st->value, params);
     PwmWindow window = {.min_us = ESC_WINDOW_MIN_US, .max_us = ESC_WINDOW_MAX_US};
     return clamp_pwm_us(esc_us, window);
 }

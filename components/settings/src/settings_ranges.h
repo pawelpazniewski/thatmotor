@@ -62,11 +62,12 @@
 #define FAILSAFE_TIMEOUT_MS_MAX 2000U
 #define FAILSAFE_TIMEOUT_MS_DEFAULT 200U
 
-/* Dwell at neutral on a fast forward<->reverse flip. 0 = disabled until the
- * WP880 plugging behaviour is measured (kontekst: open item). */
+/* Dwell at neutral on a fast forward<->reverse flip (anti-plugging): the prop is
+ * held stopped at neutral this long before it spins up the other way. Default
+ * 400 ms keeps the dwell active out of the box; 0 disables it. */
 #define REVERSE_NEUTRAL_DWELL_MS_MIN 0U
 #define REVERSE_NEUTRAL_DWELL_MS_MAX 2000U
-#define REVERSE_NEUTRAL_DWELL_MS_DEFAULT 0U
+#define REVERSE_NEUTRAL_DWELL_MS_DEFAULT 400U
 
 /* CH4 mode-switch position switch. The threshold lives in the RC pulse band;
  * default 1500 us is the midpoint of a typical 2-position switch (~1000/~2000

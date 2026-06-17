@@ -8,11 +8,18 @@
 #include "rc_validity.h"
 #include "safety_clamp.h"
 #include "settings_model.h"
+#include "signal_chain.h"
 #include "state_machine.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Control cycle target rate. ~50 Hz: a 20 ms period matches the RC frame rate
+ * and the LEDC update granularity. Defined here (the IDF-free pure-logic header)
+ * so host-testable code can derive cycle counts from it without pulling in the
+ * IDF-dependent control_loop.h; control_loop.h re-exports it via this header. */
+#define CONTROL_LOOP_PERIOD_MS 20U
 
 /**
  * Pure logical core of the control loop (Unit 7).
@@ -52,7 +59,7 @@ typedef struct {
 typedef struct {
     sm_state state;
     rc_debounce_state rc_debounce;
-    int32_t throttle_ramp; /* normalized ramped throttle command */
+    throttle_ramp_state throttle_ramp; /* ramped throttle command + dwell */
     int32_t servo_slew;    /* slewed servo pulse width (us) */
     calib_step calib_step; /* current ESC calibration step (when in calib) */
 } loop_state;

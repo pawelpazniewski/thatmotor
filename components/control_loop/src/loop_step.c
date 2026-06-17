@@ -16,6 +16,20 @@ static int32_t servo_center_us(const settings_params *params)
     return ((int32_t)params->servo_min_us + (int32_t)params->servo_max_us) / 2;
 }
 
+/* Convert the anti-plugging neutral dwell from milliseconds to whole control
+ * cycles, rounding UP so the parked time is never shorter than configured.
+ * 0 ms -> 0 frames (dwell disabled). Period comes from the single shared
+ * CONTROL_LOOP_PERIOD_MS named constant (no hardcoded period here). */
+static uint16_t reverse_dwell_frames(const settings_params *params)
+{
+    uint32_t ms = params->reverse_neutral_dwell_ms;
+    if (ms == 0U) {
+        return 0U;
+    }
+    uint32_t frames = (ms + CONTROL_LOOP_PERIOD_MS - 1U) / CONTROL_LOOP_PERIOD_MS;
+    return (uint16_t)frames;
+}
+
 bool loop_should_apply_pending(sm_state state)
 {
     return state == SM_STATE_DISARMED;
@@ -26,7 +40,8 @@ void loop_state_init(loop_state *state, const settings_params *params,
 {
     state->state = SM_STATE_DISARMED;
     rc_debounce_init(&state->rc_debounce, debounce_threshold);
-    state->throttle_ramp = 0;
+    state->throttle_ramp.value = 0;
+    state->throttle_ramp.dwell_remaining = 0;
     state->servo_slew = servo_center_us(params);
     state->calib_step = CALIB_STEP_NEUTRAL;
 }
@@ -118,7 +133,8 @@ static uint32_t compute_calib_esc(const loop_inputs *in, bool rc_is_valid,
     };
     calib_outputs co = calib_step_next(&ci);
     state->calib_step = co.step;
-    state->throttle_ramp = 0;
+    state->throttle_ramp.value = 0;
+    state->throttle_ramp.dwell_remaining = 0;
     *exit = co.exit;
     return calib_clamp_esc(co.esc_us, esc_clamp_window());
 }
@@ -154,6 +170,7 @@ static uint32_t resolve_esc(const loop_inputs *in, const settings_params *params
         return run_calibration(in, rc_is_valid, entry_frame, state, next_state);
     }
     return throttle_chain_step(in->ch2.width_us, sm->throttle_target, params,
+                               reverse_dwell_frames(params),
                                &state->throttle_ramp);
 }
 
