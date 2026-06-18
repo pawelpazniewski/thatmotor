@@ -30,6 +30,7 @@ typedef struct {
     uint32_t ch1_us;           /* steering raw pulse width */
     uint32_t ch2_us;           /* throttle raw pulse width */
     uint32_t ch4_us;           /* diagnostic raw pulse width (R12) */
+    uint32_t ch3_us;           /* diagnostic raw pulse width (future spot lock) */
     uint32_t ch1_period_us;    /* DIAG: measured CH1 frame period */
     uint32_t ch2_period_us;    /* DIAG: measured CH2 frame period */
     bool ch1_valid;            /* DIAG: CH1 passes channel_valid this frame */

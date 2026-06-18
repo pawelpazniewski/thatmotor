@@ -296,12 +296,15 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
 {
     rc_channel_sample ch4 = {0};
     rc_capture_read(RC_CAP_CH4, &ch4);
+    rc_channel_sample ch3 = {0};
+    rc_capture_read(RC_CAP_CH3, &ch3);
     s_snapshot.state = out->telemetry.state;
     s_snapshot.arm_reason = out->telemetry.arm_reason;
     s_snapshot.rc_valid = out->telemetry.rc_valid;
     s_snapshot.ch1_us = in->ch1.width_us;
     s_snapshot.ch2_us = in->ch2.width_us;
     s_snapshot.ch4_us = ch4.width_us;
+    s_snapshot.ch3_us = ch3.width_us;
     /* DIAG: surface the hidden validity inputs in the panel (period + per-channel
      * pass/fail) so RC can be diagnosed over WiFi without USB attached. */
     s_snapshot.ch1_period_us = in->ch1.period_us;

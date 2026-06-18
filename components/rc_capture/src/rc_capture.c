@@ -26,17 +26,33 @@ static inline uint32_t rc_cap_now_ticks_raw(void)
 #define RC_CAP_CH1_GPIO 34
 #define RC_CAP_CH2_GPIO 35
 #define RC_CAP_CH4_GPIO 32
+#define RC_CAP_CH3_GPIO 27
 
 /* Capture timer at the APB clock: 80 MHz -> 12.5 ns/tick, matching cap_math.
  * Prescale 1 keeps the per-channel resolution at the full tick rate. */
 #define RC_CAP_RESOLUTION_HZ 80000000U
-#define RC_CAP_GROUP_ID 0
 #define RC_CAP_PRESCALE 1U
+
+/* MCPWM capture groups. Group 0 has only 3 capture channels and is fully used by
+ * CH1/CH2/CH4, so CH3 (diagnostic, future spot lock) lives on group 1's own
+ * capture timer. Each used group gets exactly one capture timer in init. */
+#define RC_CAP_GROUP_0 0
+#define RC_CAP_GROUP_1 1
+#define RC_CAP_GROUP_COUNT 2
 
 static const int RC_CAP_GPIO_MAP[RC_CAP_CHANNEL_COUNT] = {
     [RC_CAP_CH1] = RC_CAP_CH1_GPIO,
     [RC_CAP_CH2] = RC_CAP_CH2_GPIO,
     [RC_CAP_CH4] = RC_CAP_CH4_GPIO,
+    [RC_CAP_CH3] = RC_CAP_CH3_GPIO,
+};
+
+/* Channel -> MCPWM group. CH1/CH2/CH4 fill group 0; CH3 sits alone on group 1. */
+static const int RC_CAP_GROUP_MAP[RC_CAP_CHANNEL_COUNT] = {
+    [RC_CAP_CH1] = RC_CAP_GROUP_0,
+    [RC_CAP_CH2] = RC_CAP_GROUP_0,
+    [RC_CAP_CH4] = RC_CAP_GROUP_0,
+    [RC_CAP_CH3] = RC_CAP_GROUP_1,
 };
 
 /* Per-channel capture state, updated only from the capture ISR callback. */
@@ -115,32 +131,48 @@ static esp_err_t configure_channel(mcpwm_cap_timer_handle_t timer,
     return mcpwm_capture_channel_enable(handle);
 }
 
-esp_err_t rc_capture_init(void)
+/* Create one capture timer for the given MCPWM group at the shared resolution. */
+static esp_err_t create_group_timer(int group_id, mcpwm_cap_timer_handle_t *out)
 {
     mcpwm_capture_timer_config_t timer_cfg = {
-        .group_id = RC_CAP_GROUP_ID,
+        .group_id = group_id,
         .clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT,
         .resolution_hz = RC_CAP_RESOLUTION_HZ,
     };
+    return mcpwm_new_capture_timer(&timer_cfg, out);
+}
 
-    mcpwm_cap_timer_handle_t timer = NULL;
-    esp_err_t err = mcpwm_new_capture_timer(&timer_cfg, &timer);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    for (int channel = 0; channel < RC_CAP_CHANNEL_COUNT; channel++) {
-        err = configure_channel(timer, (RcCaptureChannel)channel);
+esp_err_t rc_capture_init(void)
+{
+    /* One capture timer per used MCPWM group (group 0: CH1/CH2/CH4, group 1: CH3).
+     * Channels attach to the timer of their mapped group. */
+    mcpwm_cap_timer_handle_t timers[RC_CAP_GROUP_COUNT] = {0};
+    for (int group = 0; group < RC_CAP_GROUP_COUNT; group++) {
+        esp_err_t err = create_group_timer(group, &timers[group]);
         if (err != ESP_OK) {
             return err;
         }
     }
 
-    err = mcpwm_capture_timer_enable(timer);
-    if (err != ESP_OK) {
-        return err;
+    for (int channel = 0; channel < RC_CAP_CHANNEL_COUNT; channel++) {
+        mcpwm_cap_timer_handle_t timer = timers[RC_CAP_GROUP_MAP[channel]];
+        esp_err_t err = configure_channel(timer, (RcCaptureChannel)channel);
+        if (err != ESP_OK) {
+            return err;
+        }
     }
-    return mcpwm_capture_timer_start(timer);
+
+    for (int group = 0; group < RC_CAP_GROUP_COUNT; group++) {
+        esp_err_t err = mcpwm_capture_timer_enable(timers[group]);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = mcpwm_capture_timer_start(timers[group]);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+    return ESP_OK;
 }
 
 esp_err_t rc_capture_read(RcCaptureChannel channel, rc_channel_sample *out)

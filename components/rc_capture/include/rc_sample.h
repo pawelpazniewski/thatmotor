@@ -13,6 +13,7 @@ extern "C" {
  * RC_CAP_CH1 -> GPIO34 (steering, part of RC_valid)
  * RC_CAP_CH2 -> GPIO35 (throttle, part of RC_valid)
  * RC_CAP_CH4 -> GPIO32 (diagnostic only, deliberately outside RC_valid; R12)
+ * RC_CAP_CH3 -> GPIO27 (diagnostic only, future spot lock; outside RC_valid)
  *
  * Framework-agnostic (no IDF includes) so the validity predicate and its host
  * tests can use these types without linking the MCPWM driver.
@@ -21,6 +22,7 @@ typedef enum {
     RC_CAP_CH1 = 0,
     RC_CAP_CH2 = 1,
     RC_CAP_CH4 = 2,
+    RC_CAP_CH3 = 3,
     RC_CAP_CHANNEL_COUNT
 } RcCaptureChannel;
 
