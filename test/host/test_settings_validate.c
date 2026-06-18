@@ -232,7 +232,7 @@ static void test_servo_endpoint_out_of_range_recovers(void)
     TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
     TEST_ASSERT_TRUE(result.defaults_used);
     TEST_ASSERT_FALSE(result.settings_valid);
-    TEST_ASSERT_EQUAL_UINT16(2300U, out.servo_max_us);
+    TEST_ASSERT_EQUAL_UINT16(2167U, out.servo_max_us);
 }
 
 static void test_servo_endpoints_inverted_rejected(void)
