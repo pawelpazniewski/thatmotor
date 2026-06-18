@@ -15,8 +15,19 @@ extern "C" {
  * ch4_switch_threshold_us) so CH4 can toggle ARMED/DISARMED.
  * v4: add the manual DEPLOY mode (deploy_servo_us held while the motor is off)
  * and the CH4 click-gesture window (click_window_ms) that distinguishes a single
- * click (arm/disarm) from a triple click (deploy/stow). */
-#define SETTINGS_SCHEMA_VERSION 4U
+ * click (arm/disarm) from a triple click (deploy/stow).
+ * v5: add the signed servo neutral trim (servo_trim_us): a mechanical-zero
+ * correction added to the servo output before the hard clamp, so neutral,
+ * endpoints and deploy all shift uniformly. */
+#define SETTINGS_SCHEMA_VERSION 5U
+
+/* Signed servo neutral trim bounds/step (public: the control loop drives the
+ * panel's live Step Left/Right with these; the validator/defaults reuse them).
+ * Range +/-300 us (~+/-40 deg on a 270 deg / 2000 us servo) is a generous
+ * mechanical-misalignment budget; one panel step is ~7 us (~1 deg). */
+#define SERVO_TRIM_MAX_US 300
+#define SERVO_TRIM_STEP_US 7
+#define SERVO_TRIM_DEFAULT 0
 
 /**
  * Persisted control parameters.
@@ -40,6 +51,7 @@ typedef struct {
     uint16_t servo_max_us;            /* steering endpoint maximum */
     uint16_t steer_deadband_us;       /* deadband around centre (default 0) */
     bool servo_reverse;
+    int16_t servo_trim_us;            /* SIGNED neutral trim added to servo out */
 
     /* Throttle (ESC) shaping. */
     uint16_t esc_ramp_up_us_per_cycle;   /* accel rate */

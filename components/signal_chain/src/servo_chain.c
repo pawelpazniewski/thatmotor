@@ -47,6 +47,19 @@ static uint32_t resolve_target_us(int32_t command, servo_target_mode mode,
                                 servo_center_us(params), params->servo_max_us);
 }
 
+/* Add the signed neutral trim to the slewed output, before the hard clamp, so
+ * neutral/track/center/deploy all shift uniformly. A negative sum is floored at
+ * 0 (the clamp would cut it to the window minimum anyway) to avoid undefined
+ * behaviour when casting a negative int32 to uint32. */
+static uint32_t apply_trim(int32_t slewed_us, int16_t trim_us)
+{
+    int32_t trimmed = slewed_us + (int32_t)trim_us;
+    if (trimmed < 0) {
+        trimmed = 0;
+    }
+    return (uint32_t)trimmed;
+}
+
 uint32_t servo_chain_step(uint32_t raw_ch1_us, servo_target_mode mode,
                           const settings_params *params, int32_t *slew_state)
 {
@@ -56,7 +69,25 @@ uint32_t servo_chain_step(uint32_t raw_ch1_us, servo_target_mode mode,
     *slew_state = slew_step(*slew_state, (int32_t)target_us,
                             (int32_t)params->servo_slew_us_per_cycle);
 
+    uint32_t trimmed_us = apply_trim(*slew_state, params->servo_trim_us);
     PwmWindow window = {.min_us = SERVO_WINDOW_MIN_US,
                         .max_us = SERVO_WINDOW_MAX_US};
-    return clamp_pwm_us((uint32_t)*slew_state, window);
+    return clamp_pwm_us(trimmed_us, window);
+}
+
+int16_t servo_trim_stepped(int16_t current, int dir, int16_t step,
+                           int16_t max_abs)
+{
+    int32_t next = (int32_t)current;
+    if (dir > 0) {
+        next += step;
+    } else if (dir < 0) {
+        next -= step;
+    }
+    if (next > max_abs) {
+        next = max_abs;
+    } else if (next < -max_abs) {
+        next = -max_abs;
+    }
+    return (int16_t)next;
 }

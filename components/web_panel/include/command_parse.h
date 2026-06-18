@@ -31,6 +31,9 @@ typedef struct {
     bool calib_confirm;      /* operator confirmation of the calib warning */
     bool deploy_request;     /* request entry to DEPLOY (from DISARMED) */
     bool stow_request;       /* request exit from DEPLOY -> DISARMED */
+    bool trim_left;          /* servo neutral trim: step one click left */
+    bool trim_right;         /* servo neutral trim: step one click right */
+    bool trim_save;          /* persist the current servo trim to NVS */
     calib_event calib_event; /* discriminated calibration operator event */
 } command_parse_result;
 
@@ -38,8 +41,8 @@ typedef struct {
  * Map a command keyword to UI event fields (exact match).
  *
  * Recognised keywords: "arm", "disarm", "deploy", "stow", "calib_start",
- * "calib_next", "calib_cancel". Any other (or NULL) keyword yields ok=false with all event
- * fields inert (zeroed).
+ * "calib_next", "calib_cancel", "trim_left", "trim_right", "trim_save". Any
+ * other (or NULL) keyword yields ok=false with all event fields inert (zeroed).
  *
  * @param cmd  Command keyword (NUL-terminated), or NULL.
  * @return ok + the mapped fields on a known keyword; ok=false otherwise.

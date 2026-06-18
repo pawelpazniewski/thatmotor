@@ -37,6 +37,7 @@ typedef struct {
     bool ch2_valid;            /* DIAG: CH2 passes channel_valid this frame */
     uint32_t servo_us;         /* commanded servo pulse (post-clamp) */
     uint32_t esc_us;           /* commanded ESC pulse (post-clamp) */
+    int16_t servo_trim_us;     /* active signed servo neutral trim (live) */
     settings_source source;    /* R16: provenance */
     bool settings_valid;       /* R16 */
     bool calibrated;           /* R16: false -> UNCALIBRATED */
@@ -56,6 +57,9 @@ typedef struct {
     bool calib_confirm;
     bool deploy_request;       /* panel "Deploy": enter DEPLOY from DISARMED */
     bool stow_request;         /* panel "Stow": leave DEPLOY -> DISARMED */
+    bool trim_left;            /* servo neutral trim: step one click left */
+    bool trim_right;           /* servo neutral trim: step one click right */
+    bool trim_save;            /* persist the current servo trim to NVS */
     calib_event calib_event;   /* discriminated calibration operator event */
 } control_loop_ui_events;
 

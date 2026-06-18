@@ -24,6 +24,12 @@
 #define SERVO_SLEW_MAX 200U
 #define SERVO_SLEW_DEFAULT 10U
 
+/* Servo neutral trim (SIGNED): range/step/default constants live in the public
+ * settings_model.h (the shared data contract), because the control loop also
+ * needs the step/max to drive the panel's live Step Left/Right. They are
+ * included here via settings_model.h, so the validator and defaults use the same
+ * single definition. */
+
 /* Deadbands. Steering deadband defaults to 0 (plan: steer deadband = 0). */
 #define DEADBAND_MAX 300U
 #define STEER_DEADBAND_DEFAULT 0U

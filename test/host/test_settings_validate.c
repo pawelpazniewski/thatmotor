@@ -309,6 +309,60 @@ static void test_deploy_fields_preserved_when_valid(void)
     TEST_ASSERT_EQUAL_UINT16(700U, out.click_window_ms);
 }
 
+static void test_servo_trim_in_range_preserved(void)
+{
+    /* Arrange: a signed trim well inside [-300,+300] must survive a clean load,
+     * including a negative value. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.servo_trim_us = -120; /* in band */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: clean NVS load, trim preserved verbatim. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_NVS, result.source);
+    TEST_ASSERT_TRUE(result.settings_valid);
+    TEST_ASSERT_EQUAL_INT16(-120, out.servo_trim_us);
+}
+
+static void test_servo_trim_above_max_recovers(void)
+{
+    /* Arrange: trim above +300 is invalid and falls back to its default (0). */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.servo_trim_us = 400; /* > SERVO_TRIM_MAX_US */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: mixed recovery, trim reset to 0. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_FALSE(result.settings_valid);
+    TEST_ASSERT_EQUAL_INT16(0, out.servo_trim_us);
+}
+
+static void test_servo_trim_below_min_recovers(void)
+{
+    /* Arrange: trim below -300 is invalid and falls back to its default (0). */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.servo_trim_us = -400; /* < -SERVO_TRIM_MAX_US */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: mixed recovery, trim reset to 0. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_FALSE(result.settings_valid);
+    TEST_ASSERT_EQUAL_INT16(0, out.servo_trim_us);
+}
+
 void run_settings_validate_tests(void)
 {
     RUN_TEST(test_empty_nvs_yields_defaults);
@@ -327,4 +381,7 @@ void run_settings_validate_tests(void)
     RUN_TEST(test_deploy_servo_out_of_range_recovers);
     RUN_TEST(test_click_window_out_of_range_recovers);
     RUN_TEST(test_deploy_fields_preserved_when_valid);
+    RUN_TEST(test_servo_trim_in_range_preserved);
+    RUN_TEST(test_servo_trim_above_max_recovers);
+    RUN_TEST(test_servo_trim_below_min_recovers);
 }

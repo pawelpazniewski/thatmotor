@@ -36,6 +36,12 @@ static void put_bool(uint8_t *buf, size_t *pos, bool value)
     buf[(*pos)++] = value ? 1U : 0U;
 }
 
+/* Signed 16-bit: store the two's-complement bit pattern as LE u16. */
+static void put_i16(uint8_t *buf, size_t *pos, int16_t value)
+{
+    put_u16(buf, pos, (uint16_t)value);
+}
+
 /* Little-endian field cursor readers. */
 static uint16_t get_u16(const uint8_t *buf, size_t *pos)
 {
@@ -47,6 +53,12 @@ static uint16_t get_u16(const uint8_t *buf, size_t *pos)
 static bool get_bool(const uint8_t *buf, size_t *pos)
 {
     return buf[(*pos)++] != 0U;
+}
+
+/* Signed 16-bit: read the LE u16 bit pattern back as two's-complement int16. */
+static int16_t get_i16(const uint8_t *buf, size_t *pos)
+{
+    return (int16_t)get_u16(buf, pos);
 }
 
 /* Serialise every settings_params field into buf in declared order. The stored
@@ -64,6 +76,7 @@ static void serialize_fields(const settings_params *p, uint8_t *buf, size_t *pos
     put_u16(buf, pos, p->servo_max_us);
     put_u16(buf, pos, p->steer_deadband_us);
     put_bool(buf, pos, p->servo_reverse);
+    put_i16(buf, pos, p->servo_trim_us);
 
     put_u16(buf, pos, p->esc_ramp_up_us_per_cycle);
     put_u16(buf, pos, p->esc_ramp_down_us_per_cycle);
@@ -103,6 +116,7 @@ static void deserialize_fields(const uint8_t *buf, size_t *pos, settings_params 
     p->servo_max_us = get_u16(buf, pos);
     p->steer_deadband_us = get_u16(buf, pos);
     p->servo_reverse = get_bool(buf, pos);
+    p->servo_trim_us = get_i16(buf, pos);
 
     p->esc_ramp_up_us_per_cycle = get_u16(buf, pos);
     p->esc_ramp_down_us_per_cycle = get_u16(buf, pos);

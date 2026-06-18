@@ -71,6 +71,19 @@
     <p id="save-status" class="status"></p>
   </section>
 
+  <section class="card">
+    <h2>Servo neutral calibration</h2>
+    <div class="grid">
+      <div class="metric"><span class="label">Current trim (µs)</span><span id="servo_trim_us" class="value">--</span></div>
+    </div>
+    <div class="btn-row">
+      <button id="btn-trim-left" type="button">Step Left</button>
+      <button id="btn-trim-right" type="button">Step Right</button>
+      <button id="btn-trim-save" type="button">Save</button>
+    </div>
+    <p class="hint">Center the steering stick, step until the column points straight, then Save. Works in DISARMED.</p>
+  </section>
+
   <section class="card danger">
     <h2>ESC range calibration</h2>
     <p class="warn strong">Remove propeller / disconnect motor before starting calibration.</p>

@@ -108,6 +108,19 @@ uint32_t servo_chain_step(uint32_t raw_ch1_us, servo_target_mode mode,
                           const settings_params *params, int32_t *slew_state);
 
 /**
+ * Step the signed servo neutral trim by one panel click and clamp it to the
+ * symmetric range. Pure helper shared by the panel (live Step Left/Right).
+ *
+ * @param current  Current trim in microseconds (signed).
+ * @param dir      Direction: >0 adds step, <0 subtracts step, 0 leaves current.
+ * @param step     Per-click magnitude in microseconds (>= 0).
+ * @param max_abs  Symmetric clamp bound; the result is in [-max_abs, max_abs].
+ * @return The new trim, clamped to [-max_abs, max_abs].
+ */
+int16_t servo_trim_stepped(int16_t current, int dir, int16_t step,
+                           int16_t max_abs);
+
+/**
  * Whether the throttle stick is within its neutral band this cycle.
  *
  * Applies the SAME normalize + throttle-deadband steps the throttle chain uses,

@@ -16,6 +16,7 @@
 #include "pwm_out.h"
 #include "rc_capture.h"
 #include "rc_validity.h"
+#include "signal_chain.h"
 
 static const char *TAG = "control_loop";
 
@@ -41,6 +42,9 @@ static click_counter_state s_click;
 static QueueHandle_t s_pending_queue;
 static QueueHandle_t s_ui_queue;
 static commit_debounce_state s_commit;
+/* Set by a panel "Save trim" to force the next eligible commit immediately
+ * (bypass the debounce window); cleared once the write lands. */
+static bool s_force_commit;
 
 /* Load-time provenance flags (R16), surfaced verbatim to panel telemetry. */
 static settings_validation_result s_load_flags;
@@ -168,6 +172,7 @@ esp_err_t control_loop_init(const settings_params *initial,
     ch4_switch_init(&s_ch4_switch);
     click_counter_reset(&s_click);
     commit_debounce_init(&s_commit, COMMIT_DEBOUNCE_DEFAULT_MS);
+    s_force_commit = false;
 
     s_pending_queue = xQueueCreate(1, sizeof(settings_params));
     if (s_pending_queue == NULL) {
@@ -248,7 +253,7 @@ static void maybe_commit_params(void)
     if (!loop_should_apply_pending(s_loop.state)) {
         return; /* same DISARMED gate as apply: never persist while armed */
     }
-    if (!commit_debounce_should_commit(&s_commit, now_ms(), false)) {
+    if (!commit_debounce_should_commit(&s_commit, now_ms(), s_force_commit)) {
         return;
     }
     esp_err_t err = nvs_store_commit(&s_params);
@@ -257,7 +262,31 @@ static void maybe_commit_params(void)
         return;
     }
     commit_debounce_mark_committed(&s_commit);
+    s_force_commit = false;
     ESP_LOGI(TAG, "params committed to NVS");
+}
+
+/* Apply the panel's live servo-trim controls, DISARMED only (SI-6: the loop is
+ * the single writer of s_params). Step Left/Right nudge servo_trim_us by one
+ * click and stage a debounced NVS commit; Save forces an immediate commit on the
+ * next eligible cycle. Outside DISARMED every trim event is ignored. */
+static void apply_trim_events(const control_loop_ui_events *ev)
+{
+    if (!loop_should_apply_pending(s_loop.state)) {
+        return;
+    }
+    if (ev->trim_left || ev->trim_right) {
+        int dir = ev->trim_right ? 1 : -1;
+        s_params.servo_trim_us = servo_trim_stepped(
+            s_params.servo_trim_us, dir, SERVO_TRIM_STEP_US, SERVO_TRIM_MAX_US);
+        commit_debounce_mark_changed(&s_commit, now_ms());
+    }
+    if (ev->trim_save) {
+        /* Ensure there is something to persist, then force an immediate commit
+         * (skip the debounce window) on the next eligible cycle. */
+        commit_debounce_mark_changed(&s_commit, now_ms());
+        s_force_commit = true;
+    }
 }
 
 /* Drain the latest staged UI events into the per-cycle inputs (edge semantics:
@@ -275,6 +304,7 @@ static void apply_ui_events(loop_inputs *in)
     in->deploy_request = ev.deploy_request;
     in->stow_request = ev.stow_request;
     in->calib_event = ev.calib_event;
+    apply_trim_events(&ev);
 }
 
 /* Read the two control channels into the per-cycle input snapshot. */
@@ -315,6 +345,7 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
                                          &s_validity_cfg.ch2);
     s_snapshot.servo_us = out->servo_us;
     s_snapshot.esc_us = out->esc_us;
+    s_snapshot.servo_trim_us = s_params.servo_trim_us;
     s_snapshot.source = s_load_flags.source;
     s_snapshot.settings_valid = s_load_flags.settings_valid;
     s_snapshot.calibrated = s_load_flags.calibrated;

@@ -20,6 +20,7 @@ void settings_load_defaults(settings_params *out)
         .servo_max_us = SERVO_MAX_DEFAULT,
         .steer_deadband_us = STEER_DEADBAND_DEFAULT,
         .servo_reverse = false,
+        .servo_trim_us = SERVO_TRIM_DEFAULT,
 
         .esc_ramp_up_us_per_cycle = ESC_RAMP_UP_DEFAULT,
         .esc_ramp_down_us_per_cycle = ESC_RAMP_DOWN_DEFAULT,

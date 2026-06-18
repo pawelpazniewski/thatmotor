@@ -19,6 +19,18 @@ static uint16_t field_or_default(uint16_t value, uint16_t min, uint16_t max,
     return value;
 }
 
+/* Signed clamp-to-default helper for symmetric +/-max_abs fields: if value is
+ * outside [-max_abs, +max_abs], take the default and flag the repair. */
+static int16_t signed_field_or_default(int16_t value, int16_t max_abs,
+                                       int16_t fallback, bool *repaired)
+{
+    if (value < -max_abs || value > max_abs) {
+        *repaired = true;
+        return fallback;
+    }
+    return value;
+}
+
 /* Per-field range checks. Repairs out-of-range fields in *p in place against
  * the defaults in *def, setting *repaired when any field is replaced. */
 static void validate_fields(settings_params *p, const settings_params *def,
@@ -41,6 +53,10 @@ static void validate_fields(settings_params *p, const settings_params *def,
     p->steer_deadband_us = field_or_default(p->steer_deadband_us, 0U,
                                             DEADBAND_MAX, def->steer_deadband_us,
                                             repaired);
+    /* Signed servo trim: clamp to [-SERVO_TRIM_MAX_US, +SERVO_TRIM_MAX_US]. */
+    p->servo_trim_us = signed_field_or_default(p->servo_trim_us,
+                                               SERVO_TRIM_MAX_US,
+                                               def->servo_trim_us, repaired);
 
     p->esc_ramp_up_us_per_cycle =
         field_or_default(p->esc_ramp_up_us_per_cycle, ESC_RAMP_MIN, ESC_RAMP_MAX,

@@ -17,6 +17,9 @@ static const command_row COMMAND_TABLE[] = {
     {"calib_start", {.ok = true, .calib_request = true, .calib_confirm = true}},
     {"calib_next", {.ok = true, .calib_event = CALIB_EVENT_NEXT}},
     {"calib_cancel", {.ok = true, .calib_event = CALIB_EVENT_CANCEL}},
+    {"trim_left", {.ok = true, .trim_left = true}},
+    {"trim_right", {.ok = true, .trim_right = true}},
+    {"trim_save", {.ok = true, .trim_save = true}},
 };
 
 #define COMMAND_TABLE_COUNT (sizeof(COMMAND_TABLE) / sizeof(COMMAND_TABLE[0]))

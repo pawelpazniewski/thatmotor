@@ -72,6 +72,36 @@ static void test_stow_maps_to_stow_request(void)
     TEST_ASSERT_FALSE(r.disarm_request);
 }
 
+static void test_trim_left_maps_to_trim_left(void)
+{
+    command_parse_result r = command_parse("trim_left");
+
+    TEST_ASSERT_TRUE(r.ok);
+    TEST_ASSERT_TRUE(r.trim_left);
+    TEST_ASSERT_FALSE(r.trim_right);
+    TEST_ASSERT_FALSE(r.trim_save);
+}
+
+static void test_trim_right_maps_to_trim_right(void)
+{
+    command_parse_result r = command_parse("trim_right");
+
+    TEST_ASSERT_TRUE(r.ok);
+    TEST_ASSERT_TRUE(r.trim_right);
+    TEST_ASSERT_FALSE(r.trim_left);
+    TEST_ASSERT_FALSE(r.trim_save);
+}
+
+static void test_trim_save_maps_to_trim_save(void)
+{
+    command_parse_result r = command_parse("trim_save");
+
+    TEST_ASSERT_TRUE(r.ok);
+    TEST_ASSERT_TRUE(r.trim_save);
+    TEST_ASSERT_FALSE(r.trim_left);
+    TEST_ASSERT_FALSE(r.trim_right);
+}
+
 /* --- Unknown / malformed keywords are rejected (no substring match) --- */
 
 static void test_unknown_keyword_is_rejected(void)
@@ -115,6 +145,9 @@ void run_command_parse_tests(void)
     RUN_TEST(test_calib_start_sets_request_and_confirm);
     RUN_TEST(test_calib_next_maps_to_event_next);
     RUN_TEST(test_calib_cancel_maps_to_event_cancel);
+    RUN_TEST(test_trim_left_maps_to_trim_left);
+    RUN_TEST(test_trim_right_maps_to_trim_right);
+    RUN_TEST(test_trim_save_maps_to_trim_save);
     RUN_TEST(test_unknown_keyword_is_rejected);
     RUN_TEST(test_substring_of_known_keyword_is_rejected);
     RUN_TEST(test_null_keyword_is_rejected);

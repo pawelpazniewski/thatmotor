@@ -84,6 +84,7 @@ function applyTelemetry(t) {
   setText("ch2_valid", t.ch2_valid ? "yes" : "NO");
   setText("servo_us", t.servo_us);
   setText("esc_us", t.esc_us);
+  setText("servo_trim_us", t.servo_trim_us);
   setText("source", SOURCE_NAMES[t.source] || t.source);
   setText("settings_valid", t.settings_valid ? "yes" : "no");
   setText("calibrated", t.calibrated ? "yes" : "NO");
@@ -364,6 +365,20 @@ async function sendCalibCommand(cmd) {
   }
 }
 
+// Servo neutral trim: a live nudge (left/right) or a Save. The new value lands
+// back via telemetry (servo_trim_us); we only surface a rejected envelope here.
+async function sendTrimCommand(cmd) {
+  try {
+    await sendCommand(cmd);
+  } catch (e) {
+    setCmdResult(`✗ Command rejected: ${e.message}`, "err");
+  }
+}
+
+function handleTrimLeft() { return sendTrimCommand("trim_left"); }
+function handleTrimRight() { return sendTrimCommand("trim_right"); }
+function handleTrimSave() { return sendTrimCommand("trim_save"); }
+
 function wireButtons() {
   $("btn-arm").onclick = handleArm;
   $("btn-disarm").onclick = handleDisarm;
@@ -373,6 +388,9 @@ function wireButtons() {
   $("btn-calib-start").onclick = () => sendCalibCommand("calib_start");
   $("btn-calib-next").onclick = () => sendCalibCommand("calib_next");
   $("btn-calib-cancel").onclick = () => sendCalibCommand("calib_cancel");
+  $("btn-trim-left").onclick = handleTrimLeft;
+  $("btn-trim-right").onclick = handleTrimRight;
+  $("btn-trim-save").onclick = handleTrimSave;
   $("calib-ack").onchange = () => updateEditLock(lastState === STATE_DISARMED);
 }
 

@@ -154,6 +154,9 @@ static control_loop_ui_events to_ui_events(const command_parse_result *parsed)
         .calib_confirm = parsed->calib_confirm,
         .deploy_request = parsed->deploy_request,
         .stow_request = parsed->stow_request,
+        .trim_left = parsed->trim_left,
+        .trim_right = parsed->trim_right,
+        .trim_save = parsed->trim_save,
         .calib_event = parsed->calib_event,
     };
     return ev;

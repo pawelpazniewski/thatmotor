@@ -236,6 +236,92 @@ static void test_deploy_target_clamped_to_servo_window(void)
     TEST_ASSERT_EQUAL_UINT32(2500U, servo_us);
 }
 
+/* ---- servo neutral trim (signed output offset, before the hard clamp) ---- */
+
+static void test_trim_shifts_neutral_output(void)
+{
+    /* Arrange: centered stick, +30 us trim. */
+    settings_params p = defaults_params();
+    p.servo_trim_us = 30;
+
+    /* Act */
+    uint32_t servo_us = settle_servo(1500U, SERVO_TARGET_TRACK, &p);
+
+    /* Assert: neutral output shifted up by exactly the trim. */
+    TEST_ASSERT_EQUAL_UINT32(servo_center_us(&p) + 30U, servo_us);
+}
+
+static void test_trim_shifts_track_endpoint(void)
+{
+    /* Arrange: full-right tracking with a +20 us trim. */
+    settings_params p = defaults_params();
+    p.servo_trim_us = 20;
+
+    /* Act */
+    uint32_t servo_us = settle_servo(2000U, SERVO_TARGET_TRACK, &p);
+
+    /* Assert: the max endpoint is shifted up uniformly by the trim. */
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)p.servo_max_us + 20U, servo_us);
+}
+
+static void test_negative_trim_lowers_output(void)
+{
+    /* Arrange: centered stick, -40 us trim. */
+    settings_params p = defaults_params();
+    p.servo_trim_us = -40;
+
+    /* Act */
+    uint32_t servo_us = settle_servo(1500U, SERVO_TARGET_TRACK, &p);
+
+    /* Assert: neutral output shifted DOWN by exactly the trim magnitude. */
+    TEST_ASSERT_EQUAL_UINT32(servo_center_us(&p) - 40U, servo_us);
+}
+
+static void test_trim_cannot_push_past_hard_ceiling(void)
+{
+    /* Arrange: max endpoint at the electrical ceiling (2500) + 300 us trim must
+     * still clamp to 2500, never exceed the SI-3 window. */
+    settings_params p = defaults_params();
+    p.servo_max_us = 2300U;
+    p.servo_trim_us = 300; /* 2300 + 300 = 2600 -> clamp 2500 */
+
+    /* Act */
+    uint32_t servo_us = settle_servo(2000U, SERVO_TARGET_TRACK, &p);
+
+    /* Assert: clamped to the hard ceiling. */
+    TEST_ASSERT_EQUAL_UINT32(SERVO_HARD_MAX_US, servo_us);
+}
+
+static void test_deploy_target_shifted_by_trim(void)
+{
+    /* Arrange: DEPLOY target with a +50 us trim shifts the held position too. */
+    settings_params p = defaults_params();
+    p.deploy_servo_us = 2000U;
+    p.servo_trim_us = 50;
+
+    /* Act */
+    uint32_t servo_us = settle_servo(1500U, SERVO_TARGET_DEPLOY, &p);
+
+    /* Assert: deploy hold + trim. */
+    TEST_ASSERT_EQUAL_UINT32(2050U, servo_us);
+}
+
+static void test_servo_trim_stepped_adds_and_subtracts(void)
+{
+    /* dir>0 adds the step, dir<0 subtracts it, dir==0 leaves the value. */
+    TEST_ASSERT_EQUAL_INT16(7, servo_trim_stepped(0, 1, 7, 300));
+    TEST_ASSERT_EQUAL_INT16(-7, servo_trim_stepped(0, -1, 7, 300));
+    TEST_ASSERT_EQUAL_INT16(42, servo_trim_stepped(42, 0, 7, 300));
+}
+
+static void test_servo_trim_stepped_clamps_to_symmetric_bound(void)
+{
+    /* Stepping past +/-max_abs saturates at the bound. */
+    TEST_ASSERT_EQUAL_INT16(300, servo_trim_stepped(298, 1, 7, 300));
+    TEST_ASSERT_EQUAL_INT16(-300, servo_trim_stepped(-298, -1, 7, 300));
+    TEST_ASSERT_EQUAL_INT16(300, servo_trim_stepped(300, 1, 7, 300));
+}
+
 void run_servo_chain_tests(void)
 {
     RUN_TEST(test_full_left_settles_at_min_endpoint);
@@ -252,4 +338,11 @@ void run_servo_chain_tests(void)
     RUN_TEST(test_hard_window_bounds_extreme_endpoints);
     RUN_TEST(test_deploy_settles_at_deploy_servo_us_ignoring_stick);
     RUN_TEST(test_deploy_target_clamped_to_servo_window);
+    RUN_TEST(test_trim_shifts_neutral_output);
+    RUN_TEST(test_trim_shifts_track_endpoint);
+    RUN_TEST(test_negative_trim_lowers_output);
+    RUN_TEST(test_trim_cannot_push_past_hard_ceiling);
+    RUN_TEST(test_deploy_target_shifted_by_trim);
+    RUN_TEST(test_servo_trim_stepped_adds_and_subtracts);
+    RUN_TEST(test_servo_trim_stepped_clamps_to_symmetric_bound);
 }
