@@ -228,11 +228,11 @@ static void test_servo_endpoint_out_of_range_recovers(void)
     /* Act */
     settings_validation_result result = settings_validate(&stored, true, &out);
 
-    /* Assert: mixed recovery, bad field replaced by its default (1900). */
+    /* Assert: mixed recovery, bad field replaced by its default (servo_max). */
     TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
     TEST_ASSERT_TRUE(result.defaults_used);
     TEST_ASSERT_FALSE(result.settings_valid);
-    TEST_ASSERT_EQUAL_UINT16(1900U, out.servo_max_us);
+    TEST_ASSERT_EQUAL_UINT16(2300U, out.servo_max_us);
 }
 
 static void test_servo_endpoints_inverted_rejected(void)

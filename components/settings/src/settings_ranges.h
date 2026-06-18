@@ -17,8 +17,8 @@
  * for ~180 deg). Cross-field servo_min < servo_max is still enforced. */
 #define SERVO_US_MIN 500U
 #define SERVO_US_MAX 2500U
-#define SERVO_MIN_DEFAULT 1100U
-#define SERVO_MAX_DEFAULT 1900U
+#define SERVO_MIN_DEFAULT 700U
+#define SERVO_MAX_DEFAULT 2300U
 /* Slew default is gentle (smooth steering); 1..200 us/cycle is a wide window. */
 #define SERVO_SLEW_MIN 1U
 #define SERVO_SLEW_MAX 200U
