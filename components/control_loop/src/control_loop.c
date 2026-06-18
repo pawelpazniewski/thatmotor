@@ -1,6 +1,7 @@
 #include "control_loop.h"
 
 #include "ch4_switch.h"
+#include "click_counter.h"
 #include "commit_debounce.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
@@ -35,6 +36,8 @@ static loop_state s_loop;
 static loop_validity_cfg s_validity_cfg;
 /* Persistent CH4 mode-button debounce/edge state (one frame's carry-over). */
 static ch4_switch_state s_ch4_switch;
+/* Persistent CH4 click-gesture accumulator (1 vs 3 clicks across frames). */
+static click_counter_state s_click;
 static QueueHandle_t s_pending_queue;
 static QueueHandle_t s_ui_queue;
 static commit_debounce_state s_commit;
@@ -85,15 +88,42 @@ static ch4_switch_cfg make_ch4_switch_cfg(const settings_params *params)
     return cfg;
 }
 
-/* Fold the CH4 momentary toggle button into the arm/disarm intent for this
- * cycle. Each press flips CH4, so ANY accepted edge is one press; it toggles
- * against the CURRENT state (disarmed -> arm, armed -> disarm) rather than mapping
- * the raw value to a state. This keeps panel and CH4 interchangeable (toggle is
- * relative to whatever set the state last) and means the CH4 value never forces a
- * state: after boot or failsafe the loop stays DISARMED until a deliberate press.
- * The OR is intentional - the panel request was applied upstream and CH4 only
- * adds intent, never clears it. Disabled -> CH4 has no influence. Arming still
- * passes the full safety gate in the state machine. */
+/* Convert the configured click window (ms) into whole control frames, rounding
+ * UP so the window is never shorter than configured. The single shared
+ * CONTROL_LOOP_PERIOD_MS named constant defines the cycle, so no period is
+ * hardcoded here. A 0 ms window would collapse to 0 frames; the validated range
+ * floors click_window_ms well above 0, so the result is always >= 1. */
+static uint16_t click_window_frames(const settings_params *params)
+{
+    uint32_t ms = params->click_window_ms;
+    uint32_t frames = (ms + CONTROL_LOOP_PERIOD_MS - 1U) / CONTROL_LOOP_PERIOD_MS;
+    return (uint16_t)frames;
+}
+
+/* Map a click gesture to the per-state CH4 intent while DISARMED: a single
+ * click arms (through the state machine's gate), a triple click deploys. */
+static void apply_disarmed_gesture(click_gesture gesture, loop_inputs *in)
+{
+    if (gesture == CLICK_SINGLE) {
+        in->ui_arm_request = true;
+    } else if (gesture == CLICK_TRIPLE) {
+        in->deploy_request = true;
+    }
+}
+
+/* Fold the CH4 momentary button's click gestures into this cycle's intents.
+ * Each press fires exactly one accepted edge ("click"). The mapping is by the
+ * CURRENT state, so panel and CH4 stay interchangeable and CH4 never forces a
+ * state out of FAILSAFE/calibration:
+ *   ARMED    -> any single click is an IMMEDIATE disarm (no window wait); the
+ *               click accumulator is reset so it cannot also deploy.
+ *   DISARMED -> 1 click arms (gated), 3 clicks deploy, 2 clicks do nothing.
+ *   DEPLOY   -> 3 clicks stow (-> DISARMED); 1-2 clicks do NOTHING (no
+ *               accidental exit while the motor is raised).
+ *   else     -> ignored, accumulator reset.
+ * The OR is intentional: panel requests were applied upstream and CH4 only adds
+ * intent, never clears it. Disabled -> CH4 has no influence. Arming still passes
+ * the full safety gate in the state machine. */
 static void apply_ch4_switch(loop_inputs *in)
 {
     if (!s_params.ch4_mode_switch_enabled) {
@@ -102,14 +132,27 @@ static void apply_ch4_switch(loop_inputs *in)
     rc_channel_sample ch4 = {0};
     rc_capture_read(RC_CAP_CH4, &ch4);
     ch4_switch_cfg cfg = make_ch4_switch_cfg(&s_params);
-    ch4_switch_event event = ch4_switch_update(&s_ch4_switch, &ch4, &cfg);
-    ch4_intent intent = ch4_toggle_intent(event, s_loop.state == SM_STATE_DISARMED,
-                                          s_loop.state == SM_STATE_ARMED);
-    if (intent == CH4_INTENT_ARM) {
-        in->ui_arm_request = true;
-    } else if (intent == CH4_INTENT_DISARM) {
-        in->ui_disarm_request = true;
+    bool click = ch4_switch_update(&s_ch4_switch, &ch4, &cfg) != CH4_SWITCH_NONE;
+    uint16_t window = click_window_frames(&s_params);
+
+    if (s_loop.state == SM_STATE_ARMED) {
+        if (click) {
+            in->ui_disarm_request = true; /* instant disarm, no window wait */
+        }
+        click_counter_reset(&s_click);
+        return;
     }
+    if (s_loop.state == SM_STATE_DISARMED) {
+        apply_disarmed_gesture(click_counter_update(&s_click, click, window), in);
+        return;
+    }
+    if (s_loop.state == SM_STATE_DEPLOY) {
+        if (click_counter_update(&s_click, click, window) == CLICK_TRIPLE) {
+            in->stow_request = true;
+        }
+        return;
+    }
+    click_counter_reset(&s_click); /* FAILSAFE / calibration: ignore CH4 */
 }
 
 esp_err_t control_loop_init(const settings_params *initial,
@@ -123,6 +166,7 @@ esp_err_t control_loop_init(const settings_params *initial,
     rebuild_validity_cfg(&s_params);
     loop_state_init(&s_loop, &s_params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
     ch4_switch_init(&s_ch4_switch);
+    click_counter_reset(&s_click);
     commit_debounce_init(&s_commit, COMMIT_DEBOUNCE_DEFAULT_MS);
 
     s_pending_queue = xQueueCreate(1, sizeof(settings_params));
@@ -228,6 +272,8 @@ static void apply_ui_events(loop_inputs *in)
     in->ui_disarm_request = ev.disarm_request;
     in->ui_calib_request = ev.calib_request;
     in->ui_calib_confirm = ev.calib_confirm;
+    in->deploy_request = ev.deploy_request;
+    in->stow_request = ev.stow_request;
     in->calib_event = ev.calib_event;
 }
 

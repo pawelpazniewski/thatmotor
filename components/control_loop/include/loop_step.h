@@ -45,6 +45,8 @@ typedef struct {
     bool ui_disarm_request;/* explicit disarm action from the panel this cycle */
     bool ui_calib_request; /* explicit "start ESC calibration" action */
     bool ui_calib_confirm; /* operator confirmed the removal warning */
+    bool deploy_request;   /* explicit "enter DEPLOY" (from DISARMED) this cycle */
+    bool stow_request;     /* explicit "leave DEPLOY" -> DISARMED this cycle */
     calib_event calib_event;/* calibration step event (next/cancel) this cycle */
     bool calib_timeout;    /* calibration idle timeout elapsed this cycle */
 } loop_inputs;

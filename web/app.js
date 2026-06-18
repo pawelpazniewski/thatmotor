@@ -1,13 +1,14 @@
 "use strict";
 
-// Control states mirror sm_state in firmware.
-const STATE_NAMES = ["DISARMED", "ARMED", "FAILSAFE", "ESC_CALIBRATION"];
+// Control states mirror sm_state in firmware (index == enum value).
+const STATE_NAMES = ["DISARMED", "ARMED", "FAILSAFE", "ESC_CALIBRATION", "DEPLOY"];
 const SOURCE_NAMES = ["DEFAULTS", "NVS", "MIXED_RECOVERED"];
 
 // Numeric state aliases (mirror sm_state) for readable comparisons.
 const STATE_DISARMED = 0;
 const STATE_ARMED = 1;
 const STATE_FAILSAFE = 2;
+const STATE_DEPLOY = 4;
 
 // arm_reason mapping mirrors sm_arm_reason in firmware (index == enum value).
 const ARM_REASON_TEXT = [
@@ -44,6 +45,8 @@ const PARAM_LABELS = {
   max_throttle_rev_pct: "Max throttle reverse (%)",
   ch4_mode_switch_enabled: "CH4 mode switch enabled",
   ch4_switch_threshold_us: "CH4 switch threshold (µs)",
+  deploy_servo_us: "Deploy servo (µs)",
+  click_window_ms: "CH4 click window (ms)",
 };
 
 let lastState = null;
@@ -124,30 +127,49 @@ function renderIdleArmHint(state, reason) {
 // Resolve an in-flight arm/disarm once telemetry shows the intent satisfied.
 // Disarm is satisfied by DISARMED *or* FAILSAFE: both mean the drive is stopped
 // at neutral, so a disarm in failsafe is a stop, not a "still armed" failure.
+// Terminal labels per command kind once telemetry shows the intent satisfied.
+const CMD_OK_TEXT = {
+  arm: "✓ Armed",
+  disarm: "✓ Disarmed",
+  deploy: "✓ Deployed — motor raised, drive off",
+  stow: "✓ Stowed",
+};
+
 function resolvePendingCommand(state) {
   if (!cmdPending) return;
   if (cmdPending.kind === "arm") {
     if (state !== STATE_ARMED) return;
     clearPendingTimer();
-    setCmdResult("✓ Armed", "ok");
+    setCmdResult(CMD_OK_TEXT.arm, "ok");
     return;
   }
+  if (cmdPending.kind === "deploy") {
+    if (state !== STATE_DEPLOY) return;
+    clearPendingTimer();
+    setCmdResult(CMD_OK_TEXT.deploy, "ok");
+    return;
+  }
+  // disarm / stow: both target DISARMED; a disarm in failsafe is still a stop.
   if (state === STATE_DISARMED) {
     clearPendingTimer();
-    setCmdResult("✓ Disarmed", "ok");
-  } else if (state === STATE_FAILSAFE) {
+    setCmdResult(CMD_OK_TEXT[cmdPending.kind] || "✓ Disarmed", "ok");
+  } else if (state === STATE_FAILSAFE && cmdPending.kind === "disarm") {
     clearPendingTimer();
     setCmdResult("✓ Drive stopped — failsafe (RC lost)", "warn");
   }
 }
 
-// Fired ~1 s after an arm/disarm if telemetry never confirmed the intent.
+// Fired ~1 s after a command if telemetry never confirmed the intent.
 function onCommandTimeout() {
   if (!cmdPending) return;
   const kind = cmdPending.kind;
   cmdPending = null;
   if (kind === "arm") {
     setCmdResult(`✗ Not armed — ${armReasonText(lastArmReason)}`, "err");
+  } else if (kind === "deploy") {
+    setCmdResult("✗ Not deployed — deploy only from DISARMED", "err");
+  } else if (kind === "stow") {
+    setCmdResult("✗ Not stowed — still deployed", "err");
   } else if (lastState === STATE_FAILSAFE) {
     setCmdResult("✓ Drive stopped — failsafe (RC lost)", "warn");
   } else {
@@ -308,6 +330,29 @@ async function handleDisarm() {
   }
 }
 
+// Deploy raises the motor (servo to deploy_servo_us, drive held off). Like arm,
+// it is asynchronous: confirm via telemetry state -> DEPLOY.
+async function handleDeploy() {
+  startPendingCommand("deploy", STATE_DEPLOY, "Deploying…");
+  try {
+    await sendCommand("deploy");
+  } catch (e) {
+    clearPendingTimer();
+    setCmdResult(`✗ Command rejected: ${e.message}`, "err");
+  }
+}
+
+// Stow leaves DEPLOY back to DISARMED. Confirm via telemetry state -> DISARMED.
+async function handleStow() {
+  startPendingCommand("stow", STATE_DISARMED, "Stowing…");
+  try {
+    await sendCommand("stow");
+  } catch (e) {
+    clearPendingTimer();
+    setCmdResult(`✗ Command rejected: ${e.message}`, "err");
+  }
+}
+
 // Calibration commands have their own status surface in the calibration card;
 // here we only need to report a rejected envelope, not track a target state.
 async function sendCalibCommand(cmd) {
@@ -321,6 +366,8 @@ async function sendCalibCommand(cmd) {
 function wireButtons() {
   $("btn-arm").onclick = handleArm;
   $("btn-disarm").onclick = handleDisarm;
+  $("btn-deploy").onclick = handleDeploy;
+  $("btn-stow").onclick = handleStow;
   $("btn-save").onclick = saveParams;
   $("btn-calib-start").onclick = () => sendCalibCommand("calib_start");
   $("btn-calib-next").onclick = () => sendCalibCommand("calib_next");

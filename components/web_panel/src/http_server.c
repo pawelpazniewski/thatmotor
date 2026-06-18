@@ -152,6 +152,8 @@ static control_loop_ui_events to_ui_events(const command_parse_result *parsed)
         .disarm_request = parsed->disarm_request,
         .calib_request = parsed->calib_request,
         .calib_confirm = parsed->calib_confirm,
+        .deploy_request = parsed->deploy_request,
+        .stow_request = parsed->stow_request,
         .calib_event = parsed->calib_event,
     };
     return ev;

@@ -50,6 +50,7 @@ typedef enum {
 typedef enum {
     SERVO_TARGET_TRACK = 0,  /* RC valid -> track processed stick */
     SERVO_TARGET_CENTER = 1, /* FAILSAFE -> target center */
+    SERVO_TARGET_DEPLOY = 2, /* DEPLOY -> target deploy_servo_us (motor off) */
 } servo_target_mode;
 
 /**

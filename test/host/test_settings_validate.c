@@ -254,6 +254,61 @@ static void test_servo_endpoints_inverted_rejected(void)
     TEST_ASSERT_TRUE(out.servo_min_us < out.servo_max_us);
 }
 
+static void test_deploy_servo_out_of_range_recovers(void)
+{
+    /* Arrange: deploy_servo_us above the servo electrical band (2600 > 2500). */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.deploy_servo_us = 2600U; /* > DEPLOY_SERVO_US_MAX */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: mixed recovery, field replaced by its default (2167). */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_FALSE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(2167U, out.deploy_servo_us);
+}
+
+static void test_click_window_out_of_range_recovers(void)
+{
+    /* Arrange: click_window_ms below the band (100 < 200) is invalid. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.click_window_ms = 100U; /* < CLICK_WINDOW_MS_MIN */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: mixed recovery, field replaced by its default (500). */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_FALSE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(500U, out.click_window_ms);
+}
+
+static void test_deploy_fields_preserved_when_valid(void)
+{
+    /* Arrange: in-band custom deploy fields must survive a clean NVS load. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.deploy_servo_us = 2100U; /* in [500,2500] */
+    stored.click_window_ms = 700U;  /* in [200,1000] */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: clean NVS load, both deploy fields preserved verbatim. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_NVS, result.source);
+    TEST_ASSERT_TRUE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(2100U, out.deploy_servo_us);
+    TEST_ASSERT_EQUAL_UINT16(700U, out.click_window_ms);
+}
+
 void run_settings_validate_tests(void)
 {
     RUN_TEST(test_empty_nvs_yields_defaults);
@@ -269,4 +324,7 @@ void run_settings_validate_tests(void)
     RUN_TEST(test_servo_180deg_endpoints_accepted);
     RUN_TEST(test_servo_endpoint_out_of_range_recovers);
     RUN_TEST(test_servo_endpoints_inverted_rejected);
+    RUN_TEST(test_deploy_servo_out_of_range_recovers);
+    RUN_TEST(test_click_window_out_of_range_recovers);
+    RUN_TEST(test_deploy_fields_preserved_when_valid);
 }

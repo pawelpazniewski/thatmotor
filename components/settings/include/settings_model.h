@@ -12,8 +12,11 @@ extern "C" {
  * v2: split the symmetric max_throttle_pct into asymmetric forward/reverse
  * power limits (max_throttle_fwd_pct / max_throttle_rev_pct).
  * v3: add the CH4 mode-switch button (ch4_mode_switch_enabled +
- * ch4_switch_threshold_us) so CH4 can toggle ARMED/DISARMED. */
-#define SETTINGS_SCHEMA_VERSION 3U
+ * ch4_switch_threshold_us) so CH4 can toggle ARMED/DISARMED.
+ * v4: add the manual DEPLOY mode (deploy_servo_us held while the motor is off)
+ * and the CH4 click-gesture window (click_window_ms) that distinguishes a single
+ * click (arm/disarm) from a triple click (deploy/stow). */
+#define SETTINGS_SCHEMA_VERSION 4U
 
 /**
  * Persisted control parameters.
@@ -61,6 +64,10 @@ typedef struct {
     /* CH4 position switch (GPIO32): high=arm, low=disarm, one flick=one change. */
     bool ch4_mode_switch_enabled;      /* CH4 drives arm/disarm when true */
     uint16_t ch4_switch_threshold_us;  /* width >= this (in RC band) = high */
+
+    /* Manual DEPLOY mode (raise the motor). */
+    uint16_t deploy_servo_us;          /* servo pulse held in DEPLOY (motor off) */
+    uint16_t click_window_ms;          /* CH4 click-gesture window (1 vs 3 clicks) */
 } settings_params;
 
 #ifdef __cplusplus

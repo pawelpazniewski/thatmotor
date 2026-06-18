@@ -212,45 +212,6 @@ static void test_threshold_is_configurable(void)
     TEST_ASSERT_EQUAL(CH4_SWITCH_TO_HIGH, low_event);
 }
 
-/* --- ch4_toggle_intent: any edge toggles against the current state --- */
-
-static void test_toggle_no_edge_is_none(void)
-{
-    /* No edge this frame -> no intent regardless of state. */
-    TEST_ASSERT_EQUAL(CH4_INTENT_NONE,
-                      ch4_toggle_intent(CH4_SWITCH_NONE, true, false));
-    TEST_ASSERT_EQUAL(CH4_INTENT_NONE,
-                      ch4_toggle_intent(CH4_SWITCH_NONE, false, true));
-}
-
-static void test_toggle_while_disarmed_requests_arm_either_edge(void)
-{
-    /* A press while disarmed arms, no matter which way CH4 flipped. */
-    TEST_ASSERT_EQUAL(CH4_INTENT_ARM,
-                      ch4_toggle_intent(CH4_SWITCH_TO_HIGH, true, false));
-    TEST_ASSERT_EQUAL(CH4_INTENT_ARM,
-                      ch4_toggle_intent(CH4_SWITCH_TO_LOW, true, false));
-}
-
-static void test_toggle_while_armed_requests_disarm_either_edge(void)
-{
-    /* A press while armed disarms, either edge. */
-    TEST_ASSERT_EQUAL(CH4_INTENT_DISARM,
-                      ch4_toggle_intent(CH4_SWITCH_TO_HIGH, false, true));
-    TEST_ASSERT_EQUAL(CH4_INTENT_DISARM,
-                      ch4_toggle_intent(CH4_SWITCH_TO_LOW, false, true));
-}
-
-static void test_toggle_ignored_when_not_armable(void)
-{
-    /* FAILSAFE / calibration (neither disarmed nor armed): CH4 value cannot
-     * force a state -> NONE, so a press during failsafe never arms. */
-    TEST_ASSERT_EQUAL(CH4_INTENT_NONE,
-                      ch4_toggle_intent(CH4_SWITCH_TO_HIGH, false, false));
-    TEST_ASSERT_EQUAL(CH4_INTENT_NONE,
-                      ch4_toggle_intent(CH4_SWITCH_TO_LOW, false, false));
-}
-
 void run_ch4_switch_tests(void)
 {
     RUN_TEST(test_rising_edge_emits_to_high_after_debounce);
@@ -261,8 +222,4 @@ void run_ch4_switch_tests(void)
     RUN_TEST(test_out_of_band_holds_level_no_false_edge);
     RUN_TEST(test_init_baseline_high_emits_none_then_real_edge);
     RUN_TEST(test_threshold_is_configurable);
-    RUN_TEST(test_toggle_no_edge_is_none);
-    RUN_TEST(test_toggle_while_disarmed_requests_arm_either_edge);
-    RUN_TEST(test_toggle_while_armed_requests_disarm_either_edge);
-    RUN_TEST(test_toggle_ignored_when_not_armable);
 }

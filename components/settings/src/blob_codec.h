@@ -31,8 +31,9 @@ extern "C" {
 /* Encoded blob size: 22 u16 fields (2 bytes each) + 3 bool fields (1 byte each)
  * + u32 CRC. Kept as a compile-time constant so callers size buffers exactly.
  * schema v3 added ch4_switch_threshold_us (u16) and ch4_mode_switch_enabled
- * (bool): +3 bytes over the v2 layout (44 -> 47). */
-#define BLOB_CODEC_FIELD_BYTES 47U
+ * (bool): +3 bytes over the v2 layout (44 -> 47). schema v4 added deploy_servo_us
+ * (u16) and click_window_ms (u16): +4 bytes over the v3 layout (47 -> 51). */
+#define BLOB_CODEC_FIELD_BYTES 51U
 #define BLOB_CODEC_CRC_BYTES 4U
 #define BLOB_CODEC_SIZE (BLOB_CODEC_FIELD_BYTES + BLOB_CODEC_CRC_BYTES)
 

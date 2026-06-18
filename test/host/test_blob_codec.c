@@ -44,6 +44,8 @@ static settings_params make_sample(void)
     p.esc_neutral_us = 1480;
     p.ch4_mode_switch_enabled = false; /* non-default to make the round-trip real */
     p.ch4_switch_threshold_us = 1820;
+    p.deploy_servo_us = 2100;
+    p.click_window_ms = 600;
     return p;
 }
 
@@ -93,15 +95,18 @@ static void test_round_trip_preserves_every_field(void)
                           out.ch4_mode_switch_enabled);
     TEST_ASSERT_EQUAL_UINT16(in.ch4_switch_threshold_us,
                              out.ch4_switch_threshold_us);
+    TEST_ASSERT_EQUAL_UINT16(in.deploy_servo_us, out.deploy_servo_us);
+    TEST_ASSERT_EQUAL_UINT16(in.click_window_ms, out.click_window_ms);
 }
 
-static void test_blob_size_matches_v3_layout(void)
+static void test_blob_size_matches_v4_layout(void)
 {
-    /* Anchor the schema-v3 wire size: 22 u16 (44) + 3 bool (3) field bytes + 4
-     * CRC bytes = 51. A struct/layout change that forgets to update the codec
-     * size trips this. */
-    TEST_ASSERT_EQUAL_UINT(47U, BLOB_CODEC_FIELD_BYTES);
-    TEST_ASSERT_EQUAL_UINT(51U, BLOB_CODEC_SIZE);
+    /* Anchor the schema-v4 wire size: 24 u16 (48) + 3 bool (3) field bytes + 4
+     * CRC bytes = 55. v4 added deploy_servo_us + click_window_ms (+4 over v3's
+     * 51). A struct/layout change that forgets to update the codec size trips
+     * this. */
+    TEST_ASSERT_EQUAL_UINT(51U, BLOB_CODEC_FIELD_BYTES);
+    TEST_ASSERT_EQUAL_UINT(55U, BLOB_CODEC_SIZE);
 }
 
 static void test_encode_stamps_current_schema_version(void)
@@ -209,6 +214,30 @@ static void test_other_schema_version_is_rejected(void)
     TEST_ASSERT_EQUAL_INT(BLOB_CODEC_ERR_SCHEMA, decoded);
 }
 
+static void test_prior_schema_v3_is_rejected(void)
+{
+    /* Arrange: a v4-sized blob carrying the prior schema 3 (the pre-DEPLOY
+     * layout) with a valid CRC must be rejected: settings reload defaults rather
+     * than silently mis-read the new deploy fields from old bytes. */
+    settings_params in = make_sample();
+    uint8_t blob[BLOB_CODEC_SIZE];
+    blob_codec_encode(&in, blob, sizeof(blob));
+    blob[0] = 3U; /* schema_version low byte = 3 */
+    blob[1] = 0U;
+    uint32_t crc = blob_codec_crc32(blob, BLOB_CODEC_FIELD_BYTES);
+    blob[BLOB_CODEC_FIELD_BYTES + 0] = (uint8_t)(crc & 0xFFU);
+    blob[BLOB_CODEC_FIELD_BYTES + 1] = (uint8_t)((crc >> 8) & 0xFFU);
+    blob[BLOB_CODEC_FIELD_BYTES + 2] = (uint8_t)((crc >> 16) & 0xFFU);
+    blob[BLOB_CODEC_FIELD_BYTES + 3] = (uint8_t)((crc >> 24) & 0xFFU);
+
+    /* Act */
+    settings_params out;
+    blob_codec_result decoded = blob_codec_decode(blob, sizeof(blob), &out);
+
+    /* Assert */
+    TEST_ASSERT_EQUAL_INT(BLOB_CODEC_ERR_SCHEMA, decoded);
+}
+
 static void test_null_args_are_rejected(void)
 {
     settings_params in = make_sample();
@@ -241,13 +270,14 @@ void run_blob_codec_tests(void)
     RUN_TEST(test_crc32_check_value_is_standard);
     RUN_TEST(test_crc32_empty_range_is_zero);
     RUN_TEST(test_round_trip_preserves_every_field);
-    RUN_TEST(test_blob_size_matches_v3_layout);
+    RUN_TEST(test_blob_size_matches_v4_layout);
     RUN_TEST(test_encode_stamps_current_schema_version);
     RUN_TEST(test_bad_crc_is_rejected);
     RUN_TEST(test_corrupt_crc_trailer_is_rejected);
     RUN_TEST(test_wrong_length_too_short_is_rejected);
     RUN_TEST(test_wrong_length_too_long_is_rejected);
     RUN_TEST(test_other_schema_version_is_rejected);
+    RUN_TEST(test_prior_schema_v3_is_rejected);
     RUN_TEST(test_null_args_are_rejected);
     RUN_TEST(test_encode_into_too_small_buffer_is_rejected);
 }

@@ -124,6 +124,75 @@ static void test_calibration_idle_tail_is_off(void)
     TEST_ASSERT_FALSE(led_pattern_on(SM_STATE_ESC_CALIBRATION, true, t));
 }
 
+/* --- DEPLOY: triple-blink burst --- */
+
+static void test_deploy_first_blink_slot_on(void)
+{
+    /* The first of three blinks (slot 0). */
+    TEST_ASSERT_TRUE(led_pattern_on(SM_STATE_DEPLOY, true, 0));
+    TEST_ASSERT_TRUE(led_pattern_on(SM_STATE_DEPLOY, true,
+                                    LED_PATTERN_DOUBLE_BLINK_SLOT_MS - 1U));
+}
+
+static void test_deploy_third_blink_slot_on(void)
+{
+    /* The third blink lands in slot 4 (3*150..). This slot is the signature of
+     * DEPLOY: neither the DISARMED overlay nor ESC_CALIBRATION blink there. */
+    uint32_t t = LED_PATTERN_DOUBLE_BLINK_SLOT_MS * 4U;
+    TEST_ASSERT_TRUE(led_pattern_on(SM_STATE_DEPLOY, true, t));
+}
+
+static void test_deploy_tail_is_off(void)
+{
+    /* After the 6-slot burst window the rest of the 2 s period is off. */
+    uint32_t t = LED_PATTERN_DOUBLE_BLINK_SLOT_MS * 6U;
+    TEST_ASSERT_FALSE(led_pattern_on(SM_STATE_DEPLOY, true, t));
+    TEST_ASSERT_FALSE(led_pattern_on(SM_STATE_DEPLOY, true,
+                                     LED_PATTERN_DEPLOY_PERIOD_MS - 1U));
+}
+
+static void test_deploy_third_blink_distinguishes_from_calibration(void)
+{
+    /* Oracle: at the third-blink slot (slot 4) DEPLOY is ON while the look-alike
+     * ESC_CALIBRATION double-blink (only slots 0 and 2) is OFF, so the third
+     * blink unambiguously marks DEPLOY. */
+    uint32_t t = LED_PATTERN_DOUBLE_BLINK_SLOT_MS * 4U;
+    TEST_ASSERT_TRUE(led_pattern_on(SM_STATE_DEPLOY, false, t));
+    TEST_ASSERT_FALSE(led_pattern_on(SM_STATE_ESC_CALIBRATION, false, t));
+}
+
+/* Sample a state's waveform across its period into a coarse on/off signature. */
+static int waveforms_differ(sm_state a, sm_state b, bool calibrated)
+{
+    for (uint32_t t = 0; t < LED_PATTERN_DEPLOY_PERIOD_MS; t += 25U) {
+        if (led_pattern_on(a, calibrated, t) != led_pattern_on(b, calibrated, t)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void test_deploy_waveform_differs_from_every_other_state(void)
+{
+    /* Oracle: DEPLOY's blink signature is not identical to ARMED, DISARMED,
+     * FAILSAFE or ESC_CALIBRATION over a full period, so it is distinguishable. */
+    TEST_ASSERT_TRUE(waveforms_differ(SM_STATE_DEPLOY, SM_STATE_ARMED, false));
+    TEST_ASSERT_TRUE(waveforms_differ(SM_STATE_DEPLOY, SM_STATE_DISARMED, false));
+    TEST_ASSERT_TRUE(waveforms_differ(SM_STATE_DEPLOY, SM_STATE_DISARMED, true));
+    TEST_ASSERT_TRUE(waveforms_differ(SM_STATE_DEPLOY, SM_STATE_FAILSAFE, false));
+    TEST_ASSERT_TRUE(
+        waveforms_differ(SM_STATE_DEPLOY, SM_STATE_ESC_CALIBRATION, false));
+}
+
+static void test_deploy_independent_of_calibrated(void)
+{
+    /* The calibrated flag only affects DISARMED; DEPLOY ignores it. */
+    for (uint32_t t = 0; t < LED_PATTERN_DEPLOY_PERIOD_MS; t += 50U) {
+        TEST_ASSERT_EQUAL(led_pattern_on(SM_STATE_DEPLOY, true, t),
+                          led_pattern_on(SM_STATE_DEPLOY, false, t));
+    }
+}
+
 void run_led_pattern_tests(void)
 {
     RUN_TEST(test_armed_is_solid_on_at_any_time);
@@ -140,4 +209,10 @@ void run_led_pattern_tests(void)
     RUN_TEST(test_calibration_double_blink_first_slot_on);
     RUN_TEST(test_calibration_double_blink_gap_off);
     RUN_TEST(test_calibration_idle_tail_is_off);
+    RUN_TEST(test_deploy_first_blink_slot_on);
+    RUN_TEST(test_deploy_third_blink_slot_on);
+    RUN_TEST(test_deploy_tail_is_off);
+    RUN_TEST(test_deploy_third_blink_distinguishes_from_calibration);
+    RUN_TEST(test_deploy_waveform_differs_from_every_other_state);
+    RUN_TEST(test_deploy_independent_of_calibrated);
 }

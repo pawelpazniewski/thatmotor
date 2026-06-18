@@ -93,6 +93,14 @@ static void validate_fields(settings_params *p, const settings_params *def,
     p->ch4_switch_threshold_us =
         field_or_default(p->ch4_switch_threshold_us, RC_US_MIN, RC_US_MAX,
                          def->ch4_switch_threshold_us, repaired);
+
+    /* DEPLOY mode: servo target in the full servo band; click window in ms. */
+    p->deploy_servo_us =
+        field_or_default(p->deploy_servo_us, DEPLOY_SERVO_US_MIN,
+                         DEPLOY_SERVO_US_MAX, def->deploy_servo_us, repaired);
+    p->click_window_ms =
+        field_or_default(p->click_window_ms, CLICK_WINDOW_MS_MIN,
+                         CLICK_WINDOW_MS_MAX, def->click_window_ms, repaired);
 }
 
 /* The ESC map (map_normalized_to_us in the throttle chain) treats

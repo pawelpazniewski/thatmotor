@@ -40,6 +40,25 @@ static bool calibration_on(uint32_t t_ms)
     return double_blink_active(phase);
 }
 
+/* Three short blinks at the start of a window: on during slots 0, 2 and 4
+ * (blink, gap, blink, gap, blink), off otherwise. */
+static bool triple_blink_active(uint32_t phase_ms)
+{
+    uint32_t slot = phase_ms / LED_PATTERN_DOUBLE_BLINK_SLOT_MS;
+    return slot == 0U || slot == 2U || slot == 4U;
+}
+
+/* DEPLOY: a repeating TRIPLE-blink burst, off for the rest of the 2 s period. */
+static bool deploy_on(uint32_t t_ms)
+{
+    uint32_t phase = t_ms % LED_PATTERN_DEPLOY_PERIOD_MS;
+    uint32_t blink_window = LED_PATTERN_DOUBLE_BLINK_SLOT_MS * 6U;
+    if (phase >= blink_window) {
+        return false;
+    }
+    return triple_blink_active(phase);
+}
+
 bool led_pattern_on(sm_state state, bool calibrated, uint32_t t_ms)
 {
     switch (state) {
@@ -49,6 +68,8 @@ bool led_pattern_on(sm_state state, bool calibrated, uint32_t t_ms)
         return blink_50(t_ms, LED_PATTERN_FAILSAFE_PERIOD_MS);
     case SM_STATE_ESC_CALIBRATION:
         return calibration_on(t_ms);
+    case SM_STATE_DEPLOY:
+        return deploy_on(t_ms);
     case SM_STATE_DISARMED:
     default:
         return disarmed_on(calibrated, t_ms);

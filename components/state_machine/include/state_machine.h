@@ -27,6 +27,11 @@ extern "C" {
  *  - DISARMED->ESC_CALIBRATION is gated (R15/SI-5): RC valid AND throttle
  *    neutral AND an explicit calibration request AND a confirmed warning. It
  *    NEVER starts automatically. RC loss inside calibration drops to FAILSAFE.
+ *  - DEPLOY (manual motor raise) is entered ONLY from DISARMED on an explicit
+ *    deploy_request and left ONLY on an explicit stow_request -> DISARMED. The
+ *    motor is forced off (throttle neutral) the whole time, so DEPLOY does NOT
+ *    drop to FAILSAFE on RC loss: it is already safe. The servo holds at
+ *    deploy_servo_us regardless of RC validity.
  */
 
 /** Control states. ESC_CALIBRATION is a first-class state (sequence in Unit 9). */
@@ -35,6 +40,7 @@ typedef enum {
     SM_STATE_ARMED = 1,
     SM_STATE_FAILSAFE = 2,
     SM_STATE_ESC_CALIBRATION = 3,
+    SM_STATE_DEPLOY = 4,
 } sm_state;
 
 /**
@@ -64,6 +70,8 @@ typedef struct {
     bool ui_disarm_request;         /* explicit disarm action from the panel */
     bool ui_calib_request;          /* explicit "start ESC calibration" action */
     bool ui_calib_confirm;          /* operator confirmed the removal warning */
+    bool deploy_request;            /* explicit "enter DEPLOY" (from DISARMED) */
+    bool stow_request;              /* explicit "leave DEPLOY" -> DISARMED */
 } sm_inputs;
 
 /**

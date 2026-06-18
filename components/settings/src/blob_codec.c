@@ -84,6 +84,9 @@ static void serialize_fields(const settings_params *p, uint8_t *buf, size_t *pos
 
     put_bool(buf, pos, p->ch4_mode_switch_enabled);
     put_u16(buf, pos, p->ch4_switch_threshold_us);
+
+    put_u16(buf, pos, p->deploy_servo_us);
+    put_u16(buf, pos, p->click_window_ms);
 }
 
 /* Deserialise every settings_params field from buf in declared order. */
@@ -120,6 +123,9 @@ static void deserialize_fields(const uint8_t *buf, size_t *pos, settings_params 
 
     p->ch4_mode_switch_enabled = get_bool(buf, pos);
     p->ch4_switch_threshold_us = get_u16(buf, pos);
+
+    p->deploy_servo_us = get_u16(buf, pos);
+    p->click_window_ms = get_u16(buf, pos);
 }
 
 blob_codec_result blob_codec_encode(const settings_params *params, uint8_t *out,

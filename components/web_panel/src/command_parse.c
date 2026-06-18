@@ -12,6 +12,8 @@ typedef struct {
 static const command_row COMMAND_TABLE[] = {
     {"arm", {.ok = true, .arm_request = true}},
     {"disarm", {.ok = true, .disarm_request = true}},
+    {"deploy", {.ok = true, .deploy_request = true}},
+    {"stow", {.ok = true, .stow_request = true}},
     {"calib_start", {.ok = true, .calib_request = true, .calib_confirm = true}},
     {"calib_next", {.ok = true, .calib_event = CALIB_EVENT_NEXT}},
     {"calib_cancel", {.ok = true, .calib_event = CALIB_EVENT_CANCEL}},

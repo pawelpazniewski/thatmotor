@@ -316,6 +316,96 @@ static void test_arm_reason_ready_regardless_of_intent(void)
     TEST_ASSERT_EQUAL(SM_ARM_READY, sm_arm_block_reason(&in));
 }
 
+/* --- DEPLOY (manual motor raise) --- */
+
+static void test_disarmed_deploy_request_enters_deploy(void)
+{
+    /* Arrange: a deploy request from DISARMED (no arm request). */
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;
+    in.deploy_request = true;
+
+    /* Act */
+    sm_outputs out = sm_step(SM_STATE_DISARMED, &in);
+
+    /* Assert */
+    TEST_ASSERT_EQUAL(SM_STATE_DEPLOY, out.state);
+}
+
+static void test_armed_deploy_request_does_not_enter_deploy(void)
+{
+    /* Oracle: DEPLOY is only reachable from DISARMED. An ARMED unit must NOT be
+     * yanked into DEPLOY by a deploy request (it would drop the running drive). */
+    sm_inputs in = armable_inputs();
+    in.deploy_request = true;
+
+    /* Act: ARMED with a deploy request but no disarm/RC loss. */
+    sm_outputs out = sm_step(SM_STATE_ARMED, &in);
+
+    /* Assert: stays ARMED, never DEPLOY. */
+    TEST_ASSERT_EQUAL(SM_STATE_ARMED, out.state);
+}
+
+static void test_deploy_stow_request_exits_to_disarmed(void)
+{
+    /* Arrange: in DEPLOY with a stow request. */
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;
+    in.stow_request = true;
+
+    /* Act */
+    sm_outputs out = sm_step(SM_STATE_DEPLOY, &in);
+
+    /* Assert: the only exit, to DISARMED. */
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
+}
+
+static void test_deploy_rc_loss_without_stow_stays_deploy(void)
+{
+    /* Oracle: losing RC in DEPLOY must NOT drop to FAILSAFE; the motor is off, so
+     * DEPLOY is already safe and the raised position is held. */
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;
+    in.rc_valid = false;     /* RC lost */
+    in.stow_request = false; /* no exit requested */
+
+    /* Act */
+    sm_outputs out = sm_step(SM_STATE_DEPLOY, &in);
+
+    /* Assert: stays in DEPLOY, NOT FAILSAFE. */
+    TEST_ASSERT_EQUAL(SM_STATE_DEPLOY, out.state);
+}
+
+static void test_deploy_motor_off_and_servo_deploy(void)
+{
+    /* Oracle: throttle is ALWAYS neutral (motor off) in DEPLOY, and the servo
+     * target is DEPLOY (hold deploy_servo_us), even with RC lost. */
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;
+    in.rc_valid = false; /* prove servo stays DEPLOY regardless of RC */
+
+    /* Act */
+    sm_outputs out = sm_step(SM_STATE_DEPLOY, &in);
+
+    /* Assert */
+    TEST_ASSERT_EQUAL(SM_STATE_DEPLOY, out.state);
+    TEST_ASSERT_EQUAL(THROTTLE_TARGET_NEUTRAL, out.throttle_target);
+    TEST_ASSERT_EQUAL(SERVO_TARGET_DEPLOY, out.servo_target);
+}
+
+static void test_armed_instant_disarm_request(void)
+{
+    /* Oracle: a single disarm request from ARMED disarms immediately. */
+    sm_inputs in = armable_inputs();
+    in.ui_disarm_request = true;
+
+    /* Act */
+    sm_outputs out = sm_step(SM_STATE_ARMED, &in);
+
+    /* Assert */
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
+}
+
 void run_state_machine_tests(void)
 {
     RUN_TEST(test_boot_disarmed_regardless_of_inputs);
@@ -345,4 +435,10 @@ void run_state_machine_tests(void)
     RUN_TEST(test_arm_reason_settings_applying);
     RUN_TEST(test_arm_reason_rc_dominates_throttle);
     RUN_TEST(test_arm_reason_ready_regardless_of_intent);
+    RUN_TEST(test_disarmed_deploy_request_enters_deploy);
+    RUN_TEST(test_armed_deploy_request_does_not_enter_deploy);
+    RUN_TEST(test_deploy_stow_request_exits_to_disarmed);
+    RUN_TEST(test_deploy_rc_loss_without_stow_stays_deploy);
+    RUN_TEST(test_deploy_motor_off_and_servo_deploy);
+    RUN_TEST(test_armed_instant_disarm_request);
 }

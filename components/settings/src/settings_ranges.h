@@ -78,3 +78,17 @@
  * in ch4_switch.h. */
 #define CH4_MODE_SWITCH_ENABLED_DEFAULT true
 #define CH4_SWITCH_THRESHOLD_US_DEFAULT 1500U
+
+/* Manual DEPLOY mode. deploy_servo_us is the servo pulse the steering servo is
+ * slewed to and held at while the motor is forced off (raise the motor). It
+ * lives in the full servo electrical band (500..2500 us); default 2167 us is
+ * the ~180 deg "up" endpoint. */
+#define DEPLOY_SERVO_US_MIN 500U
+#define DEPLOY_SERVO_US_MAX 2500U
+#define DEPLOY_SERVO_US_DEFAULT 2167U
+
+/* CH4 click-gesture window: max gap (ms) between clicks of one burst. Above it
+ * the burst closes (1 click -> arm/disarm/stow, 3 clicks -> deploy/stow). */
+#define CLICK_WINDOW_MS_MIN 200U
+#define CLICK_WINDOW_MS_MAX 1000U
+#define CLICK_WINDOW_MS_DEFAULT 500U

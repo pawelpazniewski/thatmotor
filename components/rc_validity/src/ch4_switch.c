@@ -75,20 +75,3 @@ ch4_switch_event ch4_switch_update(ch4_switch_state *st,
     st->is_high = level;
     return level ? CH4_SWITCH_TO_HIGH : CH4_SWITCH_TO_LOW;
 }
-
-ch4_intent ch4_toggle_intent(ch4_switch_event event, bool currently_disarmed,
-                             bool currently_armed)
-{
-    /* A momentary button flips CH4 on every press, so either edge is one press.
-     * Toggle against the CURRENT state; the value itself never forces a state. */
-    if (event == CH4_SWITCH_NONE) {
-        return CH4_INTENT_NONE;
-    }
-    if (currently_disarmed) {
-        return CH4_INTENT_ARM;
-    }
-    if (currently_armed) {
-        return CH4_INTENT_DISARM;
-    }
-    return CH4_INTENT_NONE; /* FAILSAFE / calibration: ignore (stay safe) */
-}

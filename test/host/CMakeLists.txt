@@ -21,6 +21,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/rc_capture/src/cap_math.c
     ${REPO_ROOT}/components/rc_validity/src/rc_validity.c
     ${REPO_ROOT}/components/rc_validity/src/ch4_switch.c
+    ${REPO_ROOT}/components/rc_validity/src/click_counter.c
     ${REPO_ROOT}/components/settings/src/settings_defaults.c
     ${REPO_ROOT}/components/settings/src/settings_validate.c
     ${REPO_ROOT}/components/settings/src/blob_codec.c
@@ -64,6 +65,7 @@ set(TEST_SOURCES
     test_cap_math.c
     test_rc_validity.c
     test_ch4_switch.c
+    test_click_counter.c
     test_settings_validate.c
     test_blob_codec.c
     test_commit_debounce.c

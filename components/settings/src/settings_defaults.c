@@ -40,6 +40,9 @@ void settings_load_defaults(settings_params *out)
 
         .ch4_mode_switch_enabled = CH4_MODE_SWITCH_ENABLED_DEFAULT,
         .ch4_switch_threshold_us = CH4_SWITCH_THRESHOLD_US_DEFAULT,
+
+        .deploy_servo_us = DEPLOY_SERVO_US_DEFAULT,
+        .click_window_ms = CLICK_WINDOW_MS_DEFAULT,
     };
 
     *out = defaults;

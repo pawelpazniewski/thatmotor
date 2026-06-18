@@ -207,6 +207,35 @@ static void test_hard_window_bounds_extreme_endpoints(void)
     TEST_ASSERT_EQUAL_UINT32(SERVO_HARD_MAX_US, right_us);
 }
 
+static void test_deploy_settles_at_deploy_servo_us_ignoring_stick(void)
+{
+    /* Arrange: DEPLOY pins the servo at deploy_servo_us regardless of the CH1
+     * stick (drive is off in DEPLOY; the steering input is ignored). */
+    settings_params p = defaults_params();
+    p.deploy_servo_us = 2167U;
+
+    /* Act: drive a hard-left stick but in DEPLOY mode; settle the slew. */
+    uint32_t servo_us = settle_servo(1000U, SERVO_TARGET_DEPLOY, &p);
+
+    /* Assert: rests at the deploy target, not at the steering endpoint. */
+    TEST_ASSERT_EQUAL_UINT32(2167U, servo_us);
+}
+
+static void test_deploy_target_clamped_to_servo_window(void)
+{
+    /* Arrange: a deploy target above the hard electrical ceiling (3000 > 2500)
+     * — pure unit, so set it directly to prove the SI-3 servo clamp holds even
+     * if an out-of-band value ever reaches the chain. */
+    settings_params p = defaults_params();
+    p.deploy_servo_us = 3000U;
+
+    /* Act */
+    uint32_t servo_us = settle_servo(1500U, SERVO_TARGET_DEPLOY, &p);
+
+    /* Assert: snapped to the 2500 us ceiling. */
+    TEST_ASSERT_EQUAL_UINT32(2500U, servo_us);
+}
+
 void run_servo_chain_tests(void)
 {
     RUN_TEST(test_full_left_settles_at_min_endpoint);
@@ -221,4 +250,6 @@ void run_servo_chain_tests(void)
     RUN_TEST(test_output_stays_within_clamp_window);
     RUN_TEST(test_180deg_endpoints_pass_unclamped);
     RUN_TEST(test_hard_window_bounds_extreme_endpoints);
+    RUN_TEST(test_deploy_settles_at_deploy_servo_us_ignoring_stick);
+    RUN_TEST(test_deploy_target_clamped_to_servo_window);
 }

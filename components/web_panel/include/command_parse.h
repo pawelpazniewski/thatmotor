@@ -29,14 +29,16 @@ typedef struct {
     bool disarm_request;     /* request a transition to DISARMED */
     bool calib_request;      /* request entry to ESC range calibration */
     bool calib_confirm;      /* operator confirmation of the calib warning */
+    bool deploy_request;     /* request entry to DEPLOY (from DISARMED) */
+    bool stow_request;       /* request exit from DEPLOY -> DISARMED */
     calib_event calib_event; /* discriminated calibration operator event */
 } command_parse_result;
 
 /**
  * Map a command keyword to UI event fields (exact match).
  *
- * Recognised keywords: "arm", "disarm", "calib_start", "calib_next",
- * "calib_cancel". Any other (or NULL) keyword yields ok=false with all event
+ * Recognised keywords: "arm", "disarm", "deploy", "stow", "calib_start",
+ * "calib_next", "calib_cancel". Any other (or NULL) keyword yields ok=false with all event
  * fields inert (zeroed).
  *
  * @param cmd  Command keyword (NUL-terminated), or NULL.

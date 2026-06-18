@@ -52,6 +52,26 @@ static void test_calib_cancel_maps_to_event_cancel(void)
     TEST_ASSERT_EQUAL_INT(CALIB_EVENT_CANCEL, r.calib_event);
 }
 
+static void test_deploy_maps_to_deploy_request(void)
+{
+    command_parse_result r = command_parse("deploy");
+
+    TEST_ASSERT_TRUE(r.ok);
+    TEST_ASSERT_TRUE(r.deploy_request);
+    TEST_ASSERT_FALSE(r.arm_request);
+    TEST_ASSERT_FALSE(r.stow_request);
+}
+
+static void test_stow_maps_to_stow_request(void)
+{
+    command_parse_result r = command_parse("stow");
+
+    TEST_ASSERT_TRUE(r.ok);
+    TEST_ASSERT_TRUE(r.stow_request);
+    TEST_ASSERT_FALSE(r.deploy_request);
+    TEST_ASSERT_FALSE(r.disarm_request);
+}
+
 /* --- Unknown / malformed keywords are rejected (no substring match) --- */
 
 static void test_unknown_keyword_is_rejected(void)
@@ -90,6 +110,8 @@ void run_command_parse_tests(void)
 {
     RUN_TEST(test_arm_maps_to_arm_request);
     RUN_TEST(test_disarm_maps_to_disarm_request);
+    RUN_TEST(test_deploy_maps_to_deploy_request);
+    RUN_TEST(test_stow_maps_to_stow_request);
     RUN_TEST(test_calib_start_sets_request_and_confirm);
     RUN_TEST(test_calib_next_maps_to_event_next);
     RUN_TEST(test_calib_cancel_maps_to_event_cancel);

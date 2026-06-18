@@ -40,6 +40,9 @@ static uint32_t resolve_target_us(int32_t command, servo_target_mode mode,
     if (mode == SERVO_TARGET_CENTER) {
         return servo_center_us(params);
     }
+    if (mode == SERVO_TARGET_DEPLOY) {
+        return params->deploy_servo_us; /* slew here; the hard clamp follows */
+    }
     return map_normalized_to_us(command, params->servo_min_us,
                                 servo_center_us(params), params->servo_max_us);
 }

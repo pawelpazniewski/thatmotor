@@ -53,6 +53,8 @@ typedef struct {
     bool disarm_request;
     bool calib_request;
     bool calib_confirm;
+    bool deploy_request;       /* panel "Deploy": enter DEPLOY from DISARMED */
+    bool stow_request;         /* panel "Stow": leave DEPLOY -> DISARMED */
     calib_event calib_event;   /* discriminated calibration operator event */
 } control_loop_ui_events;
 

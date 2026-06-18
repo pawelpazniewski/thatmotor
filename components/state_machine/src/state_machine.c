@@ -43,7 +43,8 @@ static bool can_enter_calibration(const sm_inputs *inputs)
 }
 
 /* Next state from DISARMED. RC loss dominates; then the explicit calibration
- * entry guard; otherwise the arm guard. */
+ * entry guard; then an explicit deploy request (the motor is off in DEPLOY, so
+ * it needs no RC/throttle gate); otherwise the arm guard. */
 static sm_state next_from_disarmed(const sm_inputs *inputs)
 {
     if (!inputs->rc_valid) {
@@ -52,10 +53,23 @@ static sm_state next_from_disarmed(const sm_inputs *inputs)
     if (can_enter_calibration(inputs)) {
         return SM_STATE_ESC_CALIBRATION;
     }
+    if (inputs->deploy_request) {
+        return SM_STATE_DEPLOY;
+    }
     if (can_arm(inputs)) {
         return SM_STATE_ARMED;
     }
     return SM_STATE_DISARMED;
+}
+
+/* DEPLOY (manual motor raise): the motor is forced off, so RC loss does NOT
+ * drop to FAILSAFE. The ONLY exit is an explicit stow request -> DISARMED. */
+static sm_state next_from_deploy(const sm_inputs *inputs)
+{
+    if (inputs->stow_request) {
+        return SM_STATE_DISARMED;
+    }
+    return SM_STATE_DEPLOY;
 }
 
 /* Next state from ARMED. RC loss -> FAILSAFE; an explicit disarm request (from
@@ -101,6 +115,8 @@ static sm_state next_state(sm_state current, const sm_inputs *inputs)
         return next_from_failsafe(inputs);
     case SM_STATE_ESC_CALIBRATION:
         return next_from_calibration(inputs);
+    case SM_STATE_DEPLOY:
+        return next_from_deploy(inputs);
     default:
         return SM_STATE_FAILSAFE; /* unknown state -> safe latch */
     }
@@ -116,9 +132,15 @@ static throttle_target_mode throttle_target_for(sm_state state)
     return THROTTLE_TARGET_NEUTRAL;
 }
 
-/* Servo rule is independent of arming: RC valid -> track CH1, else center. */
-static servo_target_mode servo_target_for(const sm_inputs *inputs)
+/* Servo rule. DEPLOY pins the servo at deploy_servo_us regardless of RC (the
+ * motor is off, so holding the raised position is the safe behaviour even with
+ * RC lost). Otherwise the rule is independent of arming: RC valid -> track CH1,
+ * else center. */
+static servo_target_mode servo_target_for(sm_state state, const sm_inputs *inputs)
 {
+    if (state == SM_STATE_DEPLOY) {
+        return SERVO_TARGET_DEPLOY;
+    }
     if (inputs->rc_valid) {
         return SERVO_TARGET_TRACK;
     }
@@ -131,7 +153,7 @@ sm_outputs sm_step(sm_state current, const sm_inputs *inputs)
     sm_outputs out = {
         .state = state,
         .throttle_target = throttle_target_for(state),
-        .servo_target = servo_target_for(inputs),
+        .servo_target = servo_target_for(state, inputs),
     };
     return out;
 }

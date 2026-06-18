@@ -43,6 +43,12 @@ extern "C" {
 /* The repeat period of the ESC_CALIBRATION double-blink pattern. */
 #define LED_PATTERN_CALIBRATION_PERIOD_MS 1200U
 
+/* DEPLOY: a characteristic TRIPLE-blink burst repeated every 2 s, off for the
+ * rest of the period. Distinct from the DISARMED double-blink overlay (only when
+ * uncalibrated) and the ESC_CALIBRATION double-blink (1200 ms period): three
+ * blinks in a 2 s window unambiguously reads "motor raised". */
+#define LED_PATTERN_DEPLOY_PERIOD_MS 2000U
+
 /**
  * Compute the instantaneous LED level for the current state at time t_ms (pure).
  *

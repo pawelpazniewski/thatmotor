@@ -35,6 +35,8 @@ static const u16_field U16_FIELDS[] = {
     U16_FIELD(failsafe_timeout_ms),
     U16_FIELD(reverse_neutral_dwell_ms),
     U16_FIELD(ch4_switch_threshold_us),
+    U16_FIELD(deploy_servo_us),
+    U16_FIELD(click_window_ms),
 };
 
 #define U16_FIELD_COUNT (sizeof(U16_FIELDS) / sizeof(U16_FIELDS[0]))
