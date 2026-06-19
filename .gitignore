@@ -11,3 +11,6 @@ dependencies.lock
 
 # Host test build output
 test/host/build/
+
+# clangd / IDE index cache
+.cache/
