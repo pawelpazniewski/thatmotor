@@ -27,6 +27,7 @@ void run_command_parse_tests(void);
 void run_params_decide_tests(void);
 void run_wifi_ap_config_tests(void);
 void run_led_pattern_tests(void);
+void run_nmea_parse_tests(void);
 
 int main(void)
 {
@@ -53,5 +54,6 @@ int main(void)
     run_params_decide_tests();
     run_wifi_ap_config_tests();
     run_led_pattern_tests();
+    run_nmea_parse_tests();
     return UNITY_END();
 }

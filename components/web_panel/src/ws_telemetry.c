@@ -27,7 +27,9 @@ static int snapshot_to_json(const control_loop_snapshot *s, char *buf, size_t n)
         "\"ch1_valid\":%s,\"ch2_valid\":%s,\"servo_us\":%u,\"esc_us\":%u,"
         "\"servo_trim_us\":%d,"
         "\"source\":%d,\"settings_valid\":%s,\"calibrated\":%s,"
-        "\"defaults_used\":%s,\"nvs_error\":%s}",
+        "\"defaults_used\":%s,\"nvs_error\":%s,"
+        "\"gps_fix\":%s,\"gps_sats\":%u,\"gps_lat_e7\":%d,\"gps_lon_e7\":%d,"
+        "\"gps_speed_cms\":%u}",
         (int)s->state, (unsigned)s->arm_reason, s->rc_valid ? "true" : "false",
         (unsigned)s->ch1_us, (unsigned)s->ch2_us, (unsigned)s->ch4_us,
         (unsigned)s->ch3_us,
@@ -38,7 +40,9 @@ static int snapshot_to_json(const control_loop_snapshot *s, char *buf, size_t n)
         s->settings_valid ? "true" : "false",
         s->calibrated ? "true" : "false",
         s->defaults_used ? "true" : "false",
-        s->nvs_error ? "true" : "false");
+        s->nvs_error ? "true" : "false",
+        s->gps_fix ? "true" : "false", (unsigned)s->gps_sats,
+        (int)s->gps_lat_e7, (int)s->gps_lon_e7, (unsigned)s->gps_speed_cms);
 }
 
 /* httpd work callback: runs in the server task. Sends the latest snapshot to
@@ -53,7 +57,7 @@ static void push_work(void *arg)
     control_loop_snapshot snap;
     control_loop_get_snapshot(&snap);
 
-    char json[384];
+    char json[512];
     int len = snapshot_to_json(&snap, json, sizeof(json));
     if (len <= 0 || (size_t)len >= sizeof(json)) {
         atomic_store(&s_push_in_flight, false);

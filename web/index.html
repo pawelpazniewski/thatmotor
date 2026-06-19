@@ -38,6 +38,18 @@
   </section>
 
   <section class="card">
+    <h2>GPS</h2>
+    <div class="grid">
+      <div class="metric"><span class="label">Fix</span><span id="gps_fix" class="value">--</span></div>
+      <div class="metric"><span class="label">Sats</span><span id="gps_sats" class="value">--</span></div>
+      <div class="metric"><span class="label">Lat</span><span id="gps_lat" class="value">--</span></div>
+      <div class="metric"><span class="label">Lon</span><span id="gps_lon" class="value">--</span></div>
+      <div class="metric"><span class="label">Speed (m/s)</span><span id="gps_speed" class="value">--</span></div>
+    </div>
+    <p class="hint">Diagnostic only — GPS is outside failsafe and does not affect arming or steering.</p>
+  </section>
+
+  <section class="card">
     <h2>Status flags (R16)</h2>
     <div class="grid">
       <div class="metric"><span class="label">Source</span><span id="source" class="value">--</span></div>

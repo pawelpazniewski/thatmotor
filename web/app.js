@@ -85,6 +85,11 @@ function applyTelemetry(t) {
   setText("servo_us", t.servo_us);
   setText("esc_us", t.esc_us);
   setText("servo_trim_us", t.servo_trim_us);
+  setText("gps_fix", t.gps_fix ? "yes" : "NO");
+  setText("gps_sats", t.gps_sats);
+  setText("gps_lat", (t.gps_lat_e7 / 1e7).toFixed(6));
+  setText("gps_lon", (t.gps_lon_e7 / 1e7).toFixed(6));
+  setText("gps_speed", (t.gps_speed_cms / 100).toFixed(1));
   setText("source", SOURCE_NAMES[t.source] || t.source);
   setText("settings_valid", t.settings_valid ? "yes" : "no");
   setText("calibrated", t.calibrated ? "yes" : "NO");

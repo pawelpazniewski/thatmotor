@@ -39,6 +39,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/web_panel/src/params_decide.c
     ${REPO_ROOT}/components/web_panel/src/wifi_ap_config.c
     ${REPO_ROOT}/components/led_status/src/led_pattern.c
+    ${REPO_ROOT}/components/gps/src/nmea_parse.c
 )
 
 set(PURE_INCLUDE_DIRS
@@ -54,6 +55,7 @@ set(PURE_INCLUDE_DIRS
     ${REPO_ROOT}/components/control_loop/include
     ${REPO_ROOT}/components/web_panel/include
     ${REPO_ROOT}/components/led_status/include
+    ${REPO_ROOT}/components/gps/include
 )
 
 # Test sources.
@@ -81,6 +83,7 @@ set(TEST_SOURCES
     test_params_decide.c
     test_wifi_ap_config.c
     test_led_pattern.c
+    test_nmea_parse.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})

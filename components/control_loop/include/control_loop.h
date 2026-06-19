@@ -43,6 +43,13 @@ typedef struct {
     bool calibrated;           /* R16: false -> UNCALIBRATED */
     bool defaults_used;        /* R16 */
     bool nvs_error;            /* R16 */
+    /* GPS (diagnostic, OUTSIDE failsafe): copied from the GPS task's shared
+     * state for the panel. Never feeds rc_valid/loop_step/sm_inputs. */
+    bool gps_fix;              /* GPS has a usable fix */
+    uint8_t gps_sats;          /* satellites used in the fix */
+    int32_t gps_lat_e7;        /* latitude in degrees * 1e7 (negative for S) */
+    int32_t gps_lon_e7;        /* longitude in degrees * 1e7 (negative for W) */
+    uint16_t gps_speed_cms;    /* ground speed in cm/s */
 } control_loop_snapshot;
 
 /**

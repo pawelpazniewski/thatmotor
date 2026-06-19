@@ -9,6 +9,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "gps.h"
 #include "led_driver.h"
 #include "led_pattern.h"
 #include "loop_step.h"
@@ -351,6 +352,15 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     s_snapshot.calibrated = s_load_flags.calibrated;
     s_snapshot.defaults_used = s_load_flags.defaults_used;
     s_snapshot.nvs_error = s_load_flags.nvs_error;
+    /* GPS is the ONLY non-control touch point: copy the diagnostic fix into the
+     * snapshot for the panel. Outside failsafe; never feeds a control decision. */
+    gps_state g;
+    gps_get_state(&g);
+    s_snapshot.gps_fix = g.fix;
+    s_snapshot.gps_sats = g.sats;
+    s_snapshot.gps_lat_e7 = g.lat_e7;
+    s_snapshot.gps_lon_e7 = g.lon_e7;
+    s_snapshot.gps_speed_cms = g.speed_cms;
 }
 
 /* Drive the status LED for this cycle from the pure pattern (Unit 11). */

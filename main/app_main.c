@@ -1,6 +1,7 @@
 #include "control_loop.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "gps.h"
 #include "http_server.h"
 #include "nvs_store.h"
 #include "pwm_out.h"
@@ -79,6 +80,14 @@ void app_main(void)
     ESP_ERROR_CHECK(wifi_ap_start());
     ESP_ERROR_CHECK(http_server_start());
     ESP_LOGI(TAG, "AP + web panel up");
+
+    /* GPS last, after the safe state + AP are up. It is OPTIONAL and entirely
+     * OUTSIDE failsafe: a start error is logged but never aborts the boot, and
+     * losing the GPS has no effect on arming/steering/failsafe. */
+    esp_err_t gps_err = gps_start();
+    if (gps_err != ESP_OK) {
+        ESP_LOGW(TAG, "GPS start failed (0x%x); continuing without GPS", gps_err);
+    }
 
     ESP_LOGI(TAG, "control loop initialised; entering 50 Hz loop (DISARMED)");
     control_loop_run();
