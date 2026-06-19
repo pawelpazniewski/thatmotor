@@ -50,6 +50,11 @@ typedef struct {
     int32_t gps_lat_e7;        /* latitude in degrees * 1e7 (negative for S) */
     int32_t gps_lon_e7;        /* longitude in degrees * 1e7 (negative for W) */
     uint16_t gps_speed_cms;    /* ground speed in cm/s */
+    /* IMU / compass (BNO085, diagnostic, OUTSIDE failsafe): copied from the IMU
+     * task's shared state for the panel. Never feeds rc_valid/loop_step/sm_inputs. */
+    bool imu_ok;               /* fresh rotation-vector data is flowing */
+    uint16_t imu_heading_deg10;/* yaw / heading in degrees * 10, [0, 3599] */
+    uint8_t imu_calib;         /* SH-2 accuracy / calibration status, 0..3 */
 } control_loop_snapshot;
 
 /**

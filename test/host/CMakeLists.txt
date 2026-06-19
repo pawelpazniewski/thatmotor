@@ -40,6 +40,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/web_panel/src/wifi_ap_config.c
     ${REPO_ROOT}/components/led_status/src/led_pattern.c
     ${REPO_ROOT}/components/gps/src/nmea_parse.c
+    ${REPO_ROOT}/components/imu/src/quat_to_yaw.c
 )
 
 set(PURE_INCLUDE_DIRS
@@ -56,6 +57,7 @@ set(PURE_INCLUDE_DIRS
     ${REPO_ROOT}/components/web_panel/include
     ${REPO_ROOT}/components/led_status/include
     ${REPO_ROOT}/components/gps/include
+    ${REPO_ROOT}/components/imu/include
 )
 
 # Test sources.
@@ -84,8 +86,9 @@ set(TEST_SOURCES
     test_wifi_ap_config.c
     test_led_pattern.c
     test_nmea_parse.c
+    test_quat_to_yaw.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})
 target_include_directories(host_tests PRIVATE ${PURE_INCLUDE_DIRS})
-target_link_libraries(host_tests PRIVATE unity)
+target_link_libraries(host_tests PRIVATE unity m)

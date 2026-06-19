@@ -50,6 +50,16 @@
   </section>
 
   <section class="card">
+    <h2>Compass (BNO085)</h2>
+    <div class="grid">
+      <div class="metric"><span class="label">Heading (deg)</span><span id="imu_heading" class="value">--</span></div>
+      <div class="metric"><span class="label">Calib (0-3)</span><span id="imu_calib" class="value">--</span></div>
+      <div class="metric"><span class="label">OK</span><span id="imu_ok" class="value">--</span></div>
+    </div>
+    <p class="hint">Diagnostic only — the compass is outside failsafe and does not affect arming or steering.</p>
+  </section>
+
+  <section class="card">
     <h2>Status flags (R16)</h2>
     <div class="grid">
       <div class="metric"><span class="label">Source</span><span id="source" class="value">--</span></div>

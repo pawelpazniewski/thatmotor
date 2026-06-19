@@ -90,6 +90,9 @@ function applyTelemetry(t) {
   setText("gps_lat", (t.gps_lat_e7 / 1e7).toFixed(6));
   setText("gps_lon", (t.gps_lon_e7 / 1e7).toFixed(6));
   setText("gps_speed", (t.gps_speed_cms / 100).toFixed(1));
+  setText("imu_heading", (t.imu_heading_deg10 / 10).toFixed(1) + "°");
+  setText("imu_calib", t.imu_calib);
+  setText("imu_ok", t.imu_ok ? "yes" : "NO");
   setText("source", SOURCE_NAMES[t.source] || t.source);
   setText("settings_valid", t.settings_valid ? "yes" : "no");
   setText("calibrated", t.calibrated ? "yes" : "NO");

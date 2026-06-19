@@ -10,6 +10,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "gps.h"
+#include "imu.h"
 #include "led_driver.h"
 #include "led_pattern.h"
 #include "loop_step.h"
@@ -361,6 +362,13 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     s_snapshot.gps_lat_e7 = g.lat_e7;
     s_snapshot.gps_lon_e7 = g.lon_e7;
     s_snapshot.gps_speed_cms = g.speed_cms;
+    /* IMU/compass: same diagnostic-only contract as GPS. Outside failsafe;
+     * never feeds a control decision. */
+    imu_state m;
+    imu_get_state(&m);
+    s_snapshot.imu_ok = m.ok;
+    s_snapshot.imu_heading_deg10 = m.heading_deg10;
+    s_snapshot.imu_calib = m.calib;
 }
 
 /* Drive the status LED for this cycle from the pure pattern (Unit 11). */

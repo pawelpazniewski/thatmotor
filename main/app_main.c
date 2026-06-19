@@ -3,6 +3,7 @@
 #include "esp_system.h"
 #include "gps.h"
 #include "http_server.h"
+#include "imu.h"
 #include "nvs_store.h"
 #include "pwm_out.h"
 #include "rc_capture.h"
@@ -87,6 +88,14 @@ void app_main(void)
     esp_err_t gps_err = gps_start();
     if (gps_err != ESP_OK) {
         ESP_LOGW(TAG, "GPS start failed (0x%x); continuing without GPS", gps_err);
+    }
+
+    /* Compass (BNO085) is also OPTIONAL and entirely OUTSIDE failsafe: a start
+     * error is logged but never aborts the boot, and losing it has no effect on
+     * arming/steering/failsafe. */
+    esp_err_t imu_err = imu_start();
+    if (imu_err != ESP_OK) {
+        ESP_LOGW(TAG, "IMU start failed (0x%x); continuing without compass", imu_err);
     }
 
     ESP_LOGI(TAG, "control loop initialised; entering 50 Hz loop (DISARMED)");

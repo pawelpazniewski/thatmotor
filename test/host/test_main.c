@@ -28,6 +28,7 @@ void run_params_decide_tests(void);
 void run_wifi_ap_config_tests(void);
 void run_led_pattern_tests(void);
 void run_nmea_parse_tests(void);
+void run_quat_to_yaw_tests(void);
 
 int main(void)
 {
@@ -55,5 +56,6 @@ int main(void)
     run_wifi_ap_config_tests();
     run_led_pattern_tests();
     run_nmea_parse_tests();
+    run_quat_to_yaw_tests();
     return UNITY_END();
 }
