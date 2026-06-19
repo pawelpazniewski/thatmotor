@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="940" viewBox="0 0 820 940" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#b0b0b0" stroke-width="2"/>
+    </pattern>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#1565c0"/>
+    </marker>
+    <marker id="leader" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#444"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="820" height="940" fill="#fbfbfb"/>
+  <text x="40" y="46" font-size="26" font-weight="bold" fill="#222">Direct drive: serwo współosiowo z kolumną</text>
+  <text x="40" y="74" font-size="15" fill="#666">Przekrój. Oś wału serwa = oś obrotu kolumny. Serwo tylko skręca; łożysko nosi obciążenia.</text>
+
+  <!-- center axis -->
+  <line x1="330" y1="100" x2="330" y2="780" stroke="#cda434" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="338" y="115" font-size="12" fill="#a8861f">oś obrotu</text>
+
+  <!-- ===== COLUMN ===== -->
+  <rect x="305" y="110" width="50" height="200" rx="4" fill="#9ec5e8" stroke="#3a6ea5" stroke-width="2"/>
+  <text x="330" y="215" font-size="13" fill="#1b3a5b" text-anchor="middle" transform="rotate(-90 330 215)">kolumna silnika</text>
+
+  <!-- rotation arc on column -->
+  <path d="M 300 150 A 40 40 0 0 1 360 150" fill="none" stroke="#1565c0" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M 360 150 A 40 40 0 0 1 300 150" fill="none" stroke="#1565c0" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="330" y="138" font-size="12" fill="#1565c0" text-anchor="middle">skręt L / P</text>
+
+  <!-- ===== BEARING + FRAME ===== -->
+  <!-- frame side supports -->
+  <rect x="170" y="310" width="60" height="420" fill="url(#hatch)" stroke="#888" stroke-width="1.5"/>
+  <rect x="430" y="310" width="60" height="420" fill="url(#hatch)" stroke="#888" stroke-width="1.5"/>
+  <text x="200" y="540" font-size="12" fill="#666" text-anchor="middle" transform="rotate(-90 200 540)">rama / mocowanie</text>
+  <text x="460" y="540" font-size="12" fill="#666" text-anchor="middle" transform="rotate(-90 460 540)">rama / mocowanie</text>
+
+  <!-- bearing block -->
+  <rect x="270" y="310" width="120" height="70" rx="4" fill="#d8d8d8" stroke="#555" stroke-width="2"/>
+  <!-- bearing balls -->
+  <circle cx="290" cy="345" r="9" fill="#fff" stroke="#555" stroke-width="2"/>
+  <circle cx="370" cy="345" r="9" fill="#fff" stroke="#555" stroke-width="2"/>
+  <rect x="305" y="310" width="50" height="70" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="330" y="350" font-size="12" fill="#333" text-anchor="middle">ŁOŻYSKO</text>
+
+  <!-- ===== FLANGE ===== -->
+  <rect x="250" y="385" width="160" height="22" rx="3" fill="#f0c674" stroke="#9c7b2e" stroke-width="2"/>
+  <circle cx="270" cy="396" r="4" fill="#5a4a1a"/>
+  <circle cx="390" cy="396" r="4" fill="#5a4a1a"/>
+  <text x="330" y="401" font-size="11" fill="#5a4a1a" text-anchor="middle">kołnierz / płytka</text>
+
+  <!-- ===== DISC HORN ===== -->
+  <rect x="235" y="410" width="190" height="20" rx="10" fill="#3a3a3a" stroke="#000" stroke-width="1.5"/>
+  <circle cx="260" cy="420" r="3.5" fill="#888"/>
+  <circle cx="400" cy="420" r="3.5" fill="#888"/>
+  <circle cx="300" cy="420" r="3.5" fill="#888"/>
+  <circle cx="360" cy="420" r="3.5" fill="#888"/>
+  <text x="330" y="424" font-size="10" fill="#ddd" text-anchor="middle">orczyk-dysk</text>
+
+  <!-- optional flexible coupling note marker -->
+  <rect x="300" y="430" width="60" height="14" rx="3" fill="#cfe8cf" stroke="#5a8a5a" stroke-width="1.5"/>
+  <text x="330" y="441" font-size="9.5" fill="#2f5d2f" text-anchor="middle">sprzęgło (opc.)</text>
+
+  <!-- ===== SERVO SHAFT (spline) ===== -->
+  <rect x="318" y="444" width="24" height="36" fill="#bdbdbd" stroke="#555" stroke-width="1.5"/>
+  <line x1="322" y1="444" x2="322" y2="480" stroke="#555" stroke-width="1"/>
+  <line x1="326" y1="444" x2="326" y2="480" stroke="#555" stroke-width="1"/>
+  <line x1="330" y1="444" x2="330" y2="480" stroke="#555" stroke-width="1"/>
+  <line x1="334" y1="444" x2="334" y2="480" stroke="#555" stroke-width="1"/>
+  <line x1="338" y1="444" x2="338" y2="480" stroke="#555" stroke-width="1"/>
+
+  <!-- ===== SERVO BODY ===== -->
+  <rect x="250" y="480" width="160" height="210" rx="6" fill="#b03b3b" stroke="#6e2020" stroke-width="2"/>
+  <!-- mounting ears -->
+  <rect x="220" y="500" width="30" height="26" rx="3" fill="#b03b3b" stroke="#6e2020" stroke-width="2"/>
+  <rect x="410" y="500" width="30" height="26" rx="3" fill="#b03b3b" stroke="#6e2020" stroke-width="2"/>
+  <circle cx="235" cy="513" r="5" fill="#fff" stroke="#6e2020"/>
+  <circle cx="425" cy="513" r="5" fill="#fff" stroke="#6e2020"/>
+  <text x="330" y="585" font-size="20" font-weight="bold" fill="#fff" text-anchor="middle">SERWO</text>
+  <text x="330" y="612" font-size="15" fill="#ffd9d9" text-anchor="middle">40 kg·cm, 270°</text>
+  <text x="330" y="660" font-size="12" fill="#ffd9d9" text-anchor="middle">daje TYLKO moment obrotowy</text>
+
+  <!-- ===== LEADER LABELS (right) ===== -->
+  <g font-size="14" fill="#333">
+    <line x1="356" y1="200" x2="600" y2="200" stroke="#444" stroke-width="1" marker-end="url(#leader)" stroke-dasharray="2 2"/>
+    <text x="606" y="196">Kolumna obraca się w łożysku;</text>
+    <text x="606" y="214">serwo nie dźwiga jej ciężaru.</text>
+
+    <line x1="392" y1="345" x2="600" y2="345" stroke="#444" stroke-width="1" marker-end="url(#leader)" stroke-dasharray="2 2"/>
+    <text x="606" y="335" font-weight="bold" fill="#155724">ŁOŻYSKO</text>
+    <text x="606" y="353">przenosi ciężar silnika +</text>
+    <text x="606" y="371">napór wody + siły boczne.</text>
+
+    <line x1="412" y1="396" x2="600" y2="420" stroke="#444" stroke-width="1" marker-end="url(#leader)" stroke-dasharray="2 2"/>
+    <text x="606" y="416">Kołnierz kolumny przykręcony</text>
+    <text x="606" y="434">do orczyka (otwory dysku).</text>
+
+    <line x1="425" y1="420" x2="600" y2="470" stroke="#444" stroke-width="1" marker-end="url(#leader)" stroke-dasharray="2 2"/>
+    <text x="606" y="466">Orczyk-dysk z zestawu serwa</text>
+    <text x="606" y="484">na splajnie + środkowa śruba.</text>
+
+    <line x1="342" y1="462" x2="600" y2="525" stroke="#444" stroke-width="1" marker-end="url(#leader)" stroke-dasharray="2 2"/>
+    <text x="606" y="521">Sprzęgło podatne (Oldham)</text>
+    <text x="606" y="539">absorbuje drobną niewspółosiowość,</text>
+    <text x="606" y="557">chroni przekładnię serwa.</text>
+  </g>
+
+  <!-- ===== KEY PRINCIPLE BOX ===== -->
+  <rect x="40" y="770" width="740" height="70" rx="8" fill="#fff3cd" stroke="#c8a533" stroke-width="2"/>
+  <text x="60" y="798" font-size="15" font-weight="bold" fill="#7a5d00">ZASADA: łożysko nosi obciążenia, serwo tylko skręca.</text>
+  <text x="60" y="822" font-size="13.5" fill="#5c4700">Nigdy nie wieszaj kolumny/silnika na wałku serwa — jego przekładnia nie jest do sił osiowych/bocznych.</text>
+
+  <!-- ===== ALTERNATIVE NOTE ===== -->
+  <rect x="40" y="858" width="740" height="58" rx="8" fill="#e7f1ff" stroke="#5a8ac8" stroke-width="2"/>
+  <text x="60" y="884" font-size="14" font-weight="bold" fill="#1b4a82">Jeśli serwo musi stać OBOK kolumny (osie równoległe):</text>
+  <text x="60" y="906" font-size="13.5" fill="#234a6e">direct drive niemożliwy — użyj paska zębatego GT2 lub ślimaka (samohamowny), zamiast drukowanych zębatek PETG.</text>
+</svg>
