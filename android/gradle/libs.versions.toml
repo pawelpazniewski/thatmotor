@@ -9,7 +9,10 @@ composeBom = "2024.09.03"
 okhttp = "5.0.0-alpha.14"
 kotlinxSerialization = "1.7.3"
 kotlinxCoroutines = "1.9.0"
-maplibre = "11.5.2"
+# 11.7.0 is the minimum that supports native `pmtiles://` style sources
+# (MapLibre Android docs: "Starting MapLibre Android 11.7.0"). Phase 1 pinned
+# 11.5.2 before the offline-vector requirement was scheduled; Phase 4 needs PMTiles.
+maplibre = "11.7.0"
 junit = "4.13.2"
 
 [libraries]

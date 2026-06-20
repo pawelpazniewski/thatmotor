@@ -1,0 +1,24 @@
+{
+  "version": 8,
+  "name": "kayak-offline",
+  "sprite": "asset://style/sprite",
+  "glyphs": "asset://style/glyphs/{fontstack}/{range}.pbf",
+  "sources": {
+    "osm-vector": {
+      "type": "vector",
+      "url": "pmtiles://asset://maps/osm.pmtiles",
+      "attribution": "© OpenStreetMap contributors"
+    },
+    "ortho-raster": {
+      "type": "raster",
+      "url": "mbtiles://ortho.mbtiles",
+      "tileSize": 256
+    }
+  },
+  "layers": [
+    { "id": "osm-background", "type": "fill", "source": "osm-vector", "source-layer": "background-fill" },
+    { "id": "osm-water", "type": "fill", "source": "osm-vector", "source-layer": "water" },
+    { "id": "osm-roads", "type": "fill", "source": "osm-vector", "source-layer": "transportation" },
+    { "id": "ortho", "type": "raster", "source": "ortho-raster", "layout": { "visibility": "none" } }
+  ]
+}
