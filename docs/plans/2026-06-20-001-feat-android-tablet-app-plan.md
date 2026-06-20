@@ -256,7 +256,7 @@ tak by HTTP/WS do `192.168.4.1` działały bez internetu.
 
 ### Faza 2 — Kontrakt danych i transport
 
-- [ ] **Unit 3: Modele danych i (de)serializacja**
+- [x] **Unit 3: Modele danych i (de)serializacja** (kod+testy; 27 pól 1:1 z `snapshot_to_json`; konwersje jednostek wydzielone do `data/TelemetryUnits.kt`; nieznany `state` → discriminated `Unknown`, nie crash)
 
 **Cel:** Zamodelować ramkę telemetrii, envelope odpowiedzi i komendy jako type-safe
 struktury Kotlin z parsowaniem kotlinx.serialization.
@@ -286,16 +286,16 @@ struktury Kotlin z parsowaniem kotlinx.serialization.
 **Wzorce do naśladowania:** kształt JSON z `web/app.js` i `ws_telemetry.c`.
 
 **Scenariusze testowe:**
-- [Unit] parsowanie pełnej ramki telemetrii → poprawne pola i konwersje (np.
+- [x] [Unit] parsowanie pełnej ramki telemetrii → poprawne pola i konwersje (np.
   `gps_lat_e7=520000000 → 52.0°`, `imu_heading_deg10=900 → 90.0°`).
-- [Unit] ramka z nieznanym dodatkowym polem nie wywala parsera.
-- [Unit] envelope błędu `{data:null, error:{code,message}}` → poprawnie zmapowany.
-- [Unit] mapowanie `state` 0–4 → `MotorState`; nieznana wartość → ścieżka błędu (nie crash).
+- [x] [Unit] ramka z nieznanym dodatkowym polem nie wywala parsera.
+- [x] [Unit] envelope błędu `{data:null, error:{code,message}}` → poprawnie zmapowany.
+- [x] [Unit] mapowanie `state` 0–4 → `MotorState`; nieznana wartość → ścieżka błędu (nie crash).
 
 **Weryfikacja:**
-- Testy JVM zielone; konwersje jednostek zgodne z oczekiwaniami z firmware.
+- Testy JVM zielone; konwersje jednostek zgodne z oczekiwaniami z firmware. (do review — brak JVM/Gradle w środowisku)
 
-- [ ] **Unit 4: Klient REST + WebSocket (OkHttp)**
+- [x] **Unit 4: Klient REST + WebSocket (OkHttp)** (kod+testy; czysta `mapCommandResult` host-testowana; adaptery OkHttp do weryfikacji na ESP32)
 
 **Cel:** Transport: wysyłka komend `POST /api/command` i strumień telemetrii z `WS /ws`,
 oba związane z siecią AP.
@@ -324,15 +324,16 @@ oba związane z siecią AP.
 **Wzorce do naśladowania:** sposób wołania API w `web/app.js`.
 
 **Scenariusze testowe:**
-- [Unit] 200 + `error:null` → `CommandResult.Success`.
-- [Unit] 409 + `SETTINGS_WRITE_REJECTED_NOT_DISARMED` → `Rejected(reason)`.
-- [Unit] 400 + `VALIDATION_FAILED` → `Rejected(reason)`.
+- [x] [Unit] 200 + `error:null` → `CommandResult.Success`.
+- [x] [Unit] 409 + `SETTINGS_WRITE_REJECTED_NOT_DISARMED` → `Rejected(reason)`.
+- [x] [Unit] 400 + `VALIDATION_FAILED` → `Rejected(reason)`.
+- [x] [Unit] (dodany) non-2xx bez envelope → `TransportError`.
 
 **Weryfikacja:**
 - Na urządzeniu z ESP32: `arm`/`disarm` zmienia stan łodzi (widoczne w telemetrii);
   strumień WS dostarcza ramki ~10 Hz.
 
-- [ ] **Unit 5: Repozytorium telemetrii + watchdog link-down**
+- [x] **Unit 5: Repozytorium telemetrii + watchdog link-down** (kod+testy; czysty `linkStatus` + `reconnectDelayMs`; dwie pętle collect/watchdog w repo, zegar `elapsedRealtime`)
 
 **Cel:** Złożyć strumień telemetrii w obserwowalny stan z reconnectem i wykrywaniem
 utraty linku.
@@ -361,13 +362,13 @@ utraty linku.
 (in/out), tak by test failował bez logiki progu (oracle power — learned-patterns).
 
 **Scenariusze testowe:**
-- [Unit] ramka tuż przed progiem → `Live`; brak ramki po przekroczeniu progu → `Stale`.
-- [Unit] po `Stale` nowa ramka → `Live`.
-- [Unit] reconnect backoff rośnie i jest ograniczony do max.
+- [x] [Unit] ramka tuż przed progiem (== próg) → `Live`; po przekroczeniu progu → `Stale` (oracle: `>` vs `>=`).
+- [x] [Unit] po `Stale` nowa ramka → `Live`.
+- [x] [Unit] reconnect backoff rośnie i jest ograniczony do max.
 
 **Weryfikacja:**
 - Odłączenie ESP32 powoduje przejście UI w `Stale`/link-down < ~1 s; ponowne
-  połączenie wraca do `Live`.
+  połączenie wraca do `Live`. (do review na ESP32)
 
 ### Faza 3 — UI operacyjny
 

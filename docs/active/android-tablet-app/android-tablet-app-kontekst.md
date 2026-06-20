@@ -1,7 +1,7 @@
 # Kontekst: Aplikacja Android (tablet) — v1
 
 Branch: `feature/android-tablet-app`
-Ostatnia aktualizacja: 2026-06-20
+Ostatnia aktualizacja: 2026-06-21
 
 ## Kontrakt API ESP32 (źródło prawdy)
 
@@ -118,6 +118,79 @@ Androida (sieć, mapa, service) weryfikuj manualnie na urządzeniu/emulatorze. T
   i testy JVM nie zostały uruchomione (oczekiwane). Wymagają lokalnego SDK + JDK 17.
   `gradle-wrapper.jar` (binarny) nie commitowany — generowany przez `gradle wrapper`
   lub Android Studio (opisane w `android/README.md`).
+
+### Code review Fazy 1 (2026-06-20)
+
+Multi-agent review (security, performance, architecture, test coverage). E2E browser
+verification: N/A — brak środowiska (emulator/przeglądarka) i brak web UI w tej fazie.
+Raport: `review-faza-1.md`. Severity gate: ⚠️ ZASTRZEŻENIA (0×P1, 3×P2, 7×P3).
+
+Kluczowe wnioski:
+- Jakość kodu dobra: Pure ⊥ HAL wzorowo, testy z mocą wyroczni (oracle power), brak
+  hardcoded secrets, brak `!!`/`as`, discriminated unions, pinowane wersje.
+- 3×P2 do naprawy przed warstwą OkHttp: (1) `boundNetwork` thread-safe (`@Volatile`/Flow),
+  (2) timeout `requestNetwork` (R7 — utknięcie w `Connecting`), (3) zawężenie cleartext
+  do `192.168.4.1` przez `network_security_config`.
+- Odchylenie `Network`→`boundNetwork` (zamiast `Connected(network)`) ocenione jako
+  uzasadnione — chroni czystość reducera. Konsekwencja: `Failed` bez `reason` (P3, dług na v2).
+- Pokrycie Unit 2 adekwatne (4 scenariusze z planu 1:1); brak testu adaptera HAL i Unit 1
+  zgodny z planem. Testów JVM nie uruchomiono (brak JDK/Gradle) — ograniczenie środowiska.
+
+### Re-review Fazy 1 po naprawie P2 (2026-06-20, cykl 1)
+
+Commit naprawczy `b3b0682`. Severity gate: ✅ GOTOWE DO KONTYNUACJI (0×P1, 0×P2, 8×P3).
+Wszystkie 3 P2 zweryfikowane jako ROZWIĄZANE bez regresji (analiza statyczna + weryfikacja
+semantyki API Androida; build/testy nie uruchomione — brak JDK/Gradle/SDK):
+- P2-1 `boundNetwork` → `@Volatile` (pojedyncza referencja, widoczność cross-thread OK).
+- P2-2 `requestNetwork(request, cb, timeoutMs=30 s)` + `require(timeoutMs>0)`; API 26+,
+  timeout → `onUnavailable` → `Failed` domyka R7.
+- P2-3 nowy `res/xml/network_security_config.xml`: base-config deny + domain-config permit
+  tylko `192.168.4.1`; literał IP i `ws://`/`http://` (web panel R8) pokryte.
+- Regresje: brak. Czysty reducer i typy niezmienione → 4 testy reducera zachowują moc wyroczni.
+- Nowy P3 (symetria reducera): `Unavailable` demuje `Connected→Failed` bezwarunkowo; kontrakt
+  Androida wyklucza ten scenariusz → nie defensive code; ewentualna symetria z testami oracle-power.
+- Pozostałe 7×P3 z cyklu 0 przeniesione (świadomie odroczone). Można przejść do Fazy 2.
+
+### Faza 2 — Kontrakt danych i transport (kod ukończony 2026-06-21)
+
+Zweryfikowano kontrakt 1:1 z firmware przed implementacją (źródła prawdy):
+`ws_telemetry.c::snapshot_to_json`, `control_loop.h::control_loop_snapshot`,
+`state_machine.h` (sm_state/sm_arm_reason), `api_contract.c` (stringi error code).
+
+- **Unit 3 (modele/serializacja):** `data/TelemetryFrame.kt` — 27 pól dokładnie wg
+  `snapshot_to_json` (`@SerialName` snake_case). Mapowanie szerokości C→Kotlin:
+  `uint32_t`→`Long` (pulsy/okresy, mieszczą zakres > Int), `uint16_t`/`uint8_t`→`Int`,
+  `int16_t`/`int32_t`→`Int`. Konwersje jednostek wydzielone do czystego
+  `data/TelemetryUnits.kt` (`*_e7/1e7`, `deg10/10`, `cms/100`) — model wire pozostaje
+  wiernym lustrem JSON. `data/ApiEnvelope.kt` generyczny `ApiEnvelope<T>` + `ApiError`
+  (stałe `CODE_NOT_DISARMED`, `CODE_VALIDATION_FAILED` zweryfikowane z `api_contract.c`).
+  `data/Command.kt` (enum arm/disarm/deploy/stow → keyword + `CommandRequest`).
+  `domain/MotorState.kt` — `motorStateFromCode` zwraca discriminated `Known/Unknown`
+  (nieznany kod = ścieżka błędu, nie crash); `armReasonFromCode` (0..4, null gdy nieznany).
+  Parser współdzielony `data/TelemetryJson.kt` (`ignoreUnknownKeys = true`).
+- **Unit 4 (REST+WS):** czysta `net/CommandResult.kt::mapCommandResult(status, error)`
+  → `Success/Rejected/TransportError` (populated error → Rejected niezależnie od kodu
+  HTTP; non-2xx bez envelope → TransportError). Cienkie adaptery: `net/EspHttpClient.kt`
+  (OkHttp, `socketFactory(network.socketFactory)`, `pingInterval` 7 s, timeouty LAN),
+  `net/CommandApi.kt` (POST /api/command, mapuje przez czysty rdzeń, łapie `IOException`
+  → TransportError, nie rzuca), `net/TelemetrySocket.kt` (`callbackFlow` → `Flow<TelemetryFrame>`,
+  zła ramka logowana i pomijana, `awaitClose { socket.cancel() }`).
+- **Unit 5 (repo+watchdog):** czysty `domain/LinkWatchdog.kt::linkStatus` (jedna domena
+  zegara monotonicznego, `elapsed > threshold` → STALE; granica == próg pozostaje LIVE,
+  learned-patterns: recency). `domain/ConnectionState.kt` (sealed
+  Disconnected/Connecting/Live/Stale). `domain/ReconnectBackoff.kt::reconnectDelayMs`
+  (250→500→1000→max 2000, clamp bez overflow). `data/TelemetryRepository.kt` —
+  `StateFlow<TelemetryUiState>`, dwie pętle (collect + watchdog tick 200 ms),
+  `SystemClock.elapsedRealtime` jako zegar, `pause/resumeReconnect` (wstrzymanie gdy AP Lost).
+- **Testy JVM (czyste rdzenie):** `TelemetryFrameParseTest` (4), `ApiEnvelopeParseTest` (2),
+  `CommandResultMapTest` (4), `LinkWatchdogTest` (3, granica progu — oracle power),
+  `ReconnectBackoffTest` (2, wzrost + cap). Fixtures JSON w `src/test/resources/`.
+  Helper `TestFixtures.kt`. Adaptery HAL (OkHttp/socket) — weryfikacja manualna na ESP32.
+- **Walidacja Gradle/JVM:** środowisko NIE ma realnego JRE (java to stub), brak Gradle,
+  brak `gradle-wrapper.jar`, brak Android SDK (`ANDROID_HOME` pusty). `./gradlew test`
+  i build NIE uruchomione (oczekiwane, nie błąd). Weryfikacja statyczna: API kotlinx
+  .serialization/OkHttp/coroutines zgodne z pinowanymi wersjami; brak `any`/`!!`/`as`;
+  zgodność pól/typów/jednostek z firmware potwierdzona przez odczyt źródeł.
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md

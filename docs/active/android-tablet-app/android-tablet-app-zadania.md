@@ -33,59 +33,65 @@ Legenda: `[ ]` do zrobienia · prefix `Test:` = scenariusz testowy · prefix
 
 ### Do poprawy po review fazy 1
 
-Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (0×P1, 3×P2, 7×P3). Pełny raport:
+Severity gate (re-review, cykl 1): ✅ GOTOWE DO KONTYNUACJI (0×P1, 0×P2, 8×P3).
+Wszystkie 3 P2 z cyklu 0 ROZWIĄZANE bez regresji (commit `b3b0682`). Pełny raport:
 `review-faza-1.md`. E2E: N/A (brak środowiska — emulator/przeglądarka).
 
-- [x] 🟠 [important] **net/ApConnectionManager.kt:29** — `boundNetwork` thread-unsafe (zapis na wątku ConnectivityManager, odczyt z OkHttp); oznacz `@Volatile` lub eksponuj jako `StateFlow<Network?>`. Zaadresować przed warstwą OkHttp.
-- [x] 🟠 [important] **net/ApConnectionManager.kt:74** — `requestNetwork` bez timeoutu → możliwe utknięcie w `Connecting` (R7); użyj overloadu z `timeoutMs` lub udokumentuj timeout w warstwie wyżej.
-- [x] 🟠 [important] **AndroidManifest.xml:26** — `usesCleartextTraffic="true"` globalny; zawęź przez `network_security_config.xml` do `192.168.4.1`.
+P2 (rozwiązane w cyklu 1):
+- [x] 🟠 [important] **net/ApConnectionManager.kt:45** — `boundNetwork` thread-unsafe → oznaczone `@Volatile`. ZWERYFIKOWANE: pojedyncza referencja, widoczność cross-thread OK.
+- [x] 🟠 [important] **net/ApConnectionManager.kt:96** — `requestNetwork` bez timeoutu → dodano overload `requestNetwork(request, cb, timeoutMs)` (default 30 s) + `require(timeoutMs > 0)`. ZWERYFIKOWANE: API 26+, timeout → `onUnavailable` → `Failed` (R7).
+- [x] 🟠 [important] **AndroidManifest.xml:26** — cleartext zawężony przez nowy `res/xml/network_security_config.xml` do `192.168.4.1` (base-config deny). ZWERYFIKOWANE: literał IP + `ws://`/`http://` pokryte.
+
+P3 (otwarte, niepriorytetowe):
+- [ ] 🟡 [nit] **net/ApConnectionStateReducer.kt:38** — `Unavailable` demuje `Connected → Failed` bezwarunkowo (asymetria względem strzeżonego `Lost`). Kontrakt Androida wyklucza ten scenariusz (P3, nie defensive code); jeśli symetria — z testami oracle-power.
 - [ ] 🟡 [nit] **AndroidManifest.xml:20** — `allowBackup="true"` przed persystencją passphrase; ustaw `false`.
-- [ ] 🟡 [nit] **net/ApConnectionStateReducer.kt:38 / ApConnectionState.kt:23** — `Failed` bez `reason`; rozważ `Failed(reason: enum)` gdy dojdzie timeout.
+- [ ] 🟡 [nit] **net/ApConnectionStateReducer.kt:38 / ApConnectionState.kt:23** — `Failed` bez `reason`; po dodaniu timeoutu rozważ `Failed(reason: enum)` (timeout vs odrzucenie).
 - [ ] 🟡 [nit] **net/ApConnectionState.kt:7 / ApConnectionStateReducer.kt:4** — KDoc-linki do typów Androida w warstwie pure (martwy link); zamień na zwykły tekst.
 - [ ] 🟡 [nit] **net/ApConnectionStateReducer.kt:1-43** — dwie deklaracje top-level w jednym pliku; opcjonalnie wydziel `ApConnectionEvent.kt`.
-- [ ] 🟡 [nit] **net/ApConnectionManager.kt:56-74** — anonimowy `NetworkCallback` podnosi rozmiar `connect()`; przy rozroście wyciągnij `buildApRequest()`.
-- [ ] 🟡 [nit] **app/build.gradle.kts:65** — MapLibre/OkHttp-alpha: potwierdź potrzebę, zaplanuj R8 + ABI splits dla release.
-- [ ] 🟡 [nit] **ApConnectionStateReducerTest.kt:20-29** — test o podwójnej odpowiedzialności (słabsza wyrocznia reconnectu); rozbić lub dodać komentarz.
+- [ ] 🟡 [nit] **net/ApConnectionManager.kt:78-94** — anonimowy `NetworkCallback` podnosi rozmiar `connect()`; przy rozroście wyciągnij `buildApRequest()`.
+- [ ] 🟡 [nit] **net/ApConnectionManager.kt:62** — `require(timeoutMs > 0)` bez testu; spójne z nietestowanymi `require(ssid…)` (Pure ⊥ HAL). Opcjonalnie wyekstrahuj `validateTimeout` + host-test.
+- [ ] 🟡 [nit] **app/build.gradle.kts** — MapLibre/OkHttp-alpha: potwierdź potrzebę, zaplanuj R8 + ABI splits dla release.
+- [ ] 🟡 [nit] **ApConnectionStateReducerTest.kt:19-29** — test o podwójnej odpowiedzialności (słabsza wyrocznia reconnectu); rozbić lub dodać komentarz.
 
 ---
 
 ## Faza 2 — Kontrakt danych i transport
 
 ### Unit 3: Modele danych i (de)serializacja (M)
-- [ ] Stwórz `data/TelemetryFrame.kt` (pola dokładnie wg `ws_telemetry.h`)
-- [ ] Stwórz `data/ApiEnvelope.kt` (`data`, `error{code,message}`)
-- [ ] Stwórz `data/Command.kt` (arm/disarm/deploy/stow)
-- [ ] Stwórz `domain/MotorState.kt` (mapowanie `state` 0–4 + `arm_reason`)
-- [ ] Czyste konwersje jednostek (`lat_e7→deg`, `heading_deg10→deg`, `speed_cms→m/s`)
-- [ ] Parser z `ignoreUnknownKeys = true`; fixtures JSON w `src/test/resources/`
-- [ ] Stwórz testy `data/TelemetryFrameParseTest.kt`, `data/ApiEnvelopeParseTest.kt`
-- [ ] Test: parsowanie pełnej ramki → poprawne pola/konwersje (`gps_lat_e7=520000000→52.0°`, `imu_heading_deg10=900→90.0°`)
-- [ ] Test: ramka z nieznanym polem nie wywala parsera
-- [ ] Test: envelope błędu `{data:null,error:{code,message}}` zmapowany poprawnie
-- [ ] Test: `state` 0–4 → `MotorState`; nieznana wartość → ścieżka błędu (nie crash)
+- [x] Stwórz `data/TelemetryFrame.kt` (pola dokładnie wg `ws_telemetry.h`) — 27 pól 1:1 z `snapshot_to_json`
+- [x] Stwórz `data/ApiEnvelope.kt` (`data`, `error{code,message}`) — generyczny `ApiEnvelope<T>` + `ApiError`
+- [x] Stwórz `data/Command.kt` (arm/disarm/deploy/stow) + `CommandRequest`
+- [x] Stwórz `domain/MotorState.kt` (mapowanie `state` 0–4 + `arm_reason` 0–4)
+- [x] Czyste konwersje jednostek (`data/TelemetryUnits.kt`: `lat_e7→deg`, `heading_deg10→deg`, `speed_cms→m/s`)
+- [x] Parser z `ignoreUnknownKeys = true` (`data/TelemetryJson.kt`); fixtures JSON w `src/test/resources/`
+- [x] Stwórz testy `data/TelemetryFrameParseTest.kt`, `data/ApiEnvelopeParseTest.kt`
+- [x] Test: parsowanie pełnej ramki → poprawne pola/konwersje (`gps_lat_e7=520000000→52.0°`, `imu_heading_deg10=900→90.0°`)
+- [x] Test: ramka z nieznanym polem nie wywala parsera
+- [x] Test: envelope błędu `{data:null,error:{code,message}}` zmapowany poprawnie
+- [x] Test: `state` 0–4 → `MotorState`; nieznana wartość → ścieżka błędu (nie crash)
 - [ ] Weryfikacja: testy JVM zielone; konwersje zgodne z firmware
 
 ### Unit 4: Klient REST + WebSocket (OkHttp) (M)
-- [ ] Stwórz `net/EspHttpClient.kt` (OkHttp z `socketFactory(network.socketFactory)`, `pingInterval` 5–10 s)
-- [ ] Stwórz `net/CommandApi.kt` (POST /api/command; wynik z envelope)
-- [ ] Stwórz `net/TelemetrySocket.kt` (WS → `Flow<TelemetryFrame>` przez `callbackFlow`)
-- [ ] Czysta funkcja: (status HTTP + envelope) → `CommandResult`
-- [ ] Stwórz test `net/CommandResultMapTest.kt`
-- [ ] Test: 200 + `error:null` → `Success`
-- [ ] Test: 409 + `SETTINGS_WRITE_REJECTED_NOT_DISARMED` → `Rejected(reason)`
-- [ ] Test: 400 + `VALIDATION_FAILED` → `Rejected(reason)`
+- [x] Stwórz `net/EspHttpClient.kt` (OkHttp z `socketFactory(network.socketFactory)`, `pingInterval` 7 s)
+- [x] Stwórz `net/CommandApi.kt` (POST /api/command; wynik z envelope)
+- [x] Stwórz `net/TelemetrySocket.kt` (WS → `Flow<TelemetryFrame>` przez `callbackFlow`)
+- [x] Czysta funkcja: (status HTTP + envelope) → `CommandResult` (`net/CommandResult.kt`: `mapCommandResult`)
+- [x] Stwórz test `net/CommandResultMapTest.kt`
+- [x] Test: 200 + `error:null` → `Success`
+- [x] Test: 409 + `SETTINGS_WRITE_REJECTED_NOT_DISARMED` → `Rejected(reason)`
+- [x] Test: 400 + `VALIDATION_FAILED` → `Rejected(reason)`
 - [ ] Weryfikacja: na ESP32 `arm`/`disarm` zmienia stan; WS dostarcza ramki ~10 Hz
 
 ### Unit 5: Repozytorium telemetrii + watchdog link-down (M)
-- [ ] Stwórz `data/TelemetryRepository.kt` (`StateFlow<TelemetryUiState>`)
-- [ ] Stwórz `domain/LinkWatchdog.kt` (czysta: ostatni-czas + teraz → `Live/Stale`)
-- [ ] Stwórz `domain/ConnectionState.kt` (sealed: Disconnected/Connecting/Live/Stale)
-- [ ] Reconnect z backoff (250 ms → 1 s → max 2 s); wstrzymaj gdy AP `Lost`
-- [ ] Różnica czasu w jednej domenie zegara monotonicznego (`elapsedRealtime`)
-- [ ] Stwórz test `domain/LinkWatchdogTest.kt` (test wokół granicy progu — oracle power)
-- [ ] Test: ramka tuż przed progiem → `Live`; po przekroczeniu progu → `Stale`
-- [ ] Test: po `Stale` nowa ramka → `Live`
-- [ ] Test: reconnect backoff rośnie i jest ograniczony do max
+- [x] Stwórz `data/TelemetryRepository.kt` (`StateFlow<TelemetryUiState>`) + `data/TelemetryUiState.kt`
+- [x] Stwórz `domain/LinkWatchdog.kt` (czysta: ostatni-czas + teraz → `Live/Stale`)
+- [x] Stwórz `domain/ConnectionState.kt` (sealed: Disconnected/Connecting/Live/Stale)
+- [x] Reconnect z backoff (250 ms → 500 ms → 1 s → max 2 s) (`domain/ReconnectBackoff.kt`); wstrzymaj gdy AP `Lost` (`pauseReconnect`)
+- [x] Różnica czasu w jednej domenie zegara monotonicznego (`SystemClock.elapsedRealtime`)
+- [x] Stwórz test `domain/LinkWatchdogTest.kt` (test wokół granicy progu — oracle power) + `domain/ReconnectBackoffTest.kt`
+- [x] Test: ramka tuż przed progiem → `Live`; po przekroczeniu progu → `Stale`
+- [x] Test: po `Stale` nowa ramka → `Live`
+- [x] Test: reconnect backoff rośnie i jest ograniczony do max
 - [ ] Weryfikacja: odłączenie ESP32 → link-down < ~1 s; powrót → `Live`
 
 ---
@@ -161,7 +167,7 @@ Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (0×P1, 3×P2, 7×P3). Pełny 
 
 ## Postęp
 
-- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ☐  ·  Faza 3: ☐  ·  Faza 4: ☐  ·  Faza 5: ☐
+- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ✅ (kod+testy; Weryfikacja na ESP32 do review)  ·  Faza 3: ☐  ·  Faza 4: ☐  ·  Faza 5: ☐
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md
