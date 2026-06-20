@@ -22,10 +22,27 @@ import kotlinx.coroutines.flow.asStateFlow
 class ApConnectionManager(
     private val connectivityManager: ConnectivityManager,
 ) {
+    companion object {
+        /**
+         * Default timeout for the SoftAP request. Without it, `requestNetwork`
+         * never fires `onUnavailable` on its own (only on explicit framework
+         * rejection), so a wrong SSID/passphrase would hang in `Connecting`
+         * forever (R7). The timeout guarantees an `Unavailable` event.
+         */
+        const val DEFAULT_TIMEOUT_MS = 30_000
+    }
+
     private val _state = MutableStateFlow<ApConnectionState>(ApConnectionState.Idle)
     val state: StateFlow<ApConnectionState> = _state.asStateFlow()
 
-    /** The bound AP network, available while [state] is [ApConnectionState.Connected]. */
+    /**
+     * The bound AP network, available while [state] is [ApConnectionState.Connected].
+     *
+     * Written on the ConnectivityManager callback thread and read from the OkHttp
+     * layer (`network.socketFactory`) on another thread, so it is `@Volatile` to
+     * guarantee cross-thread visibility.
+     */
+    @Volatile
     var boundNetwork: Network? = null
         private set
 
@@ -34,10 +51,15 @@ class ApConnectionManager(
     /**
      * Request and bind to the SoftAP identified by [ssid] / [passphrase].
      * Idempotent-safe: a prior request is torn down first.
+     *
+     * [timeoutMs] bounds how long the framework attempts the request before
+     * firing `onUnavailable` (→ [ApConnectionState.Failed]), so a bad
+     * SSID/passphrase cannot hang in `Connecting` indefinitely.
      */
-    fun connect(ssid: String, passphrase: String) {
+    fun connect(ssid: String, passphrase: String, timeoutMs: Int = DEFAULT_TIMEOUT_MS) {
         require(ssid.isNotBlank()) { "ssid must not be blank" }
         require(passphrase.length in 8..63) { "WPA2-PSK passphrase must be 8..63 chars" }
+        require(timeoutMs > 0) { "timeoutMs must be positive" }
 
         disconnect()
         dispatch(ApConnectionEvent.Requested)
@@ -71,7 +93,7 @@ class ApConnectionManager(
             }
         }
         callback = cb
-        connectivityManager.requestNetwork(request, cb)
+        connectivityManager.requestNetwork(request, cb, timeoutMs)
     }
 
     /** Cleanup: unbind the process and unregister the callback. Safe to call repeatedly. */

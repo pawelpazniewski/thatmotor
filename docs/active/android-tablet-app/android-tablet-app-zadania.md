@@ -31,6 +31,22 @@ Legenda: `[ ]` do zrobienia · prefix `Test:` = scenariusz testowy · prefix
 - [x] Test: `onUnavailable → Failed`
 - [ ] Weryfikacja: po wskazaniu SSID ESP32 app → `Connected`; GET do `192.168.4.1` odpowiada mimo braku internetu
 
+### Do poprawy po review fazy 1
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (0×P1, 3×P2, 7×P3). Pełny raport:
+`review-faza-1.md`. E2E: N/A (brak środowiska — emulator/przeglądarka).
+
+- [x] 🟠 [important] **net/ApConnectionManager.kt:29** — `boundNetwork` thread-unsafe (zapis na wątku ConnectivityManager, odczyt z OkHttp); oznacz `@Volatile` lub eksponuj jako `StateFlow<Network?>`. Zaadresować przed warstwą OkHttp.
+- [x] 🟠 [important] **net/ApConnectionManager.kt:74** — `requestNetwork` bez timeoutu → możliwe utknięcie w `Connecting` (R7); użyj overloadu z `timeoutMs` lub udokumentuj timeout w warstwie wyżej.
+- [x] 🟠 [important] **AndroidManifest.xml:26** — `usesCleartextTraffic="true"` globalny; zawęź przez `network_security_config.xml` do `192.168.4.1`.
+- [ ] 🟡 [nit] **AndroidManifest.xml:20** — `allowBackup="true"` przed persystencją passphrase; ustaw `false`.
+- [ ] 🟡 [nit] **net/ApConnectionStateReducer.kt:38 / ApConnectionState.kt:23** — `Failed` bez `reason`; rozważ `Failed(reason: enum)` gdy dojdzie timeout.
+- [ ] 🟡 [nit] **net/ApConnectionState.kt:7 / ApConnectionStateReducer.kt:4** — KDoc-linki do typów Androida w warstwie pure (martwy link); zamień na zwykły tekst.
+- [ ] 🟡 [nit] **net/ApConnectionStateReducer.kt:1-43** — dwie deklaracje top-level w jednym pliku; opcjonalnie wydziel `ApConnectionEvent.kt`.
+- [ ] 🟡 [nit] **net/ApConnectionManager.kt:56-74** — anonimowy `NetworkCallback` podnosi rozmiar `connect()`; przy rozroście wyciągnij `buildApRequest()`.
+- [ ] 🟡 [nit] **app/build.gradle.kts:65** — MapLibre/OkHttp-alpha: potwierdź potrzebę, zaplanuj R8 + ABI splits dla release.
+- [ ] 🟡 [nit] **ApConnectionStateReducerTest.kt:20-29** — test o podwójnej odpowiedzialności (słabsza wyrocznia reconnectu); rozbić lub dodać komentarz.
+
 ---
 
 ## Faza 2 — Kontrakt danych i transport
