@@ -42,10 +42,22 @@ object SessionPolicy {
         ConnectionState.Live -> "Telemetry live"
         ConnectionState.Stale -> "Link down — reconnecting"
     }
-}
 
-/** Whether a telemetry session is running; drives every keep-alive decision. */
-enum class SessionState {
-    ACTIVE,
-    STOPPED,
+    /**
+     * Pure session state transition. Extracted from the [TelemetryService] HAL so the
+     * `onStartCommand` (→ [SessionState.ACTIVE]) / `onDestroy` (→ [SessionState.STOPPED])
+     * lifecycle is host-testable (learned-patterns: "wyciągaj czyste funkcje decyzyjne
+     * zza HAL").
+     */
+    fun nextState(event: SessionEvent): SessionState = when (event) {
+        SessionEvent.STARTED -> SessionState.ACTIVE
+        SessionEvent.STOPPED -> SessionState.STOPPED
+    }
+
+    /**
+     * Whether the foreground notification should be refreshed for the given session
+     * state. The notification only exists while the session is [SessionState.ACTIVE];
+     * updating it after stop would resurrect a torn-down notification.
+     */
+    fun shouldUpdateStatus(session: SessionState): Boolean = session == SessionState.ACTIVE
 }

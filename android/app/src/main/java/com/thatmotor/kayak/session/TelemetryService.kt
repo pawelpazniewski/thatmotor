@@ -10,7 +10,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import com.thatmotor.kayak.MainActivity
@@ -42,6 +44,8 @@ class TelemetryService : Service() {
 
     private val binder = LocalBinder()
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     /**
      * Cleanup hook for the session resources owned outside the service (telemetry
      * repository + AP connection callback). Set by the Activity after binding; invoked
@@ -54,10 +58,35 @@ class TelemetryService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var sessionState: SessionState = SessionState.STOPPED
 
+    /** Last status pushed to the notification; used to dedupe 10 Hz updates. */
+    private var lastStatusText: String? = null
+
+    /** True while the wake lock should be held; drives the periodic re-acquire. */
+    @Volatile
+    private var wantsWakeLock: Boolean = false
+
+    /** Built once (channel + PendingIntent are stable for the service lifetime). */
+    private val notificationManager: NotificationManager by lazy {
+        getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    }
+    private val contentIntent: PendingIntent by lazy {
+        PendingIntent.getActivity(
+            this,
+            PENDING_INTENT_REQUEST_CODE,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     override fun onBind(intent: Intent?): IBinder = binder
 
+    override fun onCreate() {
+        super.onCreate()
+        ensureChannel()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        sessionState = SessionState.ACTIVE
+        sessionState = SessionPolicy.nextState(SessionEvent.STARTED)
         startSessionForeground()
         // Restart if the system kills us mid-session — the session must survive.
         return START_STICKY
@@ -78,10 +107,17 @@ class TelemetryService : Service() {
         }
     }
 
-    /** Refresh the foreground notification with the current link [statusText]. */
+    /**
+     * Refresh the foreground notification with the current link [statusText]. Deduped:
+     * the telemetry layer maps a 4-value [com.thatmotor.kayak.domain.ConnectionState] at
+     * ~10 Hz, but the text rarely changes, so identical updates are dropped to avoid
+     * flooding the NotificationManager (binder IPC + Notification rebuild).
+     */
     fun updateStatus(statusText: String) {
-        if (sessionState != SessionState.ACTIVE) return
-        notificationManager().notify(NOTIFICATION_ID, buildNotification(statusText))
+        if (!SessionPolicy.shouldUpdateStatus(sessionState)) return
+        if (statusText == lastStatusText) return
+        lastStatusText = statusText
+        notificationManager.notify(NOTIFICATION_ID, buildNotification(statusText))
     }
 
     /**
@@ -91,8 +127,12 @@ class TelemetryService : Service() {
      */
     fun onScreenStateChanged(isScreenOn: Boolean) {
         if (SessionPolicy.shouldHoldWakeLock(sessionState, isScreenOn)) {
+            wantsWakeLock = true
             acquireWakeLock()
+            scheduleWakeLockReacquire()
         } else {
+            wantsWakeLock = false
+            mainHandler.removeCallbacks(reacquireRunnable)
             releaseWakeLock()
         }
     }
@@ -106,6 +146,27 @@ class TelemetryService : Service() {
         }
     }
 
+    /**
+     * Re-acquire the lock before the [WAKE_LOCK_TIMEOUT_MS] safety-net expires, so a
+     * long screen-off session (e.g. an overnight crossing) keeps the CPU awake and the
+     * WebSocket alive. The timeout still bounds a leaked acquire — if the session ends,
+     * [onScreenStateChanged]/[onDestroy] clears [wantsWakeLock] and cancels the loop.
+     */
+    private fun scheduleWakeLockReacquire() {
+        mainHandler.removeCallbacks(reacquireRunnable)
+        mainHandler.postDelayed(reacquireRunnable, WAKE_LOCK_REACQUIRE_MS)
+    }
+
+    private val reacquireRunnable = Runnable {
+        if (wantsWakeLock) {
+            // Refresh the timeout: release the still-held lock first so acquireWakeLock
+            // (guarded on isHeld) actually takes a fresh one with a full timeout window.
+            releaseWakeLock()
+            acquireWakeLock()
+            scheduleWakeLockReacquire()
+        }
+    }
+
     private fun releaseWakeLock() {
         wakeLock?.let { lock ->
             if (lock.isHeld) lock.release()
@@ -114,7 +175,9 @@ class TelemetryService : Service() {
     }
 
     override fun onDestroy() {
-        sessionState = SessionState.STOPPED
+        sessionState = SessionPolicy.nextState(SessionEvent.STOPPED)
+        wantsWakeLock = false
+        mainHandler.removeCallbacks(reacquireRunnable)
         releaseWakeLock()
         // Tear down the externally-owned session resources exactly once.
         val cleanup = onSessionStopped
@@ -124,26 +187,21 @@ class TelemetryService : Service() {
         } catch (e: RuntimeException) {
             // Never let a cleanup failure prevent the service from finishing teardown.
             Log.e(TAG, "Session cleanup failed", e)
+        } finally {
+            // super.onDestroy() must run even if cleanup throws an Error/Throwable,
+            // otherwise the service finishes uncleanly.
+            super.onDestroy()
         }
-        super.onDestroy()
     }
 
-    private fun buildNotification(statusText: String): Notification {
-        ensureChannel()
-        val contentIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-        return Notification.Builder(this, CHANNEL_ID)
+    private fun buildNotification(statusText: String): Notification =
+        Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.session_notification_title))
             .setContentText(statusText)
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentIntent(contentIntent)
             .setOngoing(true)
             .build()
-    }
 
     private fun ensureChannel() {
         val channel = NotificationChannel(
@@ -151,29 +209,37 @@ class TelemetryService : Service() {
             getString(R.string.session_notification_channel),
             NotificationManager.IMPORTANCE_LOW,
         ).apply { setShowBadge(false) }
-        notificationManager().createNotificationChannel(channel)
+        notificationManager.createNotificationChannel(channel)
     }
-
-    private fun notificationManager(): NotificationManager =
-        getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     companion object {
         private const val TAG = "TelemetryService"
         private const val CHANNEL_ID = "telemetry_session"
         private const val NOTIFICATION_ID = 1
+        private const val PENDING_INTENT_REQUEST_CODE = 0
         private const val WAKE_LOCK_TAG = "kayak:telemetry-session"
         private const val STATUS_STARTING = "Starting session…"
 
         /**
          * Safety net so a crashed/leaked acquire cannot drain the battery forever; a
          * real session releases the lock far sooner via [onScreenStateChanged] /
-         * [onDestroy]. Long enough to cover a typical on-water session.
+         * [onDestroy]. While the session legitimately needs it, the lock is re-acquired
+         * before this expires (see [scheduleWakeLockReacquire]).
          */
         private const val WAKE_LOCK_TIMEOUT_MS = 4L * 60 * 60 * 1000
 
+        /**
+         * Re-acquire interval, comfortably shorter than [WAKE_LOCK_TIMEOUT_MS] so the
+         * lock never lapses during a long screen-off session (overnight crossing).
+         */
+        private const val WAKE_LOCK_REACQUIRE_MS = 3L * 60 * 60 * 1000
+
+        /** Intent addressing this service; used for start/stop/bind. */
+        fun intent(context: Context): Intent = Intent(context, TelemetryService::class.java)
+
         /** Start the service in the foreground with the connected-device type. */
         fun start(context: Context) {
-            val intent = Intent(context, TelemetryService::class.java)
+            val intent = intent(context)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -183,7 +249,7 @@ class TelemetryService : Service() {
 
         /** Stop the service, triggering full cleanup in [onDestroy]. */
         fun stop(context: Context) {
-            context.stopService(Intent(context, TelemetryService::class.java))
+            context.stopService(intent(context))
         }
     }
 }

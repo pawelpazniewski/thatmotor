@@ -40,6 +40,8 @@ class TelemetryViewModel(
     private val commandSender: CommandSender,
 ) : ViewModel() {
 
+    private var isSessionStopped = false
+
     init {
         source.start()
     }
@@ -119,8 +121,19 @@ class TelemetryViewModel(
         _feedback.value = null
     }
 
-    override fun onCleared() {
+    /**
+     * Stop the telemetry source. Idempotent — the foreground service's `onSessionStopped`
+     * hook and [onCleared] may both fire, but the source is stopped exactly once
+     * (coding-rules pkt 13 — no dangling collectors).
+     */
+    fun stopSession() {
+        if (isSessionStopped) return
+        isSessionStopped = true
         source.stop()
+    }
+
+    override fun onCleared() {
+        stopSession()
         super.onCleared()
     }
 

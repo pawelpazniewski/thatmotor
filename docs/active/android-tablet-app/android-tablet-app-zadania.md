@@ -244,6 +244,32 @@ statyczna (brak JDK/Gradle/Android SDK — testów JVM/buildu nie uruchomiono). 
 - [x] Test: `SessionPolicyTest.kt` (JVM) — keep-screen-on, wake-lock matrix (oracle: off+active=true, on=false, stopped=false), mapowanie statusu notyfikacji per faza
 - [ ] Weryfikacja: ekran nie gaśnie na ekranie nawigacji; telemetria przeżywa tło→powrót; brak wiszących callbacków/wake locków po wyjściu z sesji
 
+### Do poprawy po review fazy 5
+
+Severity gate (cykl 0): ⛔ WYMAGA POPRAWEK (1×P1, 6×P2, 7×P3). Rdzeń `SessionPolicy` czysty
+i z mocą wyroczni (macierz wake locka 2×2 + status notyfikacji per faza). Adapter HAL poprawnie
+zwalnia zasoby (release przed cleanup w onDestroy, setReferenceCounted(false), guardy API). BLOKER:
+cały Unit 10 to dead code — serwis niewpięty w lifecycle Activity. Pełny raport: `review-faza-5.md`.
+Build/testy JVM/E2E: N/A (brak JDK/Gradle/Android SDK/emulatora — analiza statyczna).
+
+Severity gate (cykl 1): wszystkie 1×P1 + 6×P2 (4×KOD + 1×KONFIG + 1×TEST) ROZWIĄZANE.
+Weryfikacja statyczna (brak JDK/Gradle/Android SDK — testów JVM/buildu nie uruchomiono).
+
+- [x] 🔴 [blocking] **MainActivity.kt + TelemetryService.kt:36** — serwis wpięty w cykl życia Activity: `onStart` → `TelemetryService.start` + `bindService`; `onServiceConnected` ustawia `onSessionStopped = { viewModel.stopSession(); apConnectionManager.disconnect() }` (repo.stop + unregisterNetworkCallback + bindProcessToNetwork(null)) i przekazuje screen-on; `onStop` → `onScreenStateChanged(false)` (wake lock w tle) + unbind; `onDestroy` (isFinishing) → `TelemetryService.stop`. `SessionState` sterowany czystą `SessionPolicy.nextState(SessionEvent)`, nie hardcoded ACTIVE. POST_NOTIFICATIONS request na API≥33. ViewModel pozostaje HAL-free (AP teardown w Activity).
+- [x] 🟠 [important] **AndroidManifest.xml** — dodane `POST_NOTIFICATIONS`; runtime request w `MainActivity.requestNotificationPermissionIfNeeded()` na API≥33.
+- [x] 🟠 [important] **TelemetryService.kt:82-85** — `updateStatus` z dedupingiem: early return gdy `statusText == lastStatusText` oraz gdy `!SessionPolicy.shouldUpdateStatus(sessionState)`.
+- [x] 🟠 [important] **TelemetryService.kt:131-138,148-155** — kanał tworzony raz w `onCreate` (`ensureChannel`); `contentIntent` + `notificationManager` jako `by lazy` (raz). `buildNotification` już nie rebuilduje.
+- [x] 🟠 [important] **TelemetryService.kt:100-107,172** — wake lock z re-acquire: `scheduleWakeLockReacquire` co 3h (przed 4h timeoutem) release→acquire; `wantsWakeLock` flaga, callbacki kasowane w `onScreenStateChanged(off)`/`onDestroy`.
+- [x] 🟠 [important] **TelemetryService.kt:122-128** — `super.onDestroy()` przeniesione do `finally`; cleanup nadal w try/catch(RuntimeException) z logiem.
+- [x] 🟠 [important] **TelemetryService.kt:59-64,83 (TEST)** — wyekstrahowane `SessionPolicy.nextState(SessionEvent)` + `shouldUpdateStatus(SessionState)`; pokryte testami w `SessionPolicyTest` (started→ACTIVE, stopped→STOPPED z wyrocznią, updateStatus tylko gdy ACTIVE).
+- [ ] 🟡 [nit] **AndroidManifest.xml:22** — `allowBackup="true"`; rozważyć `false`/`dataExtractionRules`.
+- [ ] 🟡 [nit] **SessionPolicy.kt:29,8** — martwe KDoc-linki `[SessionService]`→`[TelemetryService]`, `[android.app.Activity]`→`[MainActivity]`.
+- [ ] 🟡 [nit] **SessionPolicy.kt:48-51** — `SessionState` jako drugi top-level eksport; wydzielić do `session/SessionState.kt`.
+- [ ] 🟡 [nit] **SessionPolicy.kt:39-44** — user-facing stringi w czystej warstwie; zwracać `@StringRes`/enum, mapować w adapterze.
+- [ ] 🟡 [nit] **TelemetryService.kt:163,135** — request code `0` w `getActivity` gołe; spójniej nazwać stałe.
+- [ ] 🟡 [nit] **TelemetryService.kt:59-64** — restart START_STICKY (intent==null) udaje aktywną sesję bez hooka; po naprawie P1 zweryfikować re-bind lub `START_REDELIVER_INTENT`/`stopSelf()`.
+- [ ] 🟡 [nit] **SessionPolicyTest.kt:52-59** — test `live and stale differ` redundantny wobec asercji równości (46-49); nieszkodliwy.
+
 ---
 
 ## Postęp

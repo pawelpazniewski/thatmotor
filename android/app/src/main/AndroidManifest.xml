@@ -17,6 +17,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <!-- PARTIAL_WAKE_LOCK while the screen is off (Unit 10). -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Show the foreground-service notification (the link-down indicator) on API 33+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"

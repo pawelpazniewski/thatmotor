@@ -57,4 +57,30 @@ class SessionPolicyTest {
                 SessionPolicy.notificationStatusFor(ConnectionState.Stale),
         )
     }
+
+    @Test
+    fun `started event activates the session`() {
+        // onStartCommand transition: STOPPED/initial -> ACTIVE.
+        assertEquals(SessionState.ACTIVE, SessionPolicy.nextState(SessionEvent.STARTED))
+    }
+
+    @Test
+    fun `stopped event ends the session`() {
+        // onDestroy transition: ACTIVE -> STOPPED.
+        // Oracle: a reducer that always returned ACTIVE would fail here.
+        assertEquals(SessionState.STOPPED, SessionPolicy.nextState(SessionEvent.STOPPED))
+    }
+
+    @Test
+    fun `status updates only while the session is active`() {
+        // The foreground notification exists only while ACTIVE; updating after stop
+        // would resurrect a torn-down notification.
+        assertTrue(SessionPolicy.shouldUpdateStatus(SessionState.ACTIVE))
+    }
+
+    @Test
+    fun `no status updates once the session is stopped`() {
+        // Oracle: a guard that always allowed updates would fail this case.
+        assertFalse(SessionPolicy.shouldUpdateStatus(SessionState.STOPPED))
+    }
 }
