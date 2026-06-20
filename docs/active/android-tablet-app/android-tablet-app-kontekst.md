@@ -293,6 +293,52 @@ cienka warstwa prezentacji bez decyzji.
   `lifecycle-runtime-compose`, `.entries` zgodne z konwencją, brak `any`/`!!`/`as`, discriminated unions,
   zero pustych catch.
 
+## Review Fazy 3 (cykl 0, 2026-06-20)
+
+Multi-agent (security/performance/architecture/test) + ręczna weryfikacja kluczowych
+findingów. Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI — 0×P1, 8×P2, 7×P3. E2E: N/A
+(brak emulatora/przeglądarki). Raport: `review-faza-3.md`; checkboxy: `…-zadania.md`
+(„Do poprawy po review fazy 3").
+
+Kluczowe wnioski:
+- WYMÓG Z BRIEFU SPEŁNIONY: `SafetyIndicators.linkDown` zależy WYŁĄCZNIE od
+  `ConnectionState` (obie ścieżki noFrame/z-ramką), mocny test wyroczni (zdrowa ramka +
+  Stale → linkDown=true). Komendy veto przy `connection != Live`/`frame == null`/
+  nieznanym kodzie/ESC_CALIBRATION. DEPLOY/STOW za dialogiem. Mock TYLKO `CommandSender`.
+- 8×P2 do naprawy: 4×KOD — (1) ViewModel ręcznie jako pole Activity, nie przeżyje
+  config change → `viewModels{factory}`; (2) `sendCommand` nie re-waliduje `availability`
+  → okno dialog→klik, dodać guard `isEnabled()`; (3) brak guardu in-flight (double-send);
+  (4) cały ekran rekomponuje 10×/s (monolityczny State) → pochodne StateFlow/deferred
+  reads. 4×TEST — nieprzetestowane poprawne gałęzie `when`: ESC_CALIBRATION, nieznany kod
+  (availability + indicators), `ConnectionState.Connecting`, komunikaty sukcesu DEPLOY/
+  DISARM/STOW.
+- Brak odchyleń od planu (wszystkie pliki Unit 6/7 + testy istnieją). Pure ⊥ HAL
+  utrzymane, brak `any`/`as`/`!!`, graf warstw acykliczny (domain ← ui, ui → net seam).
+
+## Re-review Fazy 3 po naprawie 8×P2 (2026-06-20, cykl 1)
+
+Re-review po commicie `df10ae3`. Severity gate: ✅ **CZYSTE** — 0×P1, 0×P2, 7×P3 (nity).
+Build/testy JVM/E2E: N/A (brak JDK/Gradle/Android SDK — analiza statyczna).
+
+Kluczowe wnioski:
+- **8/8 P2 ROZWIĄZANE** realnie (poprawa kodu + testy z mocą wyroczni). KOD: (1)
+  `viewModels{TelemetryViewModelFactory()}` + start w `init`/stop w `onCleared`; (2)
+  `sendCommand` re-waliduje `availability` ze świeżego `source.state.value`, publikuje
+  `Rejected`; (3) guard `isSending` (no-op gdy in-flight, `finally` zwalnia, bar `!isSending`);
+  (4) 4 slice'y `map.distinctUntilChanged.stateIn` + sekcje ekranu → 10 Hz dotyka tylko
+  GPS/Compass. TEST: ESC_CALIBRATION/unknown(99)/Connecting w availability i indicators +
+  successMessage DEPLOY/DISARM/STOW.
+- **BRAK test weakening w `TelemetryViewModelTest.kt`** — zmiana to adaptacja do nowego
+  kontraktu (seam `TelemetrySource` + guard re-walidacji), nie obejście. Stare asercje
+  zachowane; dodane 2 testy z realną wyrocznią (`lastCommand == null` po veto na Stale;
+  `callCount == 1` przy double-tap z `GatedCommandSender`). Mockowane TYLKO seamy zewnętrzne.
+- **Brak regresji po seam + Factory:** ViewModel zależy od interfejsu `TelemetrySource`
+  (nie konkretnego repo), `TelemetryRepository : TelemetrySource`, `CommandApi : CommandSender`,
+  graf acykliczny, brak wiszących referencji do usuniętego `by lazy`/pola Activity.
+- Nity P3 (7) świadomie odłożone; m.in. `192.168.4.1` zduplikowany w 3 miejscach. Drobny
+  dead-code candidate: `TelemetryRepository.connection`/`latestFrame` (Flow) nieużywane
+  przez ViewModel — nie błąd, nie regresja.
+
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md
 - Plan techniczny: docs/plans/2026-06-20-001-feat-android-tablet-app-plan.md
