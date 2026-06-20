@@ -25,6 +25,9 @@ WiFi (WPA2 SoftAP) do podglądu live i strojenia.
   komendy arm/disarm/deploy/stow, kalibracja neutralu serwa, diagnostyka RC.
 - **Sygnalizacja LED** (GPIO2) — osobny wzór dla każdego stanu.
 - **CH3** — nasłuch pod przyszły *spot lock* (na razie tylko podgląd w telemetrii).
+- **GPS** (u-blox NEO-M9N, UART/NMEA) i **kompas** (BNO085, I2C/SHTP rotation vector) — pozycja, prędkość
+  i kurs w telemetrii panelu. **Ściśle poza failsafe** (osobne taski, tylko podgląd — zero wpływu na
+  uzbrojenie/sterowanie), pod przyszły Spot-Lock.
 
 ---
 
@@ -41,8 +44,15 @@ WiFi (WPA2 SoftAP) do podglądu live i strojenia.
 | 18 | wyjście (LEDC 50 Hz) | serwo skrętu |
 | 19 | wyjście (LEDC 50 Hz) | ESC (WP880) |
 | 2 | wyjście | LED statusu |
+| 16 | wejście (UART1 RX) | GPS TXD (NEO-M9N, 38400) — poza failsafe |
+| 17 | wyjście (UART1 TX) | GPS RXD (konfiguracja, opcjonalnie) |
+| 21 | I2C SDA | BNO085 (adres 0x4A) — poza failsafe |
+| 22 | I2C SCL | BNO085 |
+| 23 | wejście | BNO085 INT (data-ready) |
+| 25 | wyjście | BNO085 RST |
 
-**Wymagana wspólna masa** odbiornik ↔ ESP32 ↔ ESC.
+**Wymagana wspólna masa** odbiornik ↔ ESP32 ↔ ESC ↔ GPS ↔ kompas.
+**GPS** zasilaj **5 V** (ma regulator), **BNO085** koniecznie **3,3 V** (max 3,6 V), PS0/PS1 i ADO → GND.
 
 > **Krytyczne (sprzęt, nie firmware):** w oknie martwym boot/reset/brownout piny są Hi-Z. Realna
 > gwarancja bezpieczeństwa to **pull-downy ~10 kΩ na GPIO18/19** + własny failsafe ESC przy utracie sygnału.
@@ -76,6 +86,8 @@ components/
   control_loop/   loop_step (pure rdzeń) + control_loop (HAL/timing, single-writer SI-6)
   web_panel/      wifi_ap, http_server, ws_telemetry, params_api, command_parse, api_contract
   led_status/     led_pattern (pure) + led_driver (HAL)
+  gps/            nmea_parse (pure) + gps_reader (UART HAL, osobny task) — poza failsafe
+  imu/            quat_to_yaw (pure) + bno085 (I2C/SHTP HAL, osobny task) — poza failsafe
 web/              index.html, app.js, style.css (embed w flash)
 ```
 
@@ -101,8 +113,8 @@ idf.py -p /dev/ttyUSB0 flash monitor      # podstaw swój port
 ./test/host/run.sh
 ```
 
-Host-testy pokrywają całą logikę pure (≈280 testów Unity): clamp, łańcuchy sygnału, maszyna stanów,
-walidacja/CRC NVS, click-counter, kalibracja, wzory LED.
+Host-testy pokrywają całą logikę pure (**289 testów Unity**): clamp, łańcuchy sygnału, maszyna stanów,
+walidacja/CRC NVS, click-counter, kalibracja, wzory LED, parser NMEA (GPS), konwersja kwaternion→kurs (kompas).
 
 ---
 
@@ -112,6 +124,8 @@ Po boocie ESP32 stawia SoftAP **WPA2** (SSID/hasło z `menuconfig` → `CONFIG_K
 Połącz się i wejdź na **`http://192.168.4.1`**:
 
 - **Live**: stan, CH1/CH2/CH3/CH4, wyjścia serwo/ESC, flagi R16, diagnostyka RC (okres + ważność per kanał).
+- **GPS**: Fix / Sats / Lat / Lon / Speed (diagnostyka, poza failsafe).
+- **Compass (BNO085)**: Heading / Calib (0–3) / OK (diagnostyka, poza failsafe).
 - **Commands**: Arm / Disarm / Deploy / Stow (z wynikiem i powodem blokady uzbrojenia).
 - **Parameters**: edycja w DISARMED, zapis do NVS (live + read-back).
 - **Servo neutral calibration**: Step Left / Step Right / Save (kalibracja zera serwa).
@@ -153,7 +167,8 @@ postój przy zmianie kierunku **400 ms**, próg CH4 **1500 µs**, okno kliknię�
 ## Roadmap
 
 - **Monitor napięcia LiFePO4** (dzielnik + ADC, alarm w panelu).
-- **Spot-Lock / AutoPilot** — wymaga silnika ciągłego z enkoderem + kompasu + GPS (CH3 już nasłuchiwany).
+- **Spot-Lock / AutoPilot** — GPS i kompas już nasłuchiwane (podgląd w panelu); pozostaje pętla nawigacji
+  + silnik ciągły z enkoderem. CH3 jako przełącznik trybu.
 - **Sterowanie wentylatorem** (czujnik temp + MOSFET / standalone termostat).
 
 ---

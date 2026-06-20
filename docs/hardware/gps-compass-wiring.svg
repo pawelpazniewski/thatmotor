@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="980" viewBox="0 0 1000 980" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="1000" height="980" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="500" y="42" text-anchor="middle" font-size="26" font-weight="bold" fill="#1a1a1a">Podłączenie GPS + kompas → ESP32 (kabel RJ45, kolory T568B)</text>
+  <text x="500" y="68" text-anchor="middle" font-size="14" fill="#666">Tylko odbiór danych (poza failsafe). Wspólna masa. GPS = 5 V, kompas = 3,3 V.</text>
+
+  <!-- ============ GPS BOX ============ -->
+  <rect x="70" y="120" width="180" height="135" rx="8" fill="#F4F6F8" stroke="#333" stroke-width="1.5"/>
+  <text x="80" y="146" font-size="16" font-weight="bold" fill="#1a1a1a">GPS — NEO-M9N</text>
+  <line x1="70" y1="156" x2="250" y2="156" stroke="#ccc" stroke-width="1"/>
+  <text x="242" y="184" text-anchor="end" font-size="14" fill="#222">VDL (5 V)</text>
+  <text x="242" y="214" text-anchor="end" font-size="14" fill="#222">TXD</text>
+  <text x="242" y="244" text-anchor="end" font-size="14" fill="#222">GND</text>
+  <text x="74" y="276" font-size="12" fill="#a23" font-style="italic">RXD = niepodłączone</text>
+
+  <!-- ============ BNO085 BOX ============ -->
+  <rect x="70" y="340" width="180" height="262" rx="8" fill="#F4F6F8" stroke="#333" stroke-width="1.5"/>
+  <text x="80" y="366" font-size="16" font-weight="bold" fill="#1a1a1a">Kompas — BNO085</text>
+  <line x1="70" y1="376" x2="250" y2="376" stroke="#ccc" stroke-width="1"/>
+  <text x="242" y="404" text-anchor="end" font-size="14" fill="#222">VCC (3,3 V)</text>
+  <text x="242" y="439" text-anchor="end" font-size="14" fill="#222">SCL</text>
+  <text x="242" y="474" text-anchor="end" font-size="14" fill="#222">SDA</text>
+  <text x="242" y="509" text-anchor="end" font-size="14" fill="#222">INT</text>
+  <text x="242" y="544" text-anchor="end" font-size="14" fill="#222">RST</text>
+  <text x="242" y="579" text-anchor="end" font-size="14" fill="#222">GND</text>
+  <text x="74" y="624" font-size="12" fill="#a23" font-style="italic">ADO · PS1 · PS0 → GND (lokalnie)</text>
+  <text x="74" y="640" font-size="12" fill="#a23" font-style="italic">CS = niepodłączone</text>
+
+  <!-- ============ ESP32 BOX ============ -->
+  <rect x="750" y="120" width="190" height="482" rx="8" fill="#EAF2FB" stroke="#1F6FD6" stroke-width="1.8"/>
+  <text x="845" y="146" text-anchor="middle" font-size="18" font-weight="bold" fill="#10468f">ESP32</text>
+  <line x1="750" y1="156" x2="940" y2="156" stroke="#bcd4ef" stroke-width="1"/>
+  <text x="758" y="184" font-size="14" fill="#222">5V</text>
+  <text x="758" y="234" font-size="14" fill="#222">3V3</text>
+  <text x="758" y="294" font-size="14" fill="#222">GPIO16</text>
+  <text x="758" y="354" font-size="14" fill="#222">GPIO21 (SDA)</text>
+  <text x="758" y="414" font-size="14" fill="#222">GPIO22 (SCL)</text>
+  <text x="758" y="474" font-size="14" fill="#222">GPIO23 (INT)</text>
+  <text x="758" y="534" font-size="14" fill="#222">GPIO25 (RST)</text>
+  <text x="758" y="579" font-size="14" fill="#222">GND</text>
+
+  <!-- ============ WIRES ============ -->
+  <!-- 1: GPS VDL -> 5V : orange solid -->
+  <path d="M250,180 C450,180 550,180 750,180" fill="none" stroke="#E8740C" stroke-width="6"/>
+  <!-- 2: GPS TXD -> GPIO16 : white/orange -->
+  <path d="M250,210 C450,210 550,290 750,290" fill="none" stroke="#E8740C" stroke-width="6"/>
+  <path d="M250,210 C450,210 550,290 750,290" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- 3: GPS GND -> GND : white/blue -->
+  <path d="M250,240 C450,240 560,575 750,575" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <path d="M250,240 C450,240 560,575 750,575" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- 4: BNO VCC -> 3V3 : green solid -->
+  <path d="M250,400 C450,400 550,230 750,230" fill="none" stroke="#2E9E3F" stroke-width="6"/>
+  <!-- 5: BNO SCL -> GPIO22 : white/green -->
+  <path d="M250,435 C450,435 550,410 750,410" fill="none" stroke="#2E9E3F" stroke-width="6"/>
+  <path d="M250,435 C450,435 550,410 750,410" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- 6: BNO SDA -> GPIO21 : blue solid -->
+  <path d="M250,470 C450,470 550,350 750,350" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <!-- 7: BNO INT -> GPIO23 : white/brown -->
+  <path d="M250,505 C450,505 550,470 750,470" fill="none" stroke="#6B4A2F" stroke-width="6"/>
+  <path d="M250,505 C450,505 550,470 750,470" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- 8: BNO RST -> GPIO25 : brown solid -->
+  <path d="M250,540 C450,540 550,530 750,530" fill="none" stroke="#6B4A2F" stroke-width="6"/>
+  <!-- 9: BNO GND -> GND : white/blue (merge) -->
+  <path d="M250,575 C450,575 560,575 750,575" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <path d="M250,575 C450,575 560,575 750,575" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+
+  <!-- connection dots (drawn after wires so they sit on top) -->
+  <g fill="#222">
+    <circle cx="250" cy="180" r="4"/><circle cx="250" cy="210" r="4"/><circle cx="250" cy="240" r="4"/>
+    <circle cx="250" cy="400" r="4"/><circle cx="250" cy="435" r="4"/><circle cx="250" cy="470" r="4"/>
+    <circle cx="250" cy="505" r="4"/><circle cx="250" cy="540" r="4"/><circle cx="250" cy="575" r="4"/>
+    <circle cx="750" cy="180" r="4"/><circle cx="750" cy="230" r="4"/><circle cx="750" cy="290" r="4"/>
+    <circle cx="750" cy="350" r="4"/><circle cx="750" cy="410" r="4"/><circle cx="750" cy="470" r="4"/>
+    <circle cx="750" cy="530" r="4"/><circle cx="750" cy="575" r="4"/>
+  </g>
+
+  <!-- ============ LEGEND ============ -->
+  <text x="70" y="690" font-size="18" font-weight="bold" fill="#1a1a1a">Legenda — kolory żył (T568B)</text>
+  <rect x="70" y="705" width="870" height="245" rx="8" fill="#FAFBFC" stroke="#ccc" stroke-width="1.2"/>
+
+  <!-- header -->
+  <text x="160" y="730" font-size="13" font-weight="bold" fill="#555">Kolor żyły</text>
+  <text x="300" y="730" font-size="13" font-weight="bold" fill="#555">Sygnał</text>
+  <text x="560" y="730" font-size="13" font-weight="bold" fill="#555">Pin czujnika</text>
+  <text x="800" y="730" font-size="13" font-weight="bold" fill="#555">Pin ESP32</text>
+  <line x1="86" y1="740" x2="924" y2="740" stroke="#ddd" stroke-width="1"/>
+
+  <!-- row 1 orange -->
+  <line x1="92" y1="762" x2="172" y2="762" stroke="#E8740C" stroke-width="7"/>
+  <text x="186" y="766" font-size="13" fill="#222">pomarańczowy</text>
+  <text x="300" y="766" font-size="13" fill="#222">5 V (zasilanie GPS)</text>
+  <text x="560" y="766" font-size="13" fill="#222">GPS · VDL</text>
+  <text x="800" y="766" font-size="13" font-weight="bold" fill="#10468f">5V</text>
+
+  <!-- row 2 white/orange -->
+  <line x1="92" y1="789" x2="172" y2="789" stroke="#E8740C" stroke-width="7"/>
+  <line x1="92" y1="789" x2="172" y2="789" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="186" y="793" font-size="13" fill="#222">biało-pomarańczowy</text>
+  <text x="300" y="793" font-size="13" fill="#222">dane GPS (UART TX)</text>
+  <text x="560" y="793" font-size="13" fill="#222">GPS · TXD</text>
+  <text x="800" y="793" font-size="13" font-weight="bold" fill="#10468f">GPIO16</text>
+
+  <!-- row 3 green -->
+  <line x1="92" y1="816" x2="172" y2="816" stroke="#2E9E3F" stroke-width="7"/>
+  <text x="186" y="820" font-size="13" fill="#222">zielony</text>
+  <text x="300" y="820" font-size="13" fill="#222">3,3 V (zasilanie kompasu)</text>
+  <text x="560" y="820" font-size="13" fill="#222">Kompas · VCC</text>
+  <text x="800" y="820" font-size="13" font-weight="bold" fill="#10468f">3V3</text>
+
+  <!-- row 4 white/green -->
+  <line x1="92" y1="843" x2="172" y2="843" stroke="#2E9E3F" stroke-width="7"/>
+  <line x1="92" y1="843" x2="172" y2="843" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="186" y="847" font-size="13" fill="#222">biało-zielony</text>
+  <text x="300" y="847" font-size="13" fill="#222">I2C — zegar</text>
+  <text x="560" y="847" font-size="13" fill="#222">Kompas · SCL</text>
+  <text x="800" y="847" font-size="13" font-weight="bold" fill="#10468f">GPIO22</text>
+
+  <!-- row 5 blue -->
+  <line x1="92" y1="870" x2="172" y2="870" stroke="#1F6FD6" stroke-width="7"/>
+  <text x="186" y="874" font-size="13" fill="#222">niebieski</text>
+  <text x="300" y="874" font-size="13" fill="#222">I2C — dane</text>
+  <text x="560" y="874" font-size="13" fill="#222">Kompas · SDA</text>
+  <text x="800" y="874" font-size="13" font-weight="bold" fill="#10468f">GPIO21</text>
+
+  <!-- row 6 white/brown -->
+  <line x1="92" y1="897" x2="172" y2="897" stroke="#6B4A2F" stroke-width="7"/>
+  <line x1="92" y1="897" x2="172" y2="897" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="186" y="901" font-size="13" fill="#222">biało-brązowy</text>
+  <text x="300" y="901" font-size="13" fill="#222">przerwanie (data-ready)</text>
+  <text x="560" y="901" font-size="13" fill="#222">Kompas · INT</text>
+  <text x="800" y="901" font-size="13" font-weight="bold" fill="#10468f">GPIO23</text>
+
+  <!-- row 7 brown -->
+  <line x1="92" y1="924" x2="172" y2="924" stroke="#6B4A2F" stroke-width="7"/>
+  <text x="186" y="928" font-size="13" fill="#222">brązowy</text>
+  <text x="300" y="928" font-size="13" fill="#222">reset</text>
+  <text x="560" y="928" font-size="13" fill="#222">Kompas · RST</text>
+  <text x="800" y="928" font-size="13" font-weight="bold" fill="#10468f">GPIO25</text>
+
+  <!-- row 8 white/blue (shared GND) -->
+  <line x1="92" y1="951" x2="172" y2="951" stroke="#1F6FD6" stroke-width="7"/>
+  <line x1="92" y1="951" x2="172" y2="951" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="186" y="955" font-size="13" fill="#222">biało-niebieski</text>
+  <text x="300" y="955" font-size="13" fill="#222">masa wspólna</text>
+  <text x="560" y="955" font-size="13" fill="#222">GPS GND + Kompas GND</text>
+  <text x="800" y="955" font-size="13" font-weight="bold" fill="#10468f">GND</text>
+</svg>
