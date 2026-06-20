@@ -1,7 +1,7 @@
 # Zadania: Aplikacja Android (tablet) — v1
 
 Branch: `feature/android-tablet-app`
-Ostatnia aktualizacja: 2026-06-20
+Ostatnia aktualizacja: 2026-06-20 (faza 4)
 
 Legenda: `[ ]` do zrobienia · prefix `Test:` = scenariusz testowy · prefix
 `Weryfikacja:` = kryterium ukończenia. Nakład: S/M/L/XL.
@@ -185,31 +185,31 @@ P3 (opcjonalne):
 ## Faza 4 — Mapa offline
 
 ### Unit 8: Integracja MapLibre + warstwy offline (L)
-- [ ] Stwórz `map/MapLibreView.kt` (`AndroidView` + lifecycle bridge: DisposableEffect + LifecycleEventObserver, przekazanie onStart/onResume/onPause/onStop/onDestroy/onLowMemory)
-- [ ] Stwórz `map/OfflineStyle.kt` (style JSON: `pmtiles://`/`mbtiles://`, `asset://` sprite/glyphs)
-- [ ] Stwórz `map/LayerToggle.kt` (visibility rastra; kolejność `addLayerBelow/Above`)
-- [ ] Stwórz `app/src/main/assets/style/` (style.json, sprite, glyphs)
-- [ ] Atrybucja „© OpenStreetMap" widoczna na mapie
-- [ ] Stwórz test `map/OfflineStyleBuilderTest.kt`
-- [ ] Test: builder stylu produkuje źródła z poprawnymi URI i kolejnością warstw
-- [ ] Test: toggle ustawia `visibility` rastra na VISIBLE/NONE
+- [x] Stwórz `map/MapLibreView.kt` (`AndroidView` + lifecycle bridge: DisposableEffect + LifecycleEventObserver, przekazanie onStart/onResume/onPause/onStop/onDestroy/onLowMemory) — lifecycle przez `MapController`; onLowMemory przez `ComponentCallbacks2` (Lifecycle.Event nie ma low-memory)
+- [x] Stwórz `map/OfflineStyle.kt` (style JSON: `pmtiles://`/`mbtiles://`, `asset://` sprite/glyphs) — czysty `buildOfflineStyleJson` + `MapIds`
+- [x] Stwórz `map/LayerToggle.kt` (visibility rastra; kolejność `addLayerBelow/Above`) — `rasterVisibility` (czysta) + `applyRasterVisible`; kolejność warstw (raster nad wektorem) w builderze stylu
+- [x] Stwórz `app/src/main/assets/style/` (style.json, sprite, glyphs) — style.json referencyjny + README; sprite/glyphs jako generowane binaria (placeholdery + opis w Unit 11)
+- [x] Atrybucja „© OpenStreetMap" widoczna na mapie — `OSM_ATTRIBUTION` wpięta w źródło wektorowe stylu
+- [x] Stwórz test `map/OfflineStyleBuilderTest.kt`
+- [x] Test: builder stylu produkuje źródła z poprawnymi URI i kolejnością warstw
+- [x] Test: toggle ustawia `visibility` rastra na VISIBLE/NONE — `rasterVisibility` oba branche (oracle)
 - [ ] Weryfikacja: (bez internetu) mapa renderuje wektor OSM; toggle ortofoto; brak czarnej mapy po powrocie z tła
 
 ### Unit 9: Marker pozycji łodzi + heading (M)
-- [ ] Stwórz `map/BoatMarker.kt` (GeoJsonSource + SymbolLayer, `iconRotate(get("heading"))`)
-- [ ] Stwórz `map/BoatMarkerProjection.kt` (czysta: frame → (lon,lat,heading); obsługa braku fixa)
-- [ ] Modyfikuj `map/MapLibreView.kt` (podpięcie do StateFlow; guard na nieaktywny styl)
-- [ ] Update tylko `setGeoJson` (async) na wątku UI; opcjonalny tryb „follow"
-- [ ] Stwórz test `map/BoatMarkerProjectionTest.kt`
-- [ ] Test: ramka z fixem → poprawne (lon,lat,heading)
-- [ ] Test: `gps_fix=false` → projekcja sygnalizuje brak pozycji (marker ukryty)
-- [ ] Test: `imu_ok=false` → heading nieznany (brak rotacji), nie 0°
+- [x] Stwórz `map/BoatMarker.kt` (GeoJsonSource + SymbolLayer, `iconRotate(get("heading"))`)
+- [x] Stwórz `map/BoatMarkerProjection.kt` (czysta: frame → (lon,lat,heading); obsługa braku fixa) — `BoatPosition` (Hidden / Positioned z headingDeg nullable)
+- [x] Modyfikuj `map/MapLibreView.kt` (podpięcie do StateFlow; guard na nieaktywny styl) — `latestFrame` param + `MapController.onState`; guard `style == null` przed update markera/rastra
+- [x] Update tylko `setGeoJson` (async) na wątku UI; opcjonalny tryb „follow" — `BoatMarker.update`; `followBoat` → `moveCamera`
+- [x] Stwórz test `map/BoatMarkerProjectionTest.kt`
+- [x] Test: ramka z fixem → poprawne (lon,lat,heading)
+- [x] Test: `gps_fix=false` → projekcja sygnalizuje brak pozycji (marker ukryty)
+- [x] Test: `imu_ok=false` → heading nieznany (brak rotacji), nie 0°
 - [ ] Weryfikacja: na ESP32 marker rusza się wg telemetrii, strzałka wg kompasu, bez lagów przy 10 Hz
 
 ### Unit 11: Pipeline i dokumentacja map offline (M)
-- [ ] Stwórz `android/maps/README.md` (Planetiler OSM→PMTiles dla bbox; Geoportal ORTO WMTS→MBTiles przez GDAL/rio-mbtiles; atrybucja ODbL; asset vs internal storage)
-- [ ] Stwórz `android/maps/` (artefakty/skrypty; duże pliki poza git)
-- [ ] Rate-limit przy pobieraniu WMTS; tylko bbox akwenu
+- [x] Stwórz `android/maps/README.md` (Planetiler OSM→PMTiles dla bbox; Geoportal ORTO WMTS→MBTiles przez GDAL/rio-mbtiles; atrybucja ODbL; asset vs internal storage)
+- [x] Stwórz `android/maps/` (artefakty/skrypty; duże pliki poza git) — katalog z README; `*.pmtiles`/`*.mbtiles` w `.gitignore` (faza 1)
+- [x] Rate-limit przy pobieraniu WMTS; tylko bbox akwenu — sekcja „Rate limiting (mandatory)" + bbox w obu pipeline'ach
 - [ ] Weryfikacja: kroki README produkują archiwa renderowane offline przez Unit 8/9
 
 ---
@@ -228,7 +228,7 @@ P3 (opcjonalne):
 
 ## Postęp
 
-- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ✅ (kod+testy; Weryfikacja na ESP32 do review)  ·  Faza 3: ✅ (kod+testy; Weryfikacja na ESP32/emulatorze do review)  ·  Faza 4: ☐  ·  Faza 5: ☐
+- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ✅ (kod+testy; Weryfikacja na ESP32 do review)  ·  Faza 3: ✅ (kod+testy; Weryfikacja na ESP32/emulatorze do review)  ·  Faza 4: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 5: ☐
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md

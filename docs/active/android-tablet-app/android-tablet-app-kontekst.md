@@ -339,6 +339,48 @@ Kluczowe wnioski:
   dead-code candidate: `TelemetryRepository.connection`/`latestFrame` (Flow) nieużywane
   przez ViewModel — nie błąd, nie regresja.
 
+## Faza 4 — Mapa offline (2026-06-20)
+
+Pakiet `map/` (Unit 8/9) + `android/maps/` (Unit 11). Utrzymana separacja Pure ⊥ HAL:
+decyzje (`buildOfflineStyleJson`, `projectBoatPosition`, `rasterVisibility`) jako czyste
+funkcje testowane na JVM; MapLibre dotykany tylko w cienkich adapterach
+(`MapLibreView`/`MapController`/`BoatMarker`/`LayerToggle`).
+
+Kluczowe decyzje:
+- **Bump MapLibre 11.5.2 → 11.7.0.** Natywne źródła `pmtiles://` w MapLibre Android są
+  wspierane dopiero od 11.7.0 (oficjalne docs: „Starting MapLibre Android 11.7.0…").
+  Faza 1 pinowała 11.5.2 zanim wektor offline trafił do harmonogramu. To nie nowa
+  zależność — korekta pinu istniejącej, żeby spełnić wymóg fazy 4 (odnotowane wprost,
+  zgodnie z coding-rules pkt 8). Wersja widoczna do dalszego bumpu (dostępne do 11.13.5).
+- **Lifecycle bridge:** `MapLibreView` (AndroidView) mostkuje cykl życia przez
+  `DisposableEffect` + `LifecycleEventObserver` (ON_START/RESUME/PAUSE/STOP → MapView),
+  teardown (`onStop`+`onDestroy`) w `onDispose`. `onLowMemory` NIE jest zdarzeniem
+  `Lifecycle.Event` — dostarczane przez `ComponentCallbacks2` zarejestrowany/wyrejestrowany
+  w tym samym `DisposableEffect`. Stan imperatywny trzyma `MapController` (SRP), Composable
+  zostaje deklaratywny.
+- **Style offline:** `pmtiles://asset://maps/osm.pmtiles` (wektor w APK assets),
+  `mbtiles://<filesystem>` (raster ortofoto — MBTiles nie czyta się z asset, Unit 11
+  ekstrahuje do internal storage), `asset://style/sprite|glyphs`. Kolejność warstw:
+  wektor OSM → raster ortofoto NAD wektorem (toggle ON zakrywa wektor) → marker na górze.
+  Raster startuje `visibility:none` (operator włącza). Atrybucja `© OpenStreetMap` wpięta
+  w źródło wektorowe (ODbL).
+- **Marker łodzi:** własny `GeoJsonSource` + `SymbolLayer` (nie LocationComponent),
+  `iconRotate(get("heading"))`. `projectBoatPosition` modeluje dwa niezależne „unknown":
+  brak fixa → `BoatPosition.Hidden` (pusty FeatureCollection, marker zniknięty);
+  fix + `imu_ok=false` → `headingDeg=null` (właściwość `heading` pominięta → brak rotacji,
+  NIE 0° które fałszywie znaczyłoby „na północ"). Update przez `setGeoJson` na wątku UI;
+  `followBoat` → `moveCamera(newLatLng)`.
+- **Pipeline (Unit 11):** `android/maps/README.md` — Planetiler (OSM extract → PMTiles dla
+  bbox), Geoportal ORTO WMTS → MBTiles (GDAL `gdal_translate -of MBTILES` + `gdaladdo`
+  lub `rio mbtiles`). Rate-limit obowiązkowy: tylko bbox akwenu, ograniczona współbieżność,
+  lokalny cache, tiling raz (nie per build). Atrybucja ODbL (OSM) + GUGiK (ortofoto).
+  Archiwa `*.pmtiles`/`*.mbtiles` poza git (faza 1).
+
+Środowisko: brak JDK/Gradle/Android SDK → `./gradlew`/testy JVM nie uruchomione
+(potwierdzone: „Unable to locate a Java Runtime"). Weryfikacja statyczna + review API
+MapLibre 11.7.0 (framework-docs-researcher) + przegląd compile-level (czysto). 12 testów
+host (6 OfflineStyleBuilderTest + 6 BoatMarkerProjectionTest) napisane, nieuruchomione.
+
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md
 - Plan techniczny: docs/plans/2026-06-20-001-feat-android-tablet-app-plan.md

@@ -435,7 +435,7 @@ bezpieczeństwa.
 
 ### Faza 4 — Mapa offline
 
-- [ ] **Unit 8: Integracja MapLibre + warstwy offline**
+- [x] **Unit 8: Integracja MapLibre + warstwy offline**
 
 **Cel:** Osadzić MapLibre w Compose i wyświetlić mapę offline (OSM wektor + ortofoto
 raster) z przełączaniem warstw.
@@ -468,14 +468,14 @@ raster) z przełączaniem warstw.
 guide z researchu.
 
 **Scenariusze testowe:**
-- [Unit] builder stylu produkuje źródła z poprawnymi URI i kolejnością warstw.
-- [Unit] toggle ustawia `visibility` rastra na VISIBLE/NONE.
+- [x] [Unit] builder stylu produkuje źródła z poprawnymi URI i kolejnością warstw.
+- [x] [Unit] toggle ustawia `visibility` rastra na VISIBLE/NONE.
 
 **Weryfikacja:**
 - Na urządzeniu (samolotowy/bez internetu): mapa renderuje wektor OSM; przełącznik
   pokazuje/ukrywa ortofoto; brak czarnej mapy po powrocie z tła.
 
-- [ ] **Unit 9: Marker pozycji łodzi + heading na mapie**
+- [x] **Unit 9: Marker pozycji łodzi + heading na mapie**
 
 **Cel:** Pokazać pozycję łodzi i orientację z telemetrii, aktualizowane ~10 Hz.
 
@@ -499,9 +499,9 @@ guide z researchu.
 - Guard: nie wołać `setGeoJson` na nieaktywnym stylu (race — coding-rules 13).
 
 **Scenariusze testowe:**
-- [Unit] ramka z fixem → poprawne (lon,lat,heading) dla markera.
-- [Unit] `gps_fix=false` → projekcja sygnalizuje brak pozycji (marker ukryty).
-- [Unit] `imu_ok=false` → heading traktowany jako nieznany (np. brak rotacji), nie 0°.
+- [x] [Unit] ramka z fixem → poprawne (lon,lat,heading) dla markera.
+- [x] [Unit] `gps_fix=false` → projekcja sygnalizuje brak pozycji (marker ukryty).
+- [x] [Unit] `imu_ok=false` → heading traktowany jako nieznany (np. brak rotacji), nie 0°.
 
 **Weryfikacja:**
 - Na urządzeniu z ESP32: marker łodzi rusza się zgodnie z telemetrią, strzałka obraca
@@ -540,7 +540,7 @@ guide z researchu.
 - Na urządzeniu: ekran nie gaśnie na ekranie nawigacji; po przełączeniu aplikacji w tło
   i powrocie telemetria nie spadła; po wyjściu z sesji brak wiszących callbacków/wake locków.
 
-- [ ] **Unit 11: Pipeline i dokumentacja map offline**
+- [x] **Unit 11: Pipeline i dokumentacja map offline**
 
 **Cel:** Udokumentować i (skryptowo) ustandaryzować generowanie i wgrywanie kafli
 offline na urządzenie.
