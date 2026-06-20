@@ -30,6 +30,7 @@ Legenda: `[ ]` do zrobienia · prefix `Test:` = scenariusz testowy · prefix
 - [x] Test: `Connected → onLost → Lost`; ponowne `onAvailable → Connected`
 - [x] Test: `onUnavailable → Failed`
 - [ ] Weryfikacja: po wskazaniu SSID ESP32 app → `Connected`; GET do `192.168.4.1` odpowiada mimo braku internetu
+- [ ] Dług cross-phase (zgłoszony w review fazy 5, cykl 2): `ApConnectionManager.connect(ssid, passphrase)` nie jest jeszcze wołany z UI, a `EspHttpClient.build(network=null)` — proces nie jest przypięty do SoftAP, więc teardown AP w Unit 10 jest inertny do czasu wpięcia connect() tutaj. Wpiąć flow wyboru SSID/passphrase + przekazać `boundNetwork`/`socketFactory` do `EspHttpClient.build(...)` na tej samej (MainActivity-owanej) instancji `ApConnectionManager`, na której wisi już teardown hook (forward-compatible).
 
 ### Do poprawy po review fazy 1
 
@@ -269,6 +270,21 @@ Weryfikacja statyczna (brak JDK/Gradle/Android SDK — testów JVM/buildu nie ur
 - [ ] 🟡 [nit] **TelemetryService.kt:163,135** — request code `0` w `getActivity` gołe; spójniej nazwać stałe.
 - [ ] 🟡 [nit] **TelemetryService.kt:59-64** — restart START_STICKY (intent==null) udaje aktywną sesję bez hooka; po naprawie P1 zweryfikować re-bind lub `START_REDELIVER_INTENT`/`stopSelf()`.
 - [ ] 🟡 [nit] **SessionPolicyTest.kt:52-59** — test `live and stale differ` redundantny wobec asercji równości (46-49); nieszkodliwy.
+
+### Re-review po naprawach (cykl 1)
+
+Severity gate (re-review): ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI — P1 + 6×P2 cyklu 0 ROZWIĄZANE
+(zweryfikowane statycznie: serwis realnie wpięty, bind/unbind sparowane, brak wycieku
+ServiceConnection, teardown-once na `isFinishing`, wake lock bez danglingu, ViewModel HAL-free,
+testy z mocą wyroczni). Zero nowych P1. Pozostają 3×P2 + 5×P3. Raport: `review-faza-5.md`.
+Build/testy JVM/E2E: N/A (brak JDK/Gradle/Android SDK — analiza statyczna).
+
+- [~] 🟠 [important] **MainActivity.kt:56-62,79 + TelemetryViewModelFactory.kt** — teardown AP no-op: `ApConnectionManager.connect()` nigdy nie wołany (grep: brak `.connect(`), `EspHttpClient.build(network=null)`. **OCENA cyklu 2: udokumentowane jako znany dług cross-phase Unit 2 (NIE wpięte) — uzasadnienie:** realne wpięcie `connect(ssid,passphrase)` wymaga UI wyboru SSID + wpisania passphrase oraz przekazania `boundNetwork`/`socketFactory` do `EspHttpClient.build(...)`, czyli flow łączenia z `zadania.md:32` (weryfikacja Unit 2 wciąż otwarta) — poza scope Unit 10. Wymuszanie tego teraz byłoby over-engineeringiem ze sztucznymi danymi SSID. Hook teardown jest na właściwej, `MainActivity`-owanej instancji `ApConnectionManager` (forward-compatible — gdy Unit 2 wpięcie `connect()` doda się na tej samej instancji, `disconnect()` zadziała bez zmian w fazie 5). Pozostaje otwarte jako dług **Fazy 1 / Unit 2**.
+- [x] 🟠 [important] **MainActivity.kt:109,120** — wynik `bindService` (Boolean) ignorowany; `unbindService` w `onStop` rzuci `IllegalArgumentException` gdy bind nie powiódł się. ROZWIĄZANE (cykl 2): pole `isBound` ustawiane z wyniku `bindService` w `onStart`; `onStop` unbinduje tylko gdy `isBound` (potem `isBound=false`); `onServiceDisconnected` zeruje `isBound`.
+- [x] 🟠 [important] **MainActivity.kt:128 (TEST)** — decyzja rotacja-vs-wyjście (`isFinishing`) — najryzykowniejszy invariant lifecycle — nieekstrahowana i nietestowana. ROZWIĄZANE (cykl 2): wyekstrahowane `SessionPolicy.shouldTearDownSession(isFinishing)`, wpięte w `MainActivity.onDestroy`; host-test z mocą wyroczni (`isFinishing=true → teardown`; `isFinishing=false`/rotacja → brak teardown — polityka zawsze-true failuje).
+- [ ] 🟡 [nit] **TelemetryService.kt:142,70** — niesprawdzone casty `as PowerManager`/`as NotificationManager`; niespójne z `requireNotNull(getSystemService)` w `MainActivity.kt:58` (pkt 10). Ujednolicić.
+- [ ] 🟡 [nit] **TelemetryService.kt:55,65** — `@Volatile` na `onSessionStopped`/`wantsWakeLock` nadmiarowy (wszystkie dostępy na main thread). Usunąć lub udokumentować.
+- [ ] 🟡 [nit] **MainActivity.kt:102-123** — rotacja (config change) wywołuje `onScreenStateChanged(false)` + ponowny `start()`; benign, rozważyć guard `isChangingConfigurations`.
 
 ---
 

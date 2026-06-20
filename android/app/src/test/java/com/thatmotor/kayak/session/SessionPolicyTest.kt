@@ -83,4 +83,18 @@ class SessionPolicyTest {
         // Oracle: a guard that always allowed updates would fail this case.
         assertFalse(SessionPolicy.shouldUpdateStatus(SessionState.STOPPED))
     }
+
+    @Test
+    fun `a real exit tears down the session`() {
+        // isFinishing == true is a genuine exit: the session must be torn down.
+        assertTrue(SessionPolicy.shouldTearDownSession(isFinishing = true))
+    }
+
+    @Test
+    fun `a configuration change does not tear down the session`() {
+        // Oracle: rotation/split-screen/density also call onDestroy with
+        // isFinishing == false; a policy that always returned true would wrongly kill
+        // the session on every rotation and this assertion would fail.
+        assertFalse(SessionPolicy.shouldTearDownSession(isFinishing = false))
+    }
 }

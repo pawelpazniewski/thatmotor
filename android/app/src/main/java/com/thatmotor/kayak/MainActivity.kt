@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var service: TelemetryService? = null
+    private var isBound: Boolean = false
     private var sessionState: SessionState = SessionState.STOPPED
 
     private val notificationPermissionLauncher =
@@ -84,6 +85,7 @@ class MainActivity : ComponentActivity() {
 
         override fun onServiceDisconnected(name: ComponentName?) {
             service = null
+            isBound = false
         }
     }
 
@@ -105,8 +107,10 @@ class MainActivity : ComponentActivity() {
         applyKeepScreenOn()
         TelemetryService.start(this)
         // Binding is async; the screen-on hand-off happens in onServiceConnected once
-        // the binder is available.
-        bindService(
+        // the binder is available. Track the bind result so onStop only unbinds a
+        // connection that actually registered (a failed bind would otherwise make
+        // unbindService throw IllegalArgumentException).
+        isBound = bindService(
             TelemetryService.intent(this),
             serviceConnection,
             Context.BIND_AUTO_CREATE,
@@ -117,7 +121,10 @@ class MainActivity : ComponentActivity() {
         // Activity backgrounded → screen no longer guaranteed on; hand off keep-alive to
         // the wake lock per SessionPolicy (active + screen off → hold lock).
         service?.onScreenStateChanged(isScreenOn = false)
-        unbindService(serviceConnection)
+        if (isBound) {
+            unbindService(serviceConnection)
+            isBound = false
+        }
         service = null
         super.onStop()
     }
@@ -125,7 +132,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         // A real exit (not a configuration change) ends the session and tears down the
         // foreground service, which triggers onSessionStopped → full cleanup.
-        if (isFinishing) {
+        if (SessionPolicy.shouldTearDownSession(isFinishing)) {
             sessionState = SessionPolicy.nextState(SessionEvent.STOPPED)
             applyKeepScreenOn()
             TelemetryService.stop(this)

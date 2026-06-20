@@ -60,4 +60,14 @@ object SessionPolicy {
      * updating it after stop would resurrect a torn-down notification.
      */
     fun shouldUpdateStatus(session: SessionState): Boolean = session == SessionState.ACTIVE
+
+    /**
+     * Whether the Activity's `onDestroy` should tear the session down. The most
+     * safety-critical lifecycle invariant: a configuration change (rotation,
+     * split-screen, density) also calls `onDestroy`, but the session must survive it —
+     * only a real exit ([isFinishing] == true) ends the session and stops the
+     * foreground service. Extracted from the [TelemetryService] / Activity HAL so the
+     * rotation-vs-exit decision is host-testable (Pure ⊥ HAL).
+     */
+    fun shouldTearDownSession(isFinishing: Boolean): Boolean = isFinishing
 }
