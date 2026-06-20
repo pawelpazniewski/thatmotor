@@ -83,4 +83,33 @@ class SafetyIndicatorsTest {
         assertFalse(indicators.failsafe)
         assertFalse(indicators.uncalibrated)
     }
+
+    @Test
+    fun `an unknown state code leaves failsafe and armed off`() {
+        // Arrange: a state code outside 0..4 — failsafe/armed key off the recognised
+        // MotorState only, so an unknown code must not assert either flag (oracle:
+        // FAILSAFE.code would set failsafe true).
+        val frame = telemetryFrame(state = 99)
+
+        // Act
+        val indicators = safetyIndicators(ConnectionState.Live, frame)
+
+        // Assert
+        assertFalse(indicators.failsafe)
+        assertFalse(indicators.armed)
+        assertFalse(indicators.linkDown)
+    }
+
+    @Test
+    fun `Connecting connection activates linkDown with a healthy frame`() {
+        // Arrange: 4th ConnectionState variant. A healthy DISARMED frame must not
+        // mask the down link — linkDown is driven by ConnectionState alone.
+        val healthyFrame = telemetryFrame(state = MotorState.DISARMED.code, calibrated = true)
+
+        // Act
+        val indicators = safetyIndicators(ConnectionState.Connecting, healthyFrame)
+
+        // Assert: breaks if linkDown only fired on Stale/Disconnected.
+        assertTrue(indicators.linkDown)
+    }
 }

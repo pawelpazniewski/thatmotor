@@ -39,7 +39,6 @@ import com.thatmotor.kayak.ui.theme.OnSurface
  */
 @Composable
 fun TelemetryScreen(viewModel: TelemetryViewModel, modifier: Modifier = Modifier) {
-    val screenState by viewModel.state.collectAsStateWithLifecycle()
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -61,23 +60,46 @@ fun TelemetryScreen(viewModel: TelemetryViewModel, modifier: Modifier = Modifier
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // Each section collects its own deduplicated slice so the 10 Hz frame
+            // stream only recomposes the GPS/Compass cards, not the whole column.
             HeaderRow(connectionBadge = {
-                StatusBadge(connection = screenState.telemetry.connection)
+                val connection by viewModel.connection.collectAsStateWithLifecycle()
+                StatusBadge(connection = connection)
             })
-            SafetyBanner(indicators = screenState.indicators)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                GpsCard(frame = screenState.telemetry.latestFrame, modifier = Modifier.weight(1f))
-                CompassCard(frame = screenState.telemetry.latestFrame, modifier = Modifier.weight(1f))
-            }
-            CommandBar(
-                availability = screenState.availability,
-                onCommand = { command: Command -> viewModel.sendCommand(command) },
-            )
+            SafetyBannerSection(viewModel)
+            FrameCardsSection(viewModel)
+            CommandBarSection(viewModel)
         }
     }
+}
+
+@Composable
+private fun SafetyBannerSection(viewModel: TelemetryViewModel) {
+    val indicators by viewModel.indicators.collectAsStateWithLifecycle()
+    SafetyBanner(indicators = indicators)
+}
+
+@Composable
+private fun FrameCardsSection(viewModel: TelemetryViewModel) {
+    val frame by viewModel.latestFrame.collectAsStateWithLifecycle()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        GpsCard(frame = frame, modifier = Modifier.weight(1f))
+        CompassCard(frame = frame, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun CommandBarSection(viewModel: TelemetryViewModel) {
+    val availability by viewModel.availability.collectAsStateWithLifecycle()
+    val isSending by viewModel.isSending.collectAsStateWithLifecycle()
+    CommandBar(
+        availability = availability,
+        isSending = isSending,
+        onCommand = { command: Command -> viewModel.sendCommand(command) },
+    )
 }
 
 @Composable

@@ -72,4 +72,40 @@ class CommandAvailabilityTest {
         // Assert
         Command.entries.forEach { command -> assertFalse(availability.isEnabled(command)) }
     }
+
+    @Test
+    fun `ESC_CALIBRATION on a live link disables every command`() {
+        // Arrange: calibration is in progress — no operational command may be issued
+        // (oracle: a different branch, e.g. DISARMED, would enable ARM/DEPLOY).
+        val availability = commandAvailability(
+            ConnectionState.Live,
+            telemetryFrame(state = MotorState.ESC_CALIBRATION.code),
+        )
+
+        // Assert
+        Command.entries.forEach { command -> assertFalse(availability.isEnabled(command)) }
+    }
+
+    @Test
+    fun `an unknown state code on a live link disables every command`() {
+        // Arrange: a state the app does not recognise (out of 0..4) must fail safe to
+        // NONE, not fall through to an enabled command.
+        val availability = commandAvailability(ConnectionState.Live, telemetryFrame(state = 99))
+
+        // Assert
+        Command.entries.forEach { command -> assertFalse(availability.isEnabled(command)) }
+    }
+
+    @Test
+    fun `Connecting link disables every command even with a healthy frame`() {
+        // Arrange: 4th ConnectionState variant. A DISARMED frame would enable
+        // ARM/DEPLOY on a Live link; Connecting must veto it (only Live permits).
+        val availability = commandAvailability(
+            ConnectionState.Connecting,
+            telemetryFrame(state = MotorState.DISARMED.code),
+        )
+
+        // Assert
+        Command.entries.forEach { command -> assertFalse(availability.isEnabled(command)) }
+    }
 }

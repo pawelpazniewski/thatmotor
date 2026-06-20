@@ -44,6 +44,36 @@ class CommandActionTest {
     }
 
     @Test
+    fun `deploy success yields the deploy success message`() {
+        // Arrange / Act: success branch is per-command; DEPLOY must not reuse "Armed".
+        val feedback = commandFeedback(Command.DEPLOY, CommandResult.Success)
+
+        // Assert
+        assertTrue(feedback is CommandFeedback.Success)
+        assertEquals("Deployed — motor raised", (feedback as CommandFeedback.Success).message)
+    }
+
+    @Test
+    fun `disarm success yields the disarm success message`() {
+        // Arrange / Act
+        val feedback = commandFeedback(Command.DISARM, CommandResult.Success)
+
+        // Assert
+        assertTrue(feedback is CommandFeedback.Success)
+        assertEquals("Disarmed", (feedback as CommandFeedback.Success).message)
+    }
+
+    @Test
+    fun `stow success yields the stow success message`() {
+        // Arrange / Act
+        val feedback = commandFeedback(Command.STOW, CommandResult.Success)
+
+        // Assert
+        assertTrue(feedback is CommandFeedback.Success)
+        assertEquals("Stowed", (feedback as CommandFeedback.Success).message)
+    }
+
+    @Test
     fun `transport error yields a generic transport feedback`() {
         // Arrange / Act: raw I/O detail must not leak to the operator banner.
         val feedback = commandFeedback(Command.DISARM, CommandResult.TransportError("ECONNREFUSED"))

@@ -26,13 +26,16 @@ import com.thatmotor.kayak.ui.theme.WarnAmber
 
 /**
  * The operational command bar: ARM / DISARM / DEPLOY / STOW. Each button is enabled
- * only when [availability] permits it (e.g. ARM disabled when the link is down).
+ * only when [availability] permits it (e.g. ARM disabled when the link is down) and no
+ * command is already in flight ([isSending]) — disabling the whole bar while a POST is
+ * pending prevents a double-tap from firing parallel commands (coding-rules pkt 13).
  * DEPLOY and STOW move physical hardware, so they go through a confirmation dialog
  * before [onCommand] fires (mirrors the web panel's guarded deploy/stow).
  */
 @Composable
 fun CommandBar(
     availability: CommandAvailability,
+    isSending: Boolean,
     onCommand: (Command) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -44,28 +47,28 @@ fun CommandBar(
     ) {
         CommandButton(
             label = "ARM",
-            enabled = availability.canArm,
+            enabled = availability.canArm && !isSending,
             color = WarnAmber,
             onClick = { onCommand(Command.ARM) },
             modifier = Modifier.weight(1f),
         )
         CommandButton(
             label = "DISARM",
-            enabled = availability.canDisarm,
+            enabled = availability.canDisarm && !isSending,
             color = DangerRed,
             onClick = { onCommand(Command.DISARM) },
             modifier = Modifier.weight(1f),
         )
         CommandButton(
             label = "DEPLOY",
-            enabled = availability.canDeploy,
+            enabled = availability.canDeploy && !isSending,
             color = DeepWater,
             onClick = { pendingConfirm = Command.DEPLOY },
             modifier = Modifier.weight(1f),
         )
         CommandButton(
             label = "STOW",
-            enabled = availability.canStow,
+            enabled = availability.canStow && !isSending,
             color = DeepWater,
             onClick = { pendingConfirm = Command.STOW },
             modifier = Modifier.weight(1f),

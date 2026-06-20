@@ -4,13 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.lifecycleScope
-import com.thatmotor.kayak.net.CommandApi
-import com.thatmotor.kayak.net.EspHttpClient
-import com.thatmotor.kayak.net.TelemetrySocket
-import com.thatmotor.kayak.repository.TelemetryRepository
+import androidx.activity.viewModels
 import com.thatmotor.kayak.ui.TelemetryScreen
 import com.thatmotor.kayak.ui.TelemetryViewModel
+import com.thatmotor.kayak.ui.TelemetryViewModelFactory
 import com.thatmotor.kayak.ui.theme.KayakTabletTheme
 
 /**
@@ -21,30 +18,22 @@ import com.thatmotor.kayak.ui.theme.KayakTabletTheme
  * later). The OkHttp client is built with a null network so it relies on
  * `bindProcessToNetwork`; per-socket pinning is added when the connection layer is
  * integrated. Manual dependency wiring is deliberate — no DI framework for v1.
+ *
+ * The ViewModel is obtained through [viewModels] so it (and its repository, started
+ * once in [TelemetryViewModel.init]) survives configuration changes (rotation /
+ * window resize on a tablet) instead of being torn down and re-`start()`-ed.
  */
 class MainActivity : ComponentActivity() {
 
-    private val httpClient by lazy { EspHttpClient.build(network = null) }
-    private val telemetrySocket by lazy { TelemetrySocket(httpClient) }
-    private val commandApi by lazy { CommandApi(httpClient) }
-    private val repository by lazy {
-        TelemetryRepository(scope = lifecycleScope, socket = telemetrySocket)
-    }
-    private val viewModel by lazy { TelemetryViewModel(repository, commandApi) }
+    private val viewModel: TelemetryViewModel by viewModels { TelemetryViewModelFactory() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        repository.start()
         setContent {
             KayakTabletTheme {
                 TelemetryScreen(viewModel = viewModel)
             }
         }
-    }
-
-    override fun onDestroy() {
-        repository.stop()
-        super.onDestroy()
     }
 }

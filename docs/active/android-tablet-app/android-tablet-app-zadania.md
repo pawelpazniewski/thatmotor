@@ -148,6 +148,38 @@ P3 (opcjonalne):
 - [x] Test: `Rejected(NOT_DISARMED)` → komunikat o odrzuceniu, brak crasha
 - [ ] Weryfikacja: na urządzeniu arm/disarm/deploy/stow działają i raportują odrzucenia
 
+### Do poprawy po review fazy 3
+
+Severity gate (cykl 0): ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (0×P1, 8×P2, 7×P3).
+Brak blokerów. Wymóg z briefu spełniony: `SafetyIndicators.linkDown` zależy WYŁĄCZNIE od
+`ConnectionState` (mocny test wyroczni); komendy veto przy link down; deploy/stow za
+dialogiem; mock TYLKO `CommandSender`. Pełny raport: `review-faza-3.md`. Build/testy JVM/
+Compose preview/E2E: N/A (brak JDK/Gradle/Android SDK/emulatora/przeglądarki).
+
+Severity gate (cykl 1): wszystkie 8×P2 (4×KOD + 4×TEST) ROZWIĄZANE. Weryfikacja
+statyczna (brak JDK/Gradle/Android SDK — testów JVM/buildu nie uruchomiono).
+
+P2 — KOD (rozwiązane w cyklu 1):
+- [x] 🟠 [important] **MainActivity.kt:33** — ViewModel przez `by viewModels { TelemetryViewModelFactory() }`; lifecycle ViewModeli przeżywa configuration change. Wiring zależności w `TelemetryViewModelFactory`; repozytorium startowane w `init` ViewModelu, stop w `onCleared`.
+- [x] 🟠 [important] **TelemetryViewModel.kt** — `sendCommand` re-waliduje availability ze świeżego `source.state.value` (`commandAvailability(...).isEnabled(command)`); jeśli niedostępne → publikuje `Rejected`, nie wysyła. Defense-in-depth dla okna dialog→klik (link spada Live→Stale).
+- [x] 🟠 [important] **CommandBar.kt / TelemetryViewModel.kt** — guard in-flight: `isSending` StateFlow; `sendCommand` no-op gdy in-flight, `finally` zwalnia; bar dezaktywowany (`enabled && !isSending`). Brak równoległych POST.
+- [x] 🟠 [important] **TelemetryScreen.kt** — rozbicie na pochodne StateFlow (`connection`/`indicators`/`availability`/`latestFrame`) z `distinctUntilChanged().stateIn`; ekran rozbity na sekcje czytające osobne slice'y → 10×/s rekomponują tylko karty GPS/Compass.
+
+P2 — TEST (rozwiązane w cyklu 1):
+- [x] 🟠 [important] **CommandAvailabilityTest.kt** — dodane testy: ESC_CALIBRATION → wszystkie komendy off, nieznany kod (99) → off, Connecting → off (każdy z wyrocznią vs zdrowa DISARMED ramka).
+- [x] 🟠 [important] **SafetyIndicatorsTest.kt** — dodany test nieznanego kodu (99, Live) → failsafe=false, armed=false, linkDown=false.
+- [x] 🟠 [important] **SafetyIndicators/CommandAvailability** — dodany wariant `ConnectionState.Connecting` w obu testach (linkDown aktywny / veto wszystkich komend ze zdrową ramką).
+- [x] 🟠 [important] **CommandActionTest.kt** — dodane testy successMessage dla DEPLOY ("Deployed — motor raised"), DISARM ("Disarmed"), STOW ("Stowed").
+
+P3 (opcjonalne):
+- [ ] 🟡 [nit] **CommandBar.kt:91** — `Color` fully-qualified inline zamiast importu.
+- [ ] 🟡 [nit] **CommandFeedback.kt** — pure/host-testowana w pakiecie `ui`; spójniej w `domain`.
+- [ ] 🟡 [nit] **WebPanelLink.kt:14 / CommandApi.kt:37** — `"http://192.168.4.1"` zduplikowany; wspólna stała `EspAp.BASE_URL`.
+- [ ] 🟡 [nit] **GpsCard.kt:33,37 / CompassCard.kt:29** — `String.format` per-rekompozycja na hot-path 10 Hz; `remember(frame)`.
+- [ ] 🟡 [nit] **SafetyBanner.kt:37,62-70** — `activeBanners` alokuje listę w ciele composable; `remember(indicators)`.
+- [ ] 🟡 [nit] **TelemetryScreen.kt:46-50** — `_feedback` może zgubić komunikat przy serii komend; `Channel`/`SharedFlow(replay=0)`.
+- [ ] 🟡 [nit] **CommandFeedback.kt:33 → TelemetryScreen.kt:103** — surowy `message` z firmware bez limitu długości w snackbarze; `take(120)`.
+
 ---
 
 ## Faza 4 — Mapa offline

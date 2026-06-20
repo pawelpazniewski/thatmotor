@@ -48,9 +48,9 @@ class TelemetryRepository(
     private val socket: TelemetrySocket,
     private val staleThresholdMs: Long = DEFAULT_STALE_THRESHOLD_MS,
     private val now: () -> Long = SystemClock::elapsedRealtime,
-) {
+) : TelemetrySource {
     private val _state = MutableStateFlow(TelemetryUiState())
-    val state: StateFlow<TelemetryUiState> = _state.asStateFlow()
+    override val state: StateFlow<TelemetryUiState> = _state.asStateFlow()
 
     /**
      * Connection phase only, deduplicated. Consumers that render just the link
@@ -80,7 +80,7 @@ class TelemetryRepository(
     private var watchdogJob: Job? = null
 
     /** Start collecting frames (with reconnect backoff) and the staleness watchdog. Idempotent. */
-    fun start() {
+    override fun start() {
         if (collectJob?.isActive == true) return
         collectJob = scope.launch {
             var attempt = 0
@@ -97,7 +97,7 @@ class TelemetryRepository(
     }
 
     /** Stop both loops and reset to Disconnected. */
-    fun stop() {
+    override fun stop() {
         collectJob?.cancel()
         watchdogJob?.cancel()
         collectJob = null
