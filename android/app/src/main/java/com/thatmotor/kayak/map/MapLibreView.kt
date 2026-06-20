@@ -73,7 +73,15 @@ private fun MapLifecycle(controller: MapController) {
             override fun onConfigurationChanged(newConfig: Configuration) = Unit
             @Deprecated("required by ComponentCallbacks2") override fun onLowMemory() =
                 controller.onLowMemory()
-            override fun onTrimMemory(level: Int) = controller.onLowMemory()
+
+            // onTrimMemory fires constantly at light levels (UI_HIDDEN, RUNNING_MODERATE);
+            // dumping MapLibre's GL/tile cache then forces a needless reload from MBTiles/
+            // PMTiles on every background trip. Only trim when memory is genuinely low.
+            override fun onTrimMemory(level: Int) {
+                if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+                    controller.onLowMemory()
+                }
+            }
         }
         context.registerComponentCallbacks(memoryCallback)
 

@@ -32,6 +32,31 @@ class BoatMarkerProjectionTest {
     }
 
     @Test
+    fun `a fix in the western southern hemisphere projects negative lon lat`() {
+        // Arrange: 34.6S, 58.4W (Buenos Aires) — both coordinates negative.
+        val frame = telemetryFrame(
+            gpsFix = true,
+            gpsLatE7 = -346000000,
+            gpsLonE7 = -584000000,
+            imuOk = true,
+            imuHeadingDeg10 = 900,
+        )
+
+        // Act
+        val position = projectBoatPosition(frame)
+
+        // Assert: the sign must survive the conversion (oracle: an abs()/clamp would fail).
+        assertTrue(position is BoatPosition.Positioned)
+        position as BoatPosition.Positioned
+        assertEquals(-58.4, position.lon, 1e-9)
+        assertEquals(-34.6, position.lat, 1e-9)
+
+        // And the minus sign must reach the GeoJSON coordinates [lon, lat].
+        val json = boatPositionToGeoJson(position)
+        assertTrue(json.contains("[-58.4,-34.6]"))
+    }
+
+    @Test
     fun `no GPS fix hides the marker`() {
         // Arrange: gps_fix=false — there is no position to draw.
         val frame = telemetryFrame(gpsFix = false)

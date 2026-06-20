@@ -63,9 +63,10 @@ const val OSM_ATTRIBUTION = "© OpenStreetMap contributors"
  */
 fun buildOfflineStyleJson(sources: OfflineStyleSources): String {
     val layers = listOf(
-        vectorLayer(MapIds.VECTOR_LAYER_BACKGROUND, "background-fill"),
-        vectorLayer(MapIds.VECTOR_LAYER_WATER, "water"),
-        vectorLayer(MapIds.VECTOR_LAYER_ROADS, "transportation"),
+        vectorLayer(MapIds.VECTOR_LAYER_BACKGROUND, "background-fill", type = "fill"),
+        vectorLayer(MapIds.VECTOR_LAYER_WATER, "water", type = "fill"),
+        // `transportation` is LineString geometry — a fill layer would render nothing.
+        vectorLayer(MapIds.VECTOR_LAYER_ROADS, "transportation", type = "line"),
         rasterLayer(),
     ).joinToString(",")
 
@@ -92,10 +93,10 @@ fun buildOfflineStyleJson(sources: OfflineStyleSources): String {
     """.trimIndent()
 }
 
-private fun vectorLayer(id: String, sourceLayer: String): String = """
+private fun vectorLayer(id: String, sourceLayer: String, type: String): String = """
     {
       "id": "$id",
-      "type": "fill",
+      "type": "$type",
       "source": "${MapIds.VECTOR_SOURCE}",
       "source-layer": "$sourceLayer"
     }

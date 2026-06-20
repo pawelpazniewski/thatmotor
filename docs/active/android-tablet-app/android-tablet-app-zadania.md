@@ -212,6 +212,25 @@ P3 (opcjonalne):
 - [x] Rate-limit przy pobieraniu WMTS; tylko bbox akwenu — sekcja „Rate limiting (mandatory)" + bbox w obu pipeline'ach
 - [ ] Weryfikacja: kroki README produkują archiwa renderowane offline przez Unit 8/9
 
+### Do poprawy po review fazy 4
+
+Severity gate (cykl 1): wszystkie 6×P2 (4×KOD + 2×TEST) ROZWIĄZANE. Weryfikacja
+statyczna (brak JDK/Gradle/Android SDK — testów JVM/buildu nie uruchomiono). E2E: N/A
+(brak emulatora/SDK). Pełny raport: `review-faza-4.md`.
+
+- [x] 🟠 [important] **map/OfflineStyle.kt:68 (+ style.json:21)** — `vectorLayer` ma parametr `type`; roads = `type:"line"` (source-layer `transportation` to LineString); `style.json` naprawiony; dodany test wyroczni `roads layer is a line layer…` (failuje przy regresji do `fill`)
+- [x] 🟠 [important] **map/MapController.kt:53-63** — dodane strażniki `lastOrtho`/`lastPosition`; `applyRasterVisible`/`boatMarker.update` aplikowane tylko przy realnej zmianie (BoatPosition data class — equals darmowe); resetowane w `destroy()`
+- [x] 🟠 [important] **map/MapController.kt:67** — `recenter` używa `easeCamera(update, 100 ms)` zamiast `moveCamera`; wołane tylko przy zmianie pozycji (strażnik z P2-2)
+- [x] 🟠 [important] **map/MapLibreView.kt:76** — `onTrimMemory` reaguje tylko gdy `level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW`; lekkie poziomy nie zrzucają cache kafli
+- [x] 🟠 [important] **map/MapAssets.kt:31-36 (TEST)** — dodany `MapAssetsTest.kt`: asercje na 4 URI; raster `mbtiles://` + `File(filesDir, …).absolutePath`
+- [x] 🟠 [important] **map/BoatMarkerProjectionTest.kt (TEST)** — dodany boundary case ujemnych lon/lat (Buenos Aires -34.6/-58.4); asercja na minus w `Positioned` i w GeoJSON `[-58.4,-34.6]`
+- [ ] 🟡 [nit] **map/MapController.kt:88-89** — `destroy()` woła redundantny `onStop()` przed `onDestroy()`; zostawić tylko `onDestroy()`
+- [ ] 🟡 [nit] **map/BoatMarkerProjection.kt:58,62 / OfflineStyle.kt:72-92** — komentarz utrwalający założenie, że `Double.toString` jest locale-independent / wartości pochodzą z Int (bezpieczne literały JSON)
+- [ ] 🟡 [nit] **map/BoatMarkerProjection.kt:59-65** — `trimIndent()` w hot-path; jednolinijkowy GeoJSON bez `trimIndent()`
+- [ ] 🟡 [nit] **assets/style/README.md** — dopisać, że ścieżka rastra w referencyjnym `style.json` (`mbtiles://ortho.mbtiles`) jest placeholderem (runtime buduje styl przez `buildOfflineStyleJson`)
+- [ ] 🟡 [nit] **map/MapLibreView.kt:32** — `MapLibreView` nie jest jeszcze wpięty w żaden ekran; upewnić się, że kolejna faza podepnie komponent (inaczej martwy kod)
+- [ ] 🟡 [nit] **map/BoatMarkerProjectionTest.kt (TEST)** — dodać boundary heading-wrap (`imuHeadingDeg10=3599 → 359.9`) oraz przypadek `headingDeg=0.0` w GeoJSON (znane 0 ≠ null)
+
 ---
 
 ## Faza 5 — Utrzymanie sesji
@@ -228,7 +247,7 @@ P3 (opcjonalne):
 
 ## Postęp
 
-- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ✅ (kod+testy; Weryfikacja na ESP32 do review)  ·  Faza 3: ✅ (kod+testy; Weryfikacja na ESP32/emulatorze do review)  ·  Faza 4: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 5: ☐
+- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ✅ (kod+testy; Weryfikacja na ESP32 do review)  ·  Faza 3: ✅ (kod+testy; Weryfikacja na ESP32/emulatorze do review)  ·  Faza 4: ✅ (kod+testy; review: 0×P1, 6×P2, 6×P3 — do poprawy)  ·  Faza 5: ☐
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md

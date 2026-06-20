@@ -25,6 +25,14 @@ class MapController {
     /** Latest state, applied once the style is ready (and re-applied on every update). */
     private var pendingOrtho = false
 
+    /**
+     * Hot-path guards (~10 Hz updates): the last values actually pushed to MapLibre, so we
+     * skip the JNI layer/source mutations when nothing changed. [BoatPosition] is a data
+     * class, so the `equals` comparison is free.
+     */
+    private var lastOrtho: Boolean? = null
+    private var lastPosition: BoatPosition? = null
+
     fun attach(view: MapView) {
         mapView = view
     }
@@ -43,6 +51,7 @@ class MapController {
             val source: GeoJsonSource? = loaded.getSourceAs(MapIds.BOAT_SOURCE)
             boatMarker = source?.let { BoatMarker(it) }
             applyRasterVisible(loaded, pendingOrtho)
+            lastOrtho = pendingOrtho
         }
     }
 
@@ -53,18 +62,30 @@ class MapController {
     fun onState(latestFrame: TelemetryFrame?, showOrtho: Boolean, followBoat: Boolean) {
         pendingOrtho = showOrtho
         val loadedStyle = style ?: return
-        applyRasterVisible(loadedStyle, showOrtho)
+
+        if (showOrtho != lastOrtho) {
+            applyRasterVisible(loadedStyle, showOrtho)
+            lastOrtho = showOrtho
+        }
 
         val position = latestFrame?.let { projectBoatPosition(it) } ?: BoatPosition.Hidden
-        boatMarker?.update(position)
-        if (followBoat && position is BoatPosition.Positioned) {
-            recenter(position)
+        if (position != lastPosition) {
+            boatMarker?.update(position)
+            if (followBoat && position is BoatPosition.Positioned) {
+                recenter(position)
+            }
+            lastPosition = position
         }
     }
 
     private fun recenter(position: BoatPosition.Positioned) {
-        // LatLng is (latitude, longitude); keep zoom/bearing/tilt unchanged.
-        map?.moveCamera(CameraUpdateFactory.newLatLng(LatLng(position.lat, position.lon)))
+        // LatLng is (latitude, longitude); keep zoom/bearing/tilt unchanged. easeCamera (not
+        // moveCamera) animates over ~one frame period so 10 Hz follow glides instead of
+        // teleporting. Only called on a real position change (guarded in onState).
+        map?.easeCamera(
+            CameraUpdateFactory.newLatLng(LatLng(position.lat, position.lon)),
+            CAMERA_EASE_MS,
+        )
     }
 
     fun onLifecycleEvent(event: Lifecycle.Event) {
@@ -91,5 +112,12 @@ class MapController {
         map = null
         style = null
         boatMarker = null
+        lastOrtho = null
+        lastPosition = null
+    }
+
+    private companion object {
+        /** Camera ease duration for follow mode (~one 10 Hz frame period). */
+        const val CAMERA_EASE_MS = 100
     }
 }

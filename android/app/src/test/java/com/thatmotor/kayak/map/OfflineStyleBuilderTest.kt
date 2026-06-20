@@ -51,6 +51,27 @@ class OfflineStyleBuilderTest {
     }
 
     @Test
+    fun `roads layer is a line layer because transportation geometry is linear`() {
+        // Act
+        val json = buildOfflineStyleJson(sources)
+
+        // Assert: the `transportation` source-layer is LineString geometry, so the roads
+        // layer MUST be type "line". Oracle: a regression to "fill" renders no roads and
+        // fails this test. Extract the roads layer object and check its declared type.
+        val roadsAnchor = "\"${MapIds.VECTOR_LAYER_ROADS}\""
+        val roadsIndex = json.indexOf(roadsAnchor)
+        assertTrue("roads layer not found", roadsIndex >= 0)
+        val roadsTypeIndex = json.indexOf("\"type\"", roadsIndex)
+        val nextLayerIndex = json.indexOf("\"id\"", roadsIndex + roadsAnchor.length)
+        val roadsObjectEnd = if (nextLayerIndex >= 0) nextLayerIndex else json.length
+        assertTrue("roads layer has no type", roadsTypeIndex in 0 until roadsObjectEnd)
+        assertTrue(
+            "roads layer must be type line, not fill",
+            json.substring(roadsTypeIndex, roadsObjectEnd).contains("\"line\""),
+        )
+    }
+
+    @Test
     fun `raster starts hidden so the operator opts in`() {
         // Act
         val json = buildOfflineStyleJson(sources)

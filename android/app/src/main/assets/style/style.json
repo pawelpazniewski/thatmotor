@@ -18,7 +18,7 @@
   "layers": [
     { "id": "osm-background", "type": "fill", "source": "osm-vector", "source-layer": "background-fill" },
     { "id": "osm-water", "type": "fill", "source": "osm-vector", "source-layer": "water" },
-    { "id": "osm-roads", "type": "fill", "source": "osm-vector", "source-layer": "transportation" },
+    { "id": "osm-roads", "type": "line", "source": "osm-vector", "source-layer": "transportation" },
     { "id": "ortho", "type": "raster", "source": "ortho-raster", "layout": { "visibility": "none" } }
   ]
 }
