@@ -1,6 +1,7 @@
-package com.thatmotor.kayak.data
+package com.thatmotor.kayak.repository
 
 import android.os.SystemClock
+import com.thatmotor.kayak.data.TelemetryFrame
 import com.thatmotor.kayak.domain.ConnectionState
 import com.thatmotor.kayak.domain.DEFAULT_STALE_THRESHOLD_MS
 import com.thatmotor.kayak.domain.LinkStatus
@@ -10,10 +11,13 @@ import com.thatmotor.kayak.net.TelemetrySocket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -21,6 +25,10 @@ import kotlinx.coroutines.launch
 /**
  * Drives [TelemetryUiState] from the [TelemetrySocket] frame stream, applying the
  * link-down watchdog and a reconnect backoff.
+ *
+ * Orchestration layer (above `net`, which sits above `data`); keeps the package
+ * graph acyclic — `data` holds only DTO models, `net` consumes them, and this
+ * `repository` layer wires `net` to the UI without `data` ever depending on `net`.
  *
  * Thin HAL adapter: the decisions (LIVE/STALE threshold, backoff growth) live in
  * the host-tested pure core ([linkStatus], [reconnectDelayMs]); this class only
@@ -43,6 +51,21 @@ class TelemetryRepository(
 ) {
     private val _state = MutableStateFlow(TelemetryUiState())
     val state: StateFlow<TelemetryUiState> = _state.asStateFlow()
+
+    /**
+     * Connection phase only, deduplicated. Consumers that render just the link
+     * status (e.g. a status badge) collect this so the 10 Hz frame stream does not
+     * trigger a recomposition while the phase is unchanged.
+     */
+    val connection: Flow<ConnectionState> =
+        state.map { it.connection }.distinctUntilChanged()
+
+    /**
+     * Latest frame only, deduplicated by reference. A new frame is a new instance,
+     * so this emits at the frame rate; phase-only changes do not re-emit a frame.
+     */
+    val latestFrame: Flow<TelemetryFrame?> =
+        state.map { it.latestFrame }.distinctUntilChanged()
 
     @Volatile
     private var reconnectPaused = false
@@ -131,10 +154,14 @@ class TelemetryRepository(
     private fun onFrame(frame: TelemetryFrame) {
         lastFrameElapsedMs = now()
         hasFrame = true
-        _state.value = TelemetryUiState(
-            connection = ConnectionState.Live,
-            latestFrame = frame,
-        )
+        // Already Live: only swap the frame so the connection sub-stream stays
+        // deduplicated (no spurious 10 Hz phase emissions). Otherwise promote.
+        val current = _state.value
+        _state.value = if (current.connection == ConnectionState.Live) {
+            current.copy(latestFrame = frame)
+        } else {
+            current.copy(connection = ConnectionState.Live, latestFrame = frame)
+        }
     }
 
     companion object {

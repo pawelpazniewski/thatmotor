@@ -94,6 +94,31 @@ P3 (otwarte, niepriorytetowe):
 - [x] Test: reconnect backoff rośnie i jest ograniczony do max
 - [ ] Weryfikacja: odłączenie ESP32 → link-down < ~1 s; powrót → `Live`
 
+### Do poprawy po review fazy 2
+
+Severity gate (cykl 1): ✅ Wszystkie 6×P2 ROZWIĄZANE (3×KOD + 3×TEST), 8×P3 otwarte (nit).
+Kontrakt 1:1 z firmware zweryfikowany (27 pól, stany, error codes, keywords). Pełny raport:
+`review-faza-2.md`. Walidacja JVM/build: N/A (brak JDK/Gradle/Android SDK — weryfikacja
+statyczna). E2E: N/A (brak UI/web w fazie; brak emulatora/ESP32 — Weryfikacja na sprzęcie).
+
+P2 (rozwiązane w cyklu 1):
+- [x] 🟠 [important] **data/TelemetryRepository.kt:9** — cykl warstw `data ⇄ net`; orkiestracja (`TelemetryRepository`/`TelemetryUiState`) wydzielona do nowego pakietu `repository`, w `data` zostały tylko modele DTO → graf acykliczny (`net → data`, `repository → net/data`).
+- [x] 🟠 [important] **net/TelemetrySocket.kt:33,43** — dodano `.buffer(1, DROP_OLDEST)` (jawna polityka lossy) + wynik `trySend` sprawdzany i logowany (nie połykany).
+- [x] 🟠 [important] **data/TelemetryRepository.kt:131-138** — `onFrame` używa `copy(latestFrame=…)` gdy już Live; dodano rozdzielone strumienie `connection` (`distinctUntilChanged`) vs `latestFrame` → brak 10 emisji/s phase floodu.
+- [x] 🟠 [important] **domain/MotorState.kt:45** — `armReasonFromCode` pokryte testem (`MotorStateTest`): happy path 0→READY, 1..4, error 99→null.
+- [x] 🟠 [important] **data/Command.kt:22-24** — `CommandRequest(Command)` + serializacja pokryte (`CommandTest`): `cmd=="arm"` i JSON `{"cmd":"arm"}`.
+- [x] 🟠 [important] **data/Command.kt:13-18** — zestaw keywords zapięty testem regresji (`CommandTest`) zweryfikowanym wobec `command_parse.c` (arm/disarm/deploy/stow + sprawdzenie kompletu enuma).
+
+P3 (opcjonalne):
+- [ ] 🟡 [nit] **data/TelemetryRepository.kt:111** — `.catch {}` połyka throwable bez logu; zaloguj (coding-rules pkt 4)
+- [ ] 🟡 [nit] **data/TelemetryRepository.kt:68-73** — watchdog `delay`-loop akumuluje drift + tiknie przy `hasFrame=false`; bramkuj do Live lub udokumentuj
+- [ ] 🟡 [nit] **data/TelemetryRepository.kt:97-102** — pauza reconnectu jako poll 250 ms; przejdź na sterowanie sygnałem
+- [ ] 🟡 [nit] **domain/MotorState.kt:39-45** — niespójny wzorzec unknown-code (`MotorStateResult` sealed vs `armReasonFromCode` nullable); ujednolić
+- [ ] 🟡 [nit] **data/TelemetryRepository.kt:115 vs :127** — `ConnectionState.Stale` w dwóch znaczeniach (cisza vs reconnect); rozdziel lub udokumentuj
+- [ ] 🟡 [nit] **data/ApiEnvelopeParseTest.kt:43** — `assertNull(data)` przy fixture `data:null` to tożsamość (słaba wyrocznia na `data`)
+- [ ] 🟡 [nit] **domain/ReconnectBackoff.kt:15-16 / LinkWatchdog.kt:29** — `require(...)` guardy bez testu (boundary)
+- [ ] 🟡 [nit] **net/CommandApi.kt:49** — surowy `IOException.message` w `TransportError`; ogólny komunikat dla UI + pełny log w debug
+
 ---
 
 ## Faza 3 — UI operacyjny
