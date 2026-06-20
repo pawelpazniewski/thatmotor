@@ -4,37 +4,47 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
+import com.thatmotor.kayak.net.CommandApi
+import com.thatmotor.kayak.net.EspHttpClient
+import com.thatmotor.kayak.net.TelemetrySocket
+import com.thatmotor.kayak.repository.TelemetryRepository
+import com.thatmotor.kayak.ui.TelemetryScreen
+import com.thatmotor.kayak.ui.TelemetryViewModel
 import com.thatmotor.kayak.ui.theme.KayakTabletTheme
 
+/**
+ * Hosts the operational [TelemetryScreen].
+ *
+ * Phase 3 wires the telemetry chain against the process-default network (the AP
+ * binding from Unit 2 / the foreground service in Phase 5 supply the bound `Network`
+ * later). The OkHttp client is built with a null network so it relies on
+ * `bindProcessToNetwork`; per-socket pinning is added when the connection layer is
+ * integrated. Manual dependency wiring is deliberate — no DI framework for v1.
+ */
 class MainActivity : ComponentActivity() {
+
+    private val httpClient by lazy { EspHttpClient.build(network = null) }
+    private val telemetrySocket by lazy { TelemetrySocket(httpClient) }
+    private val commandApi by lazy { CommandApi(httpClient) }
+    private val repository by lazy {
+        TelemetryRepository(scope = lifecycleScope, socket = telemetrySocket)
+    }
+    private val viewModel by lazy { TelemetryViewModel(repository, commandApi) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        repository.start()
         setContent {
             KayakTabletTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    PlaceholderScreen(modifier = Modifier.padding(innerPadding))
-                }
+                TelemetryScreen(viewModel = viewModel)
             }
         }
     }
-}
 
-// Phase 1 placeholder: themed empty screen. Replaced by TelemetryScreen in Phase 3.
-@Composable
-private fun PlaceholderScreen(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = "Kayak Tablet")
+    override fun onDestroy() {
+        repository.stop()
+        super.onDestroy()
     }
 }
