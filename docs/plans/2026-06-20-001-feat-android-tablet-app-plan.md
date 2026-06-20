@@ -372,7 +372,7 @@ utraty linku.
 
 ### Faza 3 — UI operacyjny
 
-- [ ] **Unit 6: Ekran telemetrii i wskaźniki bezpieczeństwa**
+- [x] **Unit 6: Ekran telemetrii i wskaźniki bezpieczeństwa**
 
 **Cel:** Compose UI prezentujące stan łodzi, telemetrię i jednoznaczne wskaźniki
 bezpieczeństwa.
@@ -398,15 +398,15 @@ bezpieczeństwa.
 - Prezentacja GPS (fix/sats/lat/lon/speed) i kompasu (heading/calib).
 
 **Scenariusze testowe:**
-- [Unit] `state=FAILSAFE` → wskaźnik failsafe aktywny.
-- [Unit] `ConnectionState.Stale` → linkDown aktywny niezależnie od ostatniej ramki.
-- [Unit] `calibrated=false` → wskaźnik UNCALIBRATED.
+- [x] [Unit] `state=FAILSAFE` → wskaźnik failsafe aktywny.
+- [x] [Unit] `ConnectionState.Stale` → linkDown aktywny niezależnie od ostatniej ramki.
+- [x] [Unit] `calibrated=false` → wskaźnik UNCALIBRATED.
 
 **Weryfikacja:**
 - Na urządzeniu: telemetria odświeża się płynnie; wymuszony failsafe/odłączenie
   pokazują właściwe banery.
 
-- [ ] **Unit 7: Komendy operacyjne (arm/disarm/deploy/stow)**
+- [x] **Unit 7: Komendy operacyjne (arm/disarm/deploy/stow)**
 
 **Cel:** Przyciski komend z obsługą wyniku i odrzuceń.
 
@@ -427,8 +427,8 @@ bezpieczeństwa.
 - Wyłącz przyciski niedostępne w danym stanie (np. arm gdy link down).
 
 **Scenariusze testowe:**
-- [Unit] sukces komendy → komunikat sukcesu, brak błędu.
-- [Unit] `Rejected(NOT_DISARMED)` → komunikat o odrzuceniu, brak crasha.
+- [x] [Unit] sukces komendy → komunikat sukcesu, brak błędu.
+- [x] [Unit] `Rejected(NOT_DISARMED)` → komunikat o odrzuceniu, brak crasha.
 
 **Weryfikacja:**
 - Na urządzeniu: arm/disarm/deploy/stow działają i poprawnie raportują odrzucenia.

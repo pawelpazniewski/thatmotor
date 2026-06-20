@@ -1,7 +1,7 @@
 # Kontekst: Aplikacja Android (tablet) — v1
 
 Branch: `feature/android-tablet-app`
-Ostatnia aktualizacja: 2026-06-21
+Ostatnia aktualizacja: 2026-06-20
 
 ## Kontrakt API ESP32 (źródło prawdy)
 
@@ -191,6 +191,107 @@ Zweryfikowano kontrakt 1:1 z firmware przed implementacją (źródła prawdy):
   i build NIE uruchomione (oczekiwane, nie błąd). Weryfikacja statyczna: API kotlinx
   .serialization/OkHttp/coroutines zgodne z pinowanymi wersjami; brak `any`/`!!`/`as`;
   zgodność pól/typów/jednostek z firmware potwierdzona przez odczyt źródeł.
+
+### Code review Fazy 2 (2026-06-20)
+
+Multi-agent review (security, performance, architecture/type-safety, test coverage).
+E2E browser: N/A — brak UI/web w fazie, brak emulatora/ESP32/JVM. Raport: `review-faza-2.md`.
+Severity gate: ⚠️ ZASTRZEŻENIA (0×P1, 6×P2, 8×P3).
+
+Kluczowe wnioski:
+- Kontrakt z firmware zweryfikowany 1:1 przed review: 27 pól `TelemetryFrame` =
+  `snapshot_to_json`, `MotorState`/`ArmReason` = `sm_state`/`sm_arm_reason` (0..4), error
+  codes = `api_contract`, keywords `Command` = `command_parse.c`. Brak rozjazdu kontraktu.
+- Jakość rdzenia wysoka: Pure ⊥ HAL realne (domain bez `android.*`/`okhttp`/`data`/`net`),
+  zero `!!`/`as`/`Any`, discriminated unions, testy z mocą wyroczni (konwersje, próg
+  watchdoga `>` vs `>=`, cap backoffu — failują bez transformacji), poprawny cleanup
+  `awaitClose`/cancel, bezpieczna deserializacja, brak pustych catch w `net`.
+- 6×P2: (1) cykl warstw `data ⇄ net` — `TelemetryRepository` w `data` importuje `net`
+  (wydzielić orkiestrację do osobnej warstwy); (2) `callbackFlow` bez polityki backpressure
+  i ciche `trySend` (dodać `conflate`/`DROP_OLDEST`); (3) `onFrame` 10 emisji/s →
+  recomposition flood w Fazie 3 (split connection/frame flow); (4-6) 3 luki testowe czystych
+  funkcji/kontraktów: `armReasonFromCode`, `CommandRequest(Command)`+serializacja, zgodność
+  keywords z firmware.
+- Decyzja severity: finding backpressure WS zgłoszony przez performance jako P1, obniżony do
+  P2 — steady-state działa poprawnie (collector non-suspending), nie blokuje, ale wymaga
+  naprawy przed konsumentem UI (Faza 3).
+- Build/testy JVM nie uruchomione (brak JDK/Gradle/SDK) — ograniczenie środowiska, nie finding.
+
+### Re-review Fazy 2 po naprawie 6×P2 (2026-06-20, cykl 1)
+
+Commit naprawczy `a98a661`. Severity gate: ✅ GOTOWE DO KONTYNUACJI (0×P1, 0×P2, 8×P3).
+Wszystkie 6×P2 ZWERYFIKOWANE jako ROZWIĄZANE bez regresji (analiza statyczna; build/testy
+nie uruchomione — brak JDK/Gradle/SDK):
+- KOD-1 cykl `data ⇄ net`: `TelemetryRepository`/`TelemetryUiState` przeniesione do nowego
+  pakietu `repository`. Graf acykliczny (grep): `data` bez importów `net`/`okhttp`/`android`,
+  `domain` pure, `net → data`, `repository → net/data/domain`, brak `net → repository`.
+  Zero martwych referencji do starego pakietu `data.TelemetryRepository`.
+- KOD-2 backpressure WS: `.buffer(1, DROP_OLDEST)` (jawna polityka lossy) + wynik `trySend`
+  sprawdzany/logowany (`isFailure && !isClosed` → `Log.w`), nie połykany.
+- KOD-3 flood 10 Hz: `onFrame` używa `copy(latestFrame)` gdy Live; rozdzielone strumienie
+  `connection` (`distinctUntilChanged`) vs `latestFrame` → brak phase floodu w Fazie 3.
+- TEST-4 `armReasonFromCode`: happy (0→READY, 1..4 map-based) + error (99→null); oracle 1:1
+  z `state_machine.h::sm_arm_reason`.
+- TEST-5 `CommandRequest(Command)`: `cmd=="arm"` + serializacja `{"cmd":"arm"}` (kształt wire).
+- TEST-6 keywords: completeness assert (`Command.entries.toSet()`) zweryfikowany wobec
+  `command_parse.c::COMMAND_TABLE` (arm/disarm/deploy/stow) — moc wyroczni na regresję.
+- Regresje: brak. Czyste rdzenie niezmienione → testy z cyklu 0 zachowują moc wyroczni.
+- 8×P3 przeniesione (świadomie odroczone; ścieżki `TelemetryRepository` → pakiet `repository`).
+  P3 watchdog-drift częściowo złagodzony (`tickWatchdog` guard `if (!hasFrame) return`).
+  Można przejść do Fazy 3.
+
+### Faza 3 — UI operacyjny (kod ukończony 2026-06-20)
+
+Logika decyzyjna jako czyste funkcje testowane na JVM (Pure ⊥ HAL); Compose jako
+cienka warstwa prezentacji bez decyzji.
+
+- **Unit 6 (ekran + wskaźniki):**
+  - `domain/SafetyIndicators.kt` — czysta `safetyIndicators(connection, frame?)` →
+    `SafetyIndicators(linkDown, failsafe, armed, uncalibrated)`. `linkDown` zależy WYŁĄCZNIE
+    od `ConnectionState` (Stale/Connecting/Disconnected → true), więc zamrożona „zdrowa"
+    ramka przy martwym linku nie wygląda bezpiecznie. `failsafe`/`armed` z `motorStateFromCode`
+    (nieznany kod → brak flagi, nie crash). `uncalibrated = !frame.calibrated`. Brak ramki →
+    `noFrame(connection)` (tylko link znany).
+  - `ui/TelemetryViewModel.kt` — `repository.state` → `TelemetryScreenState`
+    (telemetria + wyliczone `indicators` + `availability`) przez `stateIn(WhileSubscribed)`;
+    derywacje liczone raz na ramkę, nie na recomposition.
+  - `ui/TelemetryScreen.kt` + `ui/components/`: `StatusBadge` (LIVE/CONNECTING/STALE/
+    DISCONNECTED, solid high-contrast pill), `InfoCard`+`LabeledValue` (współdzielony
+    scaffold), `GpsCard` (fix/sats/pozycja/prędkość przez konwersje z `TelemetryUnits`),
+    `CompassCard` (heading „—" gdy `imu_ok=false`, nie mylące 0°), `SafetyBanner`
+    (kolejność: FAILSAFE → LINK DOWN → ARMED → UNCALIBRATED; pusty → „DISARMED — drive
+    stopped" SafeGreen), `WebPanelLink` (R8: `http://192.168.4.1` przez `ACTION_VIEW`,
+    `ActivityNotFoundException` logowany nie crash).
+  - Paleta wysokokontrastowa rozszerzona o `SurfaceRaised`/`OnSurfaceMuted` (czytelność w słońcu).
+- **Unit 7 (komendy):**
+  - `domain/CommandAvailability.kt` — czysta `commandAvailability(connection, frame?)`:
+    wszystko wyłączone gdy nie `Live` lub brak ramki (komendy po martwym linku
+    niepotwierdzalne). DISARMED→ARM+DEPLOY; ARMED/FAILSAFE→DISARM; DEPLOY→STOW;
+    ESC_CALIBRATION→nic.
+  - `ui/CommandFeedback.kt` — czysta `commandFeedback(command, CommandResult)` →
+    `Success/Rejected/TransportError`; rejection pokazuje komunikat kontrolera (kontrakt
+    firmware), transport error = ogólny komunikat (surowy detal tylko do logu, pkt 4).
+  - `ui/components/CommandBar.kt` — 4 przyciski (enable wg `availability`); DEPLOY/STOW przez
+    `AlertDialog` potwierdzenia (ruszają sprzętem).
+  - `ui/TelemetryViewModel.sendCommand` → `CommandSender` (nowy `fun interface` w `net`,
+    implementowany przez `CommandApi`) → `_feedback: StateFlow`. Ekran pokazuje feedback w
+    `Snackbar` i czyści przez `dismissFeedback`. Seam `CommandSender` = jedyne zewnętrzne API
+    do fake'owania w testach (pkt 2: mock TYLKO zewnętrznego API).
+  - `MainActivity` — manualne DI (bez frameworka): `EspHttpClient.build(null)` (process-default;
+    bound `Network` z Unit 2/Fazy 5 później) → `TelemetrySocket`/`CommandApi`/`TelemetryRepository`
+    (start w `onCreate`, stop w `onDestroy`) → `TelemetryViewModel` → `TelemetryScreen`.
+- **Testy JVM (czyste rdzenie + ViewModel):** `SafetyIndicatorsTest` (7: failsafe, Stale→linkDown
+  niezależnie od ramki, calibrated true/false, armed, no-frame — oracle power), `CommandAvailabilityTest`
+  (5: per-stan + stale/no-frame veto), `CommandActionTest` (3: success/rejected/transport — czysta
+  `commandFeedback`), `TelemetryViewModelTest` (3: dispatch sukces/odrzucenie/dismiss z `FakeCommandSender`
+  — fake TYLKO zewnętrznego API, repo realne ale niezbierane). Helpery: `telemetryFrame(...)` builder
+  w `TestFixtures.kt` (zdrowe DISARMED defaults; override pola pod testem), `MainDispatcherRule`.
+- **Walidacja Gradle/JVM:** środowisko bez realnego JRE (`java` to stub, „Unable to locate a Java
+  Runtime"), brak Gradle, brak `gradle-wrapper.jar`, brak Android SDK (`ANDROID_HOME` pusty). `./gradlew
+  test`/build NIE uruchomione (oczekiwane, nie błąd). Weryfikacja statyczna: wszystkie symbole theme/
+  domain/ui rozwiązane, `Modifier.weight` w `RowScope`, `collectAsStateWithLifecycle` z dostępnego
+  `lifecycle-runtime-compose`, `.entries` zgodne z konwencją, brak `any`/`!!`/`as`, discriminated unions,
+  zero pustych catch.
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md

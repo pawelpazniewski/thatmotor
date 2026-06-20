@@ -96,10 +96,14 @@ P3 (otwarte, niepriorytetowe):
 
 ### Do poprawy po review fazy 2
 
-Severity gate (cykl 1): ✅ Wszystkie 6×P2 ROZWIĄZANE (3×KOD + 3×TEST), 8×P3 otwarte (nit).
-Kontrakt 1:1 z firmware zweryfikowany (27 pól, stany, error codes, keywords). Pełny raport:
-`review-faza-2.md`. Walidacja JVM/build: N/A (brak JDK/Gradle/Android SDK — weryfikacja
-statyczna). E2E: N/A (brak UI/web w fazie; brak emulatora/ESP32 — Weryfikacja na sprzęcie).
+Severity gate (re-review, cykl 1): ✅ GOTOWE DO KONTYNUACJI (0×P1, 0×P2, 8×P3).
+Wszystkie 6×P2 (3×KOD + 3×TEST) ROZWIĄZANE i ZWERYFIKOWANE bez regresji (commit `a98a661`).
+Graf importów acykliczny po przeniesieniu orkiestracji do pakietu `repository`
+(`data` nie importuje `net`; `net → data`; `repository → net/data/domain`); zero martwych
+referencji do starego pakietu. Kontrakt 1:1 z firmware re-zweryfikowany (keywords
+`command_parse.c`, arm_reason 0..4 `state_machine.h`). Pełny raport: `review-faza-2.md`.
+Walidacja JVM/build: N/A (brak JDK/Gradle/Android SDK — weryfikacja statyczna). E2E: N/A
+(brak UI/web w fazie; brak emulatora/ESP32 — Weryfikacja na sprzęcie).
 
 P2 (rozwiązane w cyklu 1):
 - [x] 🟠 [important] **data/TelemetryRepository.kt:9** — cykl warstw `data ⇄ net`; orkiestracja (`TelemetryRepository`/`TelemetryUiState`) wydzielona do nowego pakietu `repository`, w `data` zostały tylko modele DTO → graf acykliczny (`net → data`, `repository → net/data`).
@@ -124,24 +128,24 @@ P3 (opcjonalne):
 ## Faza 3 — UI operacyjny
 
 ### Unit 6: Ekran telemetrii i wskaźniki bezpieczeństwa (M)
-- [ ] Stwórz `ui/TelemetryViewModel.kt` (zbiera StateFlow z repo)
-- [ ] Stwórz `ui/TelemetryScreen.kt` + `ui/components/` (StatusBadge, GpsCard, CompassCard, SafetyBanner)
-- [ ] Stwórz `domain/SafetyIndicators.kt` (czysta: (ConnectionState, frame) → wskaźniki)
-- [ ] Baner: FAILSAFE / LINK DOWN / ARMED-DISARMED / UNCALIBRATED
-- [ ] Skrót/odnośnik do web panelu (`http://192.168.4.1`) — R8
-- [ ] Stwórz test `domain/SafetyIndicatorsTest.kt`
-- [ ] Test: `state=FAILSAFE` → wskaźnik failsafe aktywny
-- [ ] Test: `ConnectionState.Stale` → linkDown aktywny niezależnie od ostatniej ramki
-- [ ] Test: `calibrated=false` → wskaźnik UNCALIBRATED
+- [x] Stwórz `ui/TelemetryViewModel.kt` (zbiera StateFlow z repo)
+- [x] Stwórz `ui/TelemetryScreen.kt` + `ui/components/` (StatusBadge, GpsCard, CompassCard, SafetyBanner)
+- [x] Stwórz `domain/SafetyIndicators.kt` (czysta: (ConnectionState, frame) → wskaźniki)
+- [x] Baner: FAILSAFE / LINK DOWN / ARMED-DISARMED / UNCALIBRATED
+- [x] Skrót/odnośnik do web panelu (`http://192.168.4.1`) — R8
+- [x] Stwórz test `domain/SafetyIndicatorsTest.kt`
+- [x] Test: `state=FAILSAFE` → wskaźnik failsafe aktywny
+- [x] Test: `ConnectionState.Stale` → linkDown aktywny niezależnie od ostatniej ramki
+- [x] Test: `calibrated=false` → wskaźnik UNCALIBRATED
 - [ ] Weryfikacja: telemetria odświeża się płynnie; failsafe/odłączenie → właściwe banery
 
 ### Unit 7: Komendy operacyjne (arm/disarm/deploy/stow) (S/M)
-- [ ] Modyfikuj `ui/TelemetryViewModel.kt` (akcje komend)
-- [ ] Stwórz `ui/components/CommandBar.kt` (przyciski + potwierdzenie deploy/stow)
-- [ ] Wyłącz przyciski niedostępne w danym stanie (np. arm gdy link down)
-- [ ] Stwórz test `ui/CommandActionTest.kt` (mock TYLKO zewnętrznego API)
-- [ ] Test: sukces komendy → komunikat sukcesu, brak błędu
-- [ ] Test: `Rejected(NOT_DISARMED)` → komunikat o odrzuceniu, brak crasha
+- [x] Modyfikuj `ui/TelemetryViewModel.kt` (akcje komend)
+- [x] Stwórz `ui/components/CommandBar.kt` (przyciski + potwierdzenie deploy/stow)
+- [x] Wyłącz przyciski niedostępne w danym stanie (np. arm gdy link down)
+- [x] Stwórz test `ui/CommandActionTest.kt` (mock TYLKO zewnętrznego API)
+- [x] Test: sukces komendy → komunikat sukcesu, brak błędu
+- [x] Test: `Rejected(NOT_DISARMED)` → komunikat o odrzuceniu, brak crasha
 - [ ] Weryfikacja: na urządzeniu arm/disarm/deploy/stow działają i raportują odrzucenia
 
 ---
@@ -192,7 +196,7 @@ P3 (opcjonalne):
 
 ## Postęp
 
-- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ✅ (kod+testy; Weryfikacja na ESP32 do review)  ·  Faza 3: ☐  ·  Faza 4: ☐  ·  Faza 5: ☐
+- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ✅ (kod+testy; Weryfikacja na ESP32 do review)  ·  Faza 3: ✅ (kod+testy; Weryfikacja na ESP32/emulatorze do review)  ·  Faza 4: ☐  ·  Faza 5: ☐
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md
