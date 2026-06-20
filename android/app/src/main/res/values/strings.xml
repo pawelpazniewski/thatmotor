@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Kayak Tablet</string>
+    <string name="session_notification_channel">Telemetry session</string>
+    <string name="session_notification_title">Kayak telemetry active</string>
 </resources>

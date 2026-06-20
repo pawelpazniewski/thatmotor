@@ -1,7 +1,7 @@
 # Zadania: Aplikacja Android (tablet) — v1
 
 Branch: `feature/android-tablet-app`
-Ostatnia aktualizacja: 2026-06-20 (faza 4)
+Ostatnia aktualizacja: 2026-06-20 (faza 5)
 
 Legenda: `[ ]` do zrobienia · prefix `Test:` = scenariusz testowy · prefix
 `Weryfikacja:` = kryterium ukończenia. Nakład: S/M/L/XL.
@@ -236,18 +236,19 @@ statyczna (brak JDK/Gradle/Android SDK — testów JVM/buildu nie uruchomiono). 
 ## Faza 5 — Utrzymanie sesji
 
 ### Unit 10: Keep-screen-on + foreground service WS (M)
-- [ ] Stwórz `session/TelemetryService.kt` (foreground, `foregroundServiceType="connectedDevice"`, notyfikacja)
-- [ ] Modyfikuj `MainActivity.kt` (`FLAG_KEEP_SCREEN_ON` na oknie ekranu nawigacji)
-- [ ] Modyfikuj `AndroidManifest.xml` (service + typ)
-- [ ] `PARTIAL_WAKE_LOCK` tylko jeśli dropy przy ekranie-off; zwalniaj po sesji
-- [ ] Cleanup: stop service, unregister NetworkCallback, `bindProcessToNetwork(null)`, zwolnienie wake locka
+- [x] Stwórz `session/TelemetryService.kt` (foreground, `foregroundServiceType="connectedDevice"`, notyfikacja) — START_STICKY; `startForeground` z typem CONNECTED_DEVICE (API 30+ guard); kanał IMPORTANCE_LOW; status notyfikacji wg `SessionPolicy.notificationStatusFor`
+- [x] Modyfikuj `MainActivity.kt` (`FLAG_KEEP_SCREEN_ON` na oknie ekranu nawigacji) — flaga sterowana czystą `SessionPolicy.shouldKeepScreenOn`
+- [x] Modyfikuj `AndroidManifest.xml` (service + typ) — `<service .session.TelemetryService exported=false foregroundServiceType=connectedDevice>` + dodane uprawnienie `WAKE_LOCK`
+- [x] `PARTIAL_WAKE_LOCK` tylko jeśli dropy przy ekranie-off; zwalniaj po sesji — `onScreenStateChanged` wg czystej `SessionPolicy.shouldHoldWakeLock(active, !screenOn)`; `setReferenceCounted(false)`; timeout safety-net; zwalniany w `releaseWakeLock`/`onDestroy`
+- [x] Cleanup: stop service, unregister NetworkCallback, `bindProcessToNetwork(null)`, zwolnienie wake locka — `onDestroy`: release wake lock + jednorazowy hook `onSessionStopped` (repo.stop + ApConnectionManager.disconnect → unregister + bindProcessToNetwork(null)); `companion stop()`
+- [x] Test: `SessionPolicyTest.kt` (JVM) — keep-screen-on, wake-lock matrix (oracle: off+active=true, on=false, stopped=false), mapowanie statusu notyfikacji per faza
 - [ ] Weryfikacja: ekran nie gaśnie na ekranie nawigacji; telemetria przeżywa tło→powrót; brak wiszących callbacków/wake locków po wyjściu z sesji
 
 ---
 
 ## Postęp
 
-- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ✅ (kod+testy; Weryfikacja na ESP32 do review)  ·  Faza 3: ✅ (kod+testy; Weryfikacja na ESP32/emulatorze do review)  ·  Faza 4: ✅ (kod+testy; review: 0×P1, 6×P2, 6×P3 — do poprawy)  ·  Faza 5: ☐
+- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ✅ (kod+testy; Weryfikacja na ESP32 do review)  ·  Faza 3: ✅ (kod+testy; Weryfikacja na ESP32/emulatorze do review)  ·  Faza 4: ✅ (kod+testy; review: 0×P1, 6×P2, 6×P3 — do poprawy)  ·  Faza 5: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md

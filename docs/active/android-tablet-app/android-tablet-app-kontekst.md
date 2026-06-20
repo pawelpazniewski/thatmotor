@@ -381,6 +381,80 @@ Kluczowe decyzje:
 MapLibre 11.7.0 (framework-docs-researcher) + przegląd compile-level (czysto). 12 testów
 host (6 OfflineStyleBuilderTest + 6 BoatMarkerProjectionTest) napisane, nieuruchomione.
 
+### Review fazy 4 (2026-06-20, multi-agent, cykl 1)
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI — 0×P1, 6×P2, 6×P3. E2E: N/A (brak
+emulatora/SDK). Raport: `review-faza-4.md`. Kluczowe wnioski:
+- **Bug renderowania (P2):** roads jako `type:"fill"` na source-layer `transportation`
+  (geometrie liniowe) → drogi się nie wyrenderują; oczekiwany `type:"line"` + test wyroczni.
+- **Hot-path 10 Hz (P2×2):** `onState` woła `applyRasterVisible`/`setGeoJson` bezwarunkowo
+  co update (też przy null/no-change); `recenter` używa skokowego `moveCamera`. Naprawa:
+  strażniki `lastOrtho`/`lastPosition` (data class equals) + `easeCamera`.
+- **Memory (P2):** `onTrimMemory` mapuje każdy poziom na pełny `onLowMemory()` → reload kafli.
+- **Testy (P2×2):** brak `MapAssetsTest` (czysta logika URI nietestowana); brak boundary
+  ujemnych lon/lat. 6/6 scenariuszy planu pokryte mocną wyrocznią (imu_ok=false→null,
+  brak fixa→Hidden, kolejność warstw, toggle) — potwierdzone.
+- **Czysto:** Pure ⊥ HAL wzorcowe, SOLID/type-safety mocne, brak `!!`/sekretów,
+  JSON injection nieosiągalny, bump MapLibre 11.7.0 uzasadniony (pmtiles) i odnotowany,
+  atrybucja OSM/ODbL+GUGiK obecna. P3: redundantny onStop w destroy, trimIndent w hot-path,
+  doc style.json, MapLibreView jeszcze niewpięty (integracja w kolejnej fazie).
+
+### Review fazy 4 (cykl 2 — re-review po naprawie, 2026-06-20)
+
+Severity gate: ✅ CZYSTE. Wszystkie 6×P2 ROZWIĄZANE (commit `0aa51ee`), 0 regresji. Pozostaje
+6×P3 (odroczone, nieblokujące). Analiza statyczna (brak JDK/Gradle/SDK — testów nie uruchomiono).
+Zweryfikowane szczegółowo:
+- **lastPosition NIE blokuje markera:** pierwszy update przechodzi (`lastPosition=null`),
+  `data class equals` wykrywa zmianę, reset w `destroy()`. OK.
+- **easeCamera 100 ms NIE kumuluje się przy 10 Hz:** MapLibre anuluje trwającą animację przy
+  starcie nowej → zastępowanie, nie kolejkowanie; płynny chase. Akceptowalne.
+- **Test type roads ma realną moc wyroczni:** FAILuje przy regresji do `fill` (okno obiektu
+  warstwy poprawnie wyznaczone).
+- **Brak test weakening:** diff testów = wyłącznie dodania nowych `@Test` z wyrocznią; żaden
+  istniejący test nie zmieniony/osłabiony.
+Pełny werdykt: `review-faza-4.md` (sekcja „Re-review (cykl 2)").
+
+## Faza 5 — Utrzymanie sesji (Unit 10, 2026-06-20)
+
+Zaimplementowano keep-screen-on + foreground service WS z naciskiem na cleanup zasobów
+(główny cel fazy, coding-rules pkt 13).
+
+Pliki:
+- **`session/SessionPolicy.kt`** (czysta, JVM, Pure ⊥ HAL) — `object SessionPolicy`:
+  `shouldKeepScreenOn(SessionState)`, `shouldHoldWakeLock(SessionState, isScreenOn)`,
+  `notificationStatusFor(ConnectionState)`. Enum `SessionState { ACTIVE, STOPPED }`.
+  Decyzja: ekran-on przez całą sesję; wake lock TYLKO `ACTIVE && !screenOn` (przy ekranie
+  on CPU już czuwa → wake lock to zbędny drenaż baterii).
+- **`session/TelemetryService.kt`** (cienki HAL adapter) — foreground service,
+  `startForeground` z `FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE` (guard API 30+; API 29 bez
+  typu), kanał `IMPORTANCE_LOW`, `START_STICKY`. Wake lock: `onScreenStateChanged` deleguje
+  do `SessionPolicy`, `setReferenceCounted(false)`, timeout safety-net 4 h, zwalniany w
+  `releaseWakeLock`/`onDestroy`. **Cleanup w `onDestroy`:** release wake lock + jednorazowy
+  hook `onSessionStopped` (Activity wpina tu repo.stop + `ApConnectionManager.disconnect`,
+  który robi `unregisterNetworkCallback` + `bindProcessToNetwork(null)`); hook wołany dokładnie
+  raz (wyzerowany przed invoke), wyjątek logowany nie połykany. `LocalBinder` dla Activity.
+- **`MainActivity.kt`** — `FLAG_KEEP_SCREEN_ON` na oknie sterowane `SessionPolicy.shouldKeepScreenOn`.
+- **`AndroidManifest.xml`** — `<service .session.TelemetryService exported=false
+  foregroundServiceType=connectedDevice>` + uprawnienie `WAKE_LOCK`.
+- **`strings.xml`** — `session_notification_channel`, `session_notification_title`.
+
+Testy: `session/SessionPolicyTest.kt` (7 testów JVM) — keep-screen-on (active=true /
+stopped=false), macierz wake locka z wyrocznią (off+active=true; on=false; stopped=false dla
+obu screen), mapowanie statusu notyfikacji per faza + asercja Live≠Stale.
+
+Decyzje:
+- Serwis NIE przejmuje własności całego łańcucha sesji (uniknięcie dużego refaktoru poza
+  scope fazy); jest jedynym właścicielem TEARDOWN przez hook `onSessionStopped` — bez
+  duplikacji logiki AP/repo (coding-rules pkt 5/10).
+- Logika decyzyjna w pełni czysta i host-testowana; serwis/Activity tylko mapują na API
+  frameworka (Pure ⊥ HAL).
+
+Walidacja JVM/build: **N/A** — brak JDK/Gradle/Android SDK (`java -version` → „Unable to
+locate a Java Runtime"; `gradle` not found). Weryfikacja statyczna: API-level guardy
+sprawdzone (NotificationChannel/Builder API26+, FLAG_IMMUTABLE API23+, CONNECTED_DEVICE type
+API30 za guardem `Build.VERSION_CODES.R`); referencje stringów/manifestu spójne; importy
+używane. Weryfikacja na sprzęcie/emulatorze do review.
+
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md
 - Plan techniczny: docs/plans/2026-06-20-001-feat-android-tablet-app-plan.md

@@ -509,7 +509,7 @@ guide z researchu.
 
 ### Faza 5 — Utrzymanie sesji
 
-- [ ] **Unit 10: Keep-screen-on + foreground service WS**
+- [x] **Unit 10: Keep-screen-on + foreground service WS**
 
 **Cel:** Utrzymać ekran i połączenie WS podczas sesji na wodzie; posprzątać zasoby.
 
@@ -533,8 +533,9 @@ guide z researchu.
   zwolnienie wake locka (coding-rules pkt 13).
 
 **Scenariusze testowe:**
-- [Unit] logika cyklu sesji (start/stop, czy trzymać wake lock) jako czysta funkcja,
-  jeśli wydzielona — w przeciwnym razie weryfikacja manualna.
+- [x] [Unit] logika cyklu sesji (start/stop, czy trzymać wake lock) jako czysta funkcja —
+  wydzielona do `session/SessionPolicy.kt`, pokryta `SessionPolicyTest.kt` (7 testów JVM,
+  wyrocznia na macierzy wake locka + statusie notyfikacji).
 
 **Weryfikacja:**
 - Na urządzeniu: ekran nie gaśnie na ekranie nawigacji; po przełączeniu aplikacji w tło
