@@ -99,6 +99,26 @@ stanu połączenia, mapowanie envelope→wynik, projekcja markera, builder stylu
 Androida (sieć, mapa, service) weryfikuj manualnie na urządzeniu/emulatorze. Testy: min.
 1 happy path + 1 error case per funkcja; fixtures JSON w `src/test/resources/`.
 
+## Stan wykonania
+
+### Faza 1 — Fundament i łączność (kod ukończony 2026-06-20)
+- **minSdk = 29** (odroczone pytanie rozwiązane): ścieżka `requestNetwork` +
+  `WifiNetworkSpecifier` bez `NET_CAPABILITY_INTERNET` wymaga API 29; na 29–32
+  specyfikator wymaga `ACCESS_FINE_LOCATION` → uprawnienie w manifeście z
+  `maxSdkVersion="32"`. targetSdk/compileSdk = 34. AGP 8.5.2, Kotlin 2.0.20.
+- **Package:** `com.thatmotor.kayak`. Warstwy: `net`, `data`, `domain`, `ui`, `map`
+  (puste pakiety zaznaczone `.gitkeep`, wypełniane w kolejnych fazach).
+- **Wersje pinowane** w `gradle/libs.versions.toml` (version catalog) — Compose BOM
+  2024.09.03, OkHttp 5.0.0-alpha.14, kotlinx.serialization 1.7.3, MapLibre 11.5.2.
+- **Unit 2:** czysty reducer `reduceApConnectionState(current, event)` (testowany
+  na JVM, 4 testy) + cienki adapter `ApConnectionManager` (HAL: `NetworkCallback`
+  → `ApConnectionEvent` → reducer; bind + cleanup). `Lost` ignorowany poza stanem
+  live (`Connecting`/`Connected`) — chroni wynik `Failed`/`Idle`.
+- **Walidacja Gradle:** to środowisko NIE ma JDK/Gradle/Android SDK — `assembleDebug`
+  i testy JVM nie zostały uruchomione (oczekiwane). Wymagają lokalnego SDK + JDK 17.
+  `gradle-wrapper.jar` (binarny) nie commitowany — generowany przez `gradle wrapper`
+  lub Android Studio (opisane w `android/README.md`).
+
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md
 - Plan techniczny: docs/plans/2026-06-20-001-feat-android-tablet-app-plan.md

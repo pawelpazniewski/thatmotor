@@ -179,7 +179,7 @@ Poza v1 (patrz Granice scope'u):
 
 ### Faza 1 — Fundament i łączność
 
-- [ ] **Unit 1: Bootstrap projektu Android**
+- [x] **Unit 1: Bootstrap projektu Android** (kod ukończony; minSdk=29/target=34; weryfikacja build na lokalnym SDK do review)
 
 **Cel:** Utworzyć pusty, budowalny projekt Compose w `android/` z manifestem,
 uprawnieniami i strukturą modułów/pakietów.
@@ -215,7 +215,7 @@ uprawnieniami i strukturą modułów/pakietów.
 - `./gradlew :app:assembleDebug` przechodzi; aplikacja startuje na emulatorze i pokazuje
   pusty ekran z motywem.
 
-- [ ] **Unit 2: Adapter łączności z AP ESP32**
+- [x] **Unit 2: Adapter łączności z AP ESP32** (kod+testy; `Network` przeniesiony do `ApConnectionManager.boundNetwork` zamiast `Connected(network)`/`Failed(reason)`, by reducer pozostał czysty/JVM-only)
 
 **Cel:** Połączyć tablet z WiFi SoftAP ESP32 i zbindować ruch procesu do tej sieci,
 tak by HTTP/WS do `192.168.4.1` działały bez internetu.
@@ -245,9 +245,10 @@ tak by HTTP/WS do `192.168.4.1` działały bez internetu.
 **Wzorce do naśladowania:** wzorzec `requestNetwork`+`bindProcessToNetwork` z researchu.
 
 **Scenariusze testowe:**
-- [Unit] sekwencja `Connecting → onAvailable → Connected`.
-- [Unit] `Connected → onLost → Lost`; ponowne `onAvailable → Connected`.
-- [Unit] `onUnavailable → Failed`.
+- [x] [Unit] sekwencja `Connecting → onAvailable → Connected`.
+- [x] [Unit] `Connected → onLost → Lost`; ponowne `onAvailable → Connected`.
+- [x] [Unit] `onUnavailable → Failed`.
+- [x] [Unit] (dodany) `Lost` ignorowany poza stanem live (oracle power).
 
 **Weryfikacja:**
 - Na urządzeniu: po wskazaniu SSID ESP32 aplikacja przechodzi w `Connected`; `ping`/

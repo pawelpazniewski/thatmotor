@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base theme; Compose draws the real UI. Material3 dark base for sunlight UI. -->
+    <style name="Theme.KayakTablet" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

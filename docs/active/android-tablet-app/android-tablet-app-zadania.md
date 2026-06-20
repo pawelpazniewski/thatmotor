@@ -11,24 +11,24 @@ Legenda: `[ ]` do zrobienia · prefix `Test:` = scenariusz testowy · prefix
 ## Faza 1 — Fundament i łączność
 
 ### Unit 1: Bootstrap projektu Android (S/M)
-- [ ] Stwórz `android/settings.gradle.kts`, `android/build.gradle.kts`, `android/gradle.properties`
-- [ ] Stwórz `android/app/build.gradle.kts` (zależności pinowane: Compose BOM, MapLibre, OkHttp 5.x, kotlinx.serialization, lifecycle-runtime-compose)
-- [ ] Ustal `minSdk`/`targetSdk` (rozwiąż odroczone pytanie minSdk)
-- [ ] Stwórz `android/app/src/main/AndroidManifest.xml` (uprawnienia: INTERNET, CHANGE_NETWORK_STATE, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE, FOREGROUND_SERVICE, FOREGROUND_SERVICE_CONNECTED_DEVICE, [ACCESS_FINE_LOCATION jeśli minSdk ≤32])
-- [ ] Stwórz `android/app/src/main/java/<pkg>/MainActivity.kt` + `ui/theme/`
-- [ ] Stwórz `android/.gitignore` (build/, .gradle/, local.properties, *.pmtiles, *.mbtiles) i `android/README.md`
-- [ ] Pakiety wg warstw: `net`, `data`, `domain`, `ui`, `map`
+- [x] Stwórz `android/settings.gradle.kts`, `android/build.gradle.kts`, `android/gradle.properties`
+- [x] Stwórz `android/app/build.gradle.kts` (zależności pinowane: Compose BOM, MapLibre, OkHttp 5.x, kotlinx.serialization, lifecycle-runtime-compose)
+- [x] Ustal `minSdk`/`targetSdk` (rozwiąż odroczone pytanie minSdk) → minSdk 29, targetSdk/compileSdk 34
+- [x] Stwórz `android/app/src/main/AndroidManifest.xml` (uprawnienia: INTERNET, CHANGE_NETWORK_STATE, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE, FOREGROUND_SERVICE, FOREGROUND_SERVICE_CONNECTED_DEVICE, [ACCESS_FINE_LOCATION jeśli minSdk ≤32])
+- [x] Stwórz `android/app/src/main/java/<pkg>/MainActivity.kt` + `ui/theme/`
+- [x] Stwórz `android/.gitignore` (build/, .gradle/, local.properties, *.pmtiles, *.mbtiles) i `android/README.md`
+- [x] Pakiety wg warstw: `net`, `data`, `domain`, `ui`, `map`
 - [ ] Weryfikacja: `./gradlew :app:assembleDebug` przechodzi; app startuje na emulatorze (pusty ekran z motywem)
 
 ### Unit 2: Adapter łączności z AP ESP32 (M)
-- [ ] Stwórz `net/ApConnectionManager.kt` (`requestNetwork`+`WifiNetworkSpecifier` bez `NET_CAPABILITY_INTERNET`; `onAvailable`→`bindProcessToNetwork`)
-- [ ] Stwórz `net/ApConnectionState.kt` (sealed: Idle/Connecting/Connected/Lost/Failed)
-- [ ] Wyciągnij czystą funkcję redukcji zdarzeń callbacku → `ApConnectionState`
-- [ ] Cleanup: `unregisterNetworkCallback` + `bindProcessToNetwork(null)`
-- [ ] Stwórz test `net/ApConnectionStateReducerTest.kt`
-- [ ] Test: sekwencja `Connecting → onAvailable → Connected`
-- [ ] Test: `Connected → onLost → Lost`; ponowne `onAvailable → Connected`
-- [ ] Test: `onUnavailable → Failed`
+- [x] Stwórz `net/ApConnectionManager.kt` (`requestNetwork`+`WifiNetworkSpecifier` bez `NET_CAPABILITY_INTERNET`; `onAvailable`→`bindProcessToNetwork`)
+- [x] Stwórz `net/ApConnectionState.kt` (sealed: Idle/Connecting/Connected/Lost/Failed)
+- [x] Wyciągnij czystą funkcję redukcji zdarzeń callbacku → `ApConnectionState` (`net/ApConnectionStateReducer.kt`)
+- [x] Cleanup: `unregisterNetworkCallback` + `bindProcessToNetwork(null)`
+- [x] Stwórz test `net/ApConnectionStateReducerTest.kt`
+- [x] Test: sekwencja `Connecting → onAvailable → Connected`
+- [x] Test: `Connected → onLost → Lost`; ponowne `onAvailable → Connected`
+- [x] Test: `onUnavailable → Failed`
 - [ ] Weryfikacja: po wskazaniu SSID ESP32 app → `Connected`; GET do `192.168.4.1` odpowiada mimo braku internetu
 
 ---
@@ -145,7 +145,7 @@ Legenda: `[ ]` do zrobienia · prefix `Test:` = scenariusz testowy · prefix
 
 ## Postęp
 
-- Faza 1: ☐  ·  Faza 2: ☐  ·  Faza 3: ☐  ·  Faza 4: ☐  ·  Faza 5: ☐
+- Faza 1: ✅ (kod+testy; Weryfikacja na sprzęcie/emulatorze do review)  ·  Faza 2: ☐  ·  Faza 3: ☐  ·  Faza 4: ☐  ·  Faza 5: ☐
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md

@@ -1,0 +1,13 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Offline map archives are large binaries — keep them out of git (Unit 11).
+*.pmtiles
+*.mbtiles
