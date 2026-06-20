@@ -279,12 +279,30 @@ ServiceConnection, teardown-once na `isFinishing`, wake lock bez danglingu, View
 testy z mocą wyroczni). Zero nowych P1. Pozostają 3×P2 + 5×P3. Raport: `review-faza-5.md`.
 Build/testy JVM/E2E: N/A (brak JDK/Gradle/Android SDK — analiza statyczna).
 
-- [~] 🟠 [important] **MainActivity.kt:56-62,79 + TelemetryViewModelFactory.kt** — teardown AP no-op: `ApConnectionManager.connect()` nigdy nie wołany (grep: brak `.connect(`), `EspHttpClient.build(network=null)`. **OCENA cyklu 2: udokumentowane jako znany dług cross-phase Unit 2 (NIE wpięte) — uzasadnienie:** realne wpięcie `connect(ssid,passphrase)` wymaga UI wyboru SSID + wpisania passphrase oraz przekazania `boundNetwork`/`socketFactory` do `EspHttpClient.build(...)`, czyli flow łączenia z `zadania.md:32` (weryfikacja Unit 2 wciąż otwarta) — poza scope Unit 10. Wymuszanie tego teraz byłoby over-engineeringiem ze sztucznymi danymi SSID. Hook teardown jest na właściwej, `MainActivity`-owanej instancji `ApConnectionManager` (forward-compatible — gdy Unit 2 wpięcie `connect()` doda się na tej samej instancji, `disconnect()` zadziała bez zmian w fazie 5). Pozostaje otwarte jako dług **Fazy 1 / Unit 2**.
+### Re-review po naprawach (cykl 2)
+
+Severity gate (re-review cyklu 2): ✅ GOTOWE DO KONTYNUACJI — wszystkie 3×P2 z cyklu 1
+ROZWIĄZANE (zweryfikowane statycznie, multi-agent):
+1. `isBound` eliminuje crash `IllegalArgumentException`/wyciek ServiceConnection na wszystkich
+   osiągalnych ścieżkach (bind fail, onStop, onServiceDisconnected, rotacja; brak double-unbind);
+2. `SessionPolicy.shouldTearDownSession` czysta + 2 testy z mocą wyroczni (always-true/always-false/
+   inwersja wszystkie zabite — NIE test weakening);
+3. cross-phase AP debt = AKCEPTOWALNY (grep potwierdza `connect()` nieużywany; przeklasyfikowany
+   do Unit 2 z planem; hook forward-compatible na właściwej instancji) — NIE finding dismissal.
+Cel Unit 10 spełniony (keep-screen-on, telemetria przeżywa tło, cleanup bez wycieków).
+Zero P1, zero P2. Pozostają tylko P3 (2 nowe nity + carry-over). Raport: `review-faza-5.md`.
+Build/testy JVM/E2E: N/A (brak JDK/Gradle/Android SDK — analiza statyczna).
+
+- [x] 🟠 [important] **MainActivity.kt:56-62,79 + TelemetryViewModelFactory.kt** — teardown AP no-op: `ApConnectionManager.connect()` nigdy nie wołany (grep: brak `.connect(`), `EspHttpClient.build(network=null)`. **OCENA cyklu 2 (zaakceptowana): udokumentowane jako znany dług cross-phase Unit 2 (NIE wpięte) — uzasadnienie:** realne wpięcie `connect(ssid,passphrase)` wymaga UI wyboru SSID + wpisania passphrase oraz przekazania `boundNetwork`/`socketFactory` do `EspHttpClient.build(...)`, czyli flow łączenia z `zadania.md:32` (weryfikacja Unit 2 wciąż otwarta) — poza scope Unit 10. Wymuszanie tego teraz byłoby over-engineeringiem ze sztucznymi danymi SSID. Hook teardown jest na właściwej, `MainActivity`-owanej instancji `ApConnectionManager` (forward-compatible — gdy Unit 2 wpięcie `connect()` doda się na tej samej instancji, `disconnect()` zadziała bez zmian w fazie 5). Pozostaje otwarte jako dług **Fazy 1 / Unit 2**.
 - [x] 🟠 [important] **MainActivity.kt:109,120** — wynik `bindService` (Boolean) ignorowany; `unbindService` w `onStop` rzuci `IllegalArgumentException` gdy bind nie powiódł się. ROZWIĄZANE (cykl 2): pole `isBound` ustawiane z wyniku `bindService` w `onStart`; `onStop` unbinduje tylko gdy `isBound` (potem `isBound=false`); `onServiceDisconnected` zeruje `isBound`.
 - [x] 🟠 [important] **MainActivity.kt:128 (TEST)** — decyzja rotacja-vs-wyjście (`isFinishing`) — najryzykowniejszy invariant lifecycle — nieekstrahowana i nietestowana. ROZWIĄZANE (cykl 2): wyekstrahowane `SessionPolicy.shouldTearDownSession(isFinishing)`, wpięte w `MainActivity.onDestroy`; host-test z mocą wyroczni (`isFinishing=true → teardown`; `isFinishing=false`/rotacja → brak teardown — polityka zawsze-true failuje).
 - [ ] 🟡 [nit] **TelemetryService.kt:142,70** — niesprawdzone casty `as PowerManager`/`as NotificationManager`; niespójne z `requireNotNull(getSystemService)` w `MainActivity.kt:58` (pkt 10). Ujednolicić.
 - [ ] 🟡 [nit] **TelemetryService.kt:55,65** — `@Volatile` na `onSessionStopped`/`wantsWakeLock` nadmiarowy (wszystkie dostępy na main thread). Usunąć lub udokumentować.
 - [ ] 🟡 [nit] **MainActivity.kt:102-123** — rotacja (config change) wywołuje `onScreenStateChanged(false)` + ponowny `start()`; benign, rozważyć guard `isChangingConfigurations`.
+- [ ] 🟡 [nit] **MainActivity.kt:113,124** (nowy, cykl 2) — idiom "ideal": przy `bindService`→`false` Android i tak wymaga `unbindService` by zwolnić rejestrację `ServiceConnection`; strzeżenie na `isBound` pomija to (latentny wyciek na failed-bind). Nieosiągalne dla lokalnego `BIND_AUTO_CREATE` (= błąd manifestu), stąd P3. Docelowo: "bind requested" osobno od "bind succeeded".
+- [ ] 🟡 [nit] **MainActivity.kt:86-89** (nowy, cykl 2) — `onServiceDisconnected` zeruje `isBound`, ale disconnection ≠ unbound; nieosiągalne dla in-process serwisu, P3.
+- [ ] 🟡 [nit] **SessionPolicy.kt:29 / :8** (carry-over) — martwy KDoc-link `[SessionService]` (→ `[TelemetryService]`) oraz `[android.app.Activity]` w pliku HAL-free (de-link/reword).
+- [ ] 🟡 [nit] **TelemetryService.kt:187,191** (nowy, cykl 2) — komentarz mówi "Error/Throwable", ale `catch (RuntimeException)` przepuszcza `Error`; brak realnego wycieku (wake lock zwolniony przed `try`, `super` w `finally`), doc-accuracy only.
 
 ---
 

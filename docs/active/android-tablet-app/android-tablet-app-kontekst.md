@@ -455,6 +455,82 @@ sprawdzone (NotificationChannel/Builder API26+, FLAG_IMMUTABLE API23+, CONNECTED
 API30 za guardem `Build.VERSION_CODES.R`); referencje stringów/manifestu spójne; importy
 używane. Weryfikacja na sprzęcie/emulatorze do review.
 
+## Review fazy 5 (cykl 0) — 2026-06-20
+
+Severity gate: ⛔ WYMAGA POPRAWEK (1×P1, 6×P2, 7×P3). Raport: `review-faza-5.md`.
+Multi-agent: security / performance / architecture / scenario-coverage. E2E/build/JVM: N/A
+(brak JDK/Gradle/Android SDK/emulatora — analiza statyczna).
+
+Kluczowe wnioski:
+- **P1 (bloker):** cały Unit 10 to dead code na poziomie integracji — `TelemetryService` nie jest
+  nigdzie startowany/bindowany (zero callerów `start/stop/onScreenStateChanged/onSessionStopped`),
+  `MainActivity.applyKeepScreenOn` hardcoduje `SessionState.ACTIVE`. Skutek: telemetria nie przeżywa
+  tła, wake lock nigdy nie acquired, cleanup hook (`disconnect`+`bindProcessToNetwork(null)`+
+  `repo.stop`) nigdy podłączony → dwa cele fazy niespełnione. Decyzja projektowa "serwis nie
+  przejmuje własności łańcucha sesji" jest OK, ALE wpięcie teardownu/startu w lifecycle Activity
+  jest częścią scope tej fazy i go brakuje. Execute agent sam to odnotował — potwierdzone gretem.
+- **Pozytyw:** `SessionPolicy` faktycznie czysta i z mocą wyroczni (macierz wake locka 2×2 + status
+  notyfikacji per faza). Adapter HAL poprawny pod kątem zwalniania zasobów (release przed cleanup,
+  setReferenceCounted(false), guardy API-level, brak danglingu — pkt 13).
+- **P2:** brak `POST_NOTIFICATIONS` (API33+); `updateStatus` bez dedupingu floodzi NotificationManager
+  przy 10 Hz; `ensureChannel`/PendingIntent rebuildowane co update; wake lock 4h bez re-acquire;
+  `onDestroy` `super` poza `finally`; brak testu przejść stanu serwisu.
+
+Następny krok: `/dev-docs-execute 5` — naprawa P1 (wpięcie serwisu) + 6×P2, potem re-review.
+
+### Re-review fazy 5 (cykl 1, po naprawach — commit `fe7c74f`)
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI. P1 + wszystkie 6×P2 cyklu 0 ROZWIĄZANE
+(zweryfikowane statycznie przez 3 agenty — architecture / scenario+lifecycle / kotlin-quality;
+żaden nie zgłosił P1). Pozostają 3×P2 + 5×P3. Raport: `review-faza-5.md`.
+
+Kluczowe wnioski:
+- **P1 naprawiony kompletnie:** serwis realnie wpięty (`onStart` start+bind, `onStop` unbind+null,
+  `onDestroy` isFinishing→stop); teardown hook (`onSessionStopped` = `viewModel.stopSession()` +
+  `apConnectionManager.disconnect()`) wołany dokładnie raz (`onSessionStopped=null` przed `invoke`)
+  i tylko na zamknięciu sesji (guard `isFinishing`, nie config change); brak wycieku
+  `ServiceConnection` przy rotacji (unbind tylko w `onStop`, `service=null`); wake lock zawsze
+  zwalniany (release w `finally` przed `super.onDestroy`, `removeCallbacks` na wszystkich ścieżkach,
+  re-acquire co 3h release→acquire bez gubienia release); `SessionState` sterowany czystą
+  `SessionPolicy.nextState`; ViewModel pozostał HAL-free (AP teardown w Activity).
+- **Nowy P2 (cross-phase):** teardown AP jest no-op — `ApConnectionManager.connect()` nigdy nie
+  wołany (grep: brak `.connect(`), `EspHttpClient.build(network=null)`. To dług **Unit 2 / Fazy 1**
+  (weryfikacja `zadania.md:32` "po wskazaniu SSID → Connected" wciąż otwarta), nie regresja fazy 5;
+  hook wpięty na właściwej instancji → forward-compatible. Do zaplanowania: UI wyboru SSID + wpięcie
+  `connect()` + przekazanie `boundNetwork`/socketFactory do http clienta.
+- **Nowy P2 (crash-path):** wynik `bindService` ignorowany → `unbindService` rzuci
+  `IllegalArgumentException` gdy bind nie powiódł się; dodać flagę `isBound`.
+- **Nowy P2 (test):** decyzja `isFinishing` (rotacja-vs-wyjście) — najryzykowniejszy invariant —
+  nieekstrahowana/nietestowana; wyekstrahować `SessionPolicy.shouldTearDownSession(isFinishing)`.
+- **P3:** martwe KDoc-linki w `SessionPolicy` (carry-over cyklu 0, nadal otwarte); niesprawdzone
+  casty `as PowerManager/NotificationManager`; nadmiarowy `@Volatile`; wake-lock churn przy rotacji;
+  `allowBackup=true`. `SessionState` wydzielony do osobnego pliku — P3 cyklu 0 domknięty.
+
+Następny krok: opcjonalna naprawa 3×P2 (cross-phase AP-connect lepiej w osobnym kroku / Unit 2);
+faza 5 (Unit 10) gotowa do kontynuacji — P1 zamknięty.
+
+## Re-review fazy 5 — cykl 2 (commit 16c89b0)
+
+Severity gate: ✅ **GOTOWE DO KONTYNUACJI** — wszystkie 3×P2 z cyklu 1 rozwiązane. Zero P1, zero P2.
+Pozostają tylko P3. Analiza statyczna multi-agent (lifecycle/crash-paths + kotlin-quality/oracle-power);
+build/testy JVM/E2E N/A (brak JDK/Gradle/Android SDK).
+
+- **P2#1 (crash-path) ROZWIĄZANE:** pole `isBound` z wyniku `bindService`; `onStop` unbinduje tylko gdy
+  `isBound`; `onServiceDisconnected` zeruje. Crash `IllegalArgumentException` wyeliminowany na wszystkich
+  osiągalnych ścieżkach (bind fail / onStop / onServiceDisconnected / rotacja; brak double-unbind).
+- **P2#2 (test) ROZWIĄZANE:** `SessionPolicy.shouldTearDownSession(isFinishing)` czysta + wpięta w
+  `onDestroy`; 2 testy z mocą wyroczni — macierz degeneracji (always-true/always-false/inwersja) wszystkie
+  zabite, hardcoded literały (nie input==output tautologia). NIE test weakening.
+- **P2#3 (cross-phase AP debt) ZAAKCEPTOWANE jako dług Unit 2 — NIE finding dismissal:** grep potwierdza
+  `connect()` zdefiniowany ale nieużywany; wpięcie wymaga UI SSID/passphrase (poza scope Unit 10);
+  udokumentowane w `zadania.md:33,282` z planem; hook na `MainActivity`-owanej instancji = forward-compatible.
+- **Cel Unit 10 spełniony:** keep-screen-on, telemetria przeżywa tło (FGS connectedDevice + wake lock
+  screen-off), cleanup bez wycieków (teardown-once, wake lock w `finally`, brak wiszących callbacków).
+- **Nowe P3 (cykl 2):** failed-bind unbind idiom (latentny, nieosiągalny dla in-process serwisu);
+  `onServiceDisconnected` semantyka isBound; komentarz "Error/Throwable" vs `catch(RuntimeException)`.
+
+Raport: `review-faza-5.md`. Faza 5 zamknięta od strony review — można kontynuować.
+
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-20-android-tablet-app-requirements.md
 - Plan techniczny: docs/plans/2026-06-20-001-feat-android-tablet-app-plan.md
