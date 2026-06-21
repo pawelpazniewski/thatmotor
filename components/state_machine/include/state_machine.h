@@ -17,8 +17,9 @@ extern "C" {
  *
  * Safety invariants enforced here:
  *  - Boot always lands in DISARMED (SI-1); the reset reason is only logged.
- *  - DISARMED->ARMED is gated (R7): RC valid AND throttle neutral AND an
- *    explicit arm request AND no calibration/settings-apply in progress.
+ *  - DISARMED->ARMED is gated (R7): RC valid AND throttle neutral AND no cruise
+ *    target held AND an explicit arm request AND no calibration/settings-apply in
+ *    progress. A latent cruise target must never let ARMED start with hidden power.
  *  - Any state with RC invalid drops to FAILSAFE (SI-4/R6).
  *  - FAILSAFE is latched: it persists while RC is invalid and the ONLY exit is
  *    RC recovery -> DISARMED. It NEVER transitions straight back to ARMED.
@@ -52,8 +53,9 @@ typedef enum {
     SM_ARM_READY = 0,                /* all arm conditions satisfied */
     SM_ARM_NO_RC = 1,                /* RC signal invalid */
     SM_ARM_THROTTLE_NOT_NEUTRAL = 2, /* throttle stick off the neutral band */
-    SM_ARM_CALIBRATING = 3,          /* ESC calibration sequence running */
-    SM_ARM_SETTINGS_APPLYING = 4,    /* a settings apply is mid-flight */
+    SM_ARM_CRUISE_ACTIVE = 3,        /* cruise still holding a power target */
+    SM_ARM_CALIBRATING = 4,          /* ESC calibration sequence running */
+    SM_ARM_SETTINGS_APPLYING = 5,    /* a settings apply is mid-flight */
 } sm_arm_reason;
 
 /**
@@ -64,6 +66,7 @@ typedef enum {
 typedef struct {
     bool rc_valid;                  /* debounced RC_valid (CH1 AND CH2) */
     bool throttle_neutral;          /* throttle stick within neutral band */
+    bool cruise_active;             /* cruise still holds a (latent) power target */
     bool calib_in_progress;         /* ESC calibration sequence running */
     bool settings_apply_in_progress;/* a pending settings apply is mid-flight */
     bool ui_arm_request;            /* explicit arm action from the panel */

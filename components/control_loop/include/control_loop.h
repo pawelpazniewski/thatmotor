@@ -37,6 +37,8 @@ typedef struct {
     bool ch2_valid;            /* DIAG: CH2 passes channel_valid this frame */
     uint32_t servo_us;         /* commanded servo pulse (post-clamp) */
     uint32_t esc_us;           /* commanded ESC pulse (post-clamp) */
+    bool cruise_active;        /* future cruise hold status, safe placeholder */
+    int16_t cruise_command_pct;/* diagnostic cruise target, percent */
     int16_t servo_trim_us;     /* active signed servo neutral trim (live) */
     settings_source source;    /* R16: provenance */
     bool settings_valid;       /* R16 */

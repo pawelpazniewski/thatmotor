@@ -166,7 +166,11 @@ postój przy zmianie kierunku **400 ms**, próg CH4 **1500 µs**, okno kliknię�
 
 ## Roadmap
 
-- **Monitor napięcia LiFePO4** (dzielnik + ADC, alarm w panelu).
+- Monitor napięcia LiFePO4 (dzielnik + ADC, alarm w panelu). Interpretacja ma
+  rozróżniać napięcie chwilowe, filtrowane i estymatę spoczynkową: obserwacja
+  ok. 13.1 V bez obciążenia oraz ok. 12.3 V przy pełnym obciążeniu jest
+  traktowana jako prawdopodobny sag pod obciążeniem, nie jako samodzielny
+  powód do twardego cutoffu od pojedynczego odczytu ADC.
 - **Spot-Lock / AutoPilot** — GPS i kompas już nasłuchiwane (podgląd w panelu); pozostaje pętla nawigacji
   + silnik ciągły z enkoderem. CH3 jako przełącznik trybu.
 - **Sterowanie wentylatorem** (czujnik temp + MOSFET / standalone termostat).

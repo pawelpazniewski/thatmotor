@@ -110,6 +110,17 @@ static void test_arming_blocked_when_settings_apply_in_progress(void)
     TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
 }
 
+static void test_arming_blocked_when_cruise_active(void)
+{
+    sm_inputs in = armable_inputs();
+    in.cruise_active = true;
+
+    sm_outputs out = sm_step(SM_STATE_DISARMED, &in);
+
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
+    TEST_ASSERT_EQUAL(THROTTLE_TARGET_NEUTRAL, out.throttle_target);
+}
+
 /* --- ARMED --- */
 
 static void test_armed_rc_invalid_goes_failsafe(void)
@@ -280,6 +291,14 @@ static void test_arm_reason_throttle_not_neutral(void)
     TEST_ASSERT_EQUAL(SM_ARM_THROTTLE_NOT_NEUTRAL, sm_arm_block_reason(&in));
 }
 
+static void test_arm_reason_cruise_active(void)
+{
+    sm_inputs in = armable_inputs();
+    in.cruise_active = true;
+
+    TEST_ASSERT_EQUAL(SM_ARM_CRUISE_ACTIVE, sm_arm_block_reason(&in));
+}
+
 static void test_arm_reason_calibrating(void)
 {
     sm_inputs in = armable_inputs();
@@ -415,6 +434,7 @@ void run_state_machine_tests(void)
     RUN_TEST(test_disarmed_rc_invalid_goes_failsafe);
     RUN_TEST(test_arming_blocked_when_calib_in_progress);
     RUN_TEST(test_arming_blocked_when_settings_apply_in_progress);
+    RUN_TEST(test_arming_blocked_when_cruise_active);
     RUN_TEST(test_armed_rc_invalid_goes_failsafe);
     RUN_TEST(test_armed_manual_disarm_goes_disarmed);
     RUN_TEST(test_armed_stays_armed_when_nominal);
@@ -431,6 +451,7 @@ void run_state_machine_tests(void)
     RUN_TEST(test_arm_reason_all_conditions_ready);
     RUN_TEST(test_arm_reason_no_rc);
     RUN_TEST(test_arm_reason_throttle_not_neutral);
+    RUN_TEST(test_arm_reason_cruise_active);
     RUN_TEST(test_arm_reason_calibrating);
     RUN_TEST(test_arm_reason_settings_applying);
     RUN_TEST(test_arm_reason_rc_dominates_throttle);

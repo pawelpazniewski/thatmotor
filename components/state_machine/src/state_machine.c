@@ -1,9 +1,9 @@
 #include "state_machine.h"
 
 /* Why arming would be refused, in the EXACT priority order of the can_arm guard
- * (R7): RC dominates, then throttle neutrality, then calibration, then a pending
- * settings apply. Pure and intent-agnostic so the panel can show the reason even
- * before any arm request. */
+ * (R7): RC dominates, then throttle neutrality, then a latent cruise target,
+ * then calibration, then a pending settings apply. Pure and intent-agnostic so
+ * the panel can show the reason even before any arm request. */
 sm_arm_reason sm_arm_block_reason(const sm_inputs *inputs)
 {
     if (!inputs->rc_valid) {
@@ -11,6 +11,9 @@ sm_arm_reason sm_arm_block_reason(const sm_inputs *inputs)
     }
     if (!inputs->throttle_neutral) {
         return SM_ARM_THROTTLE_NOT_NEUTRAL;
+    }
+    if (inputs->cruise_active) {
+        return SM_ARM_CRUISE_ACTIVE;
     }
     if (inputs->calib_in_progress) {
         return SM_ARM_CALIBRATING;

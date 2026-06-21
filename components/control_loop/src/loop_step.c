@@ -44,6 +44,24 @@ void loop_state_init(loop_state *state, const settings_params *params,
     state->throttle_ramp.dwell_remaining = 0;
     state->servo_slew = servo_center_us(params);
     state->calib_step = CALIB_STEP_NEUTRAL;
+    state->cruise_active = false;
+    state->cruise_command_pct = 0;
+}
+
+static void reset_cruise(loop_state *state)
+{
+    state->cruise_active = false;
+    state->cruise_command_pct = 0;
+}
+
+/* Cruise is a future feature, but safety is enforced now: any transition away
+ * from ARMED clears a latent cruise hold so it cannot survive disarm, failsafe,
+ * calibration, deploy, or boot/re-init and later re-arm with hidden power. */
+static void apply_cruise_lifecycle(loop_state *state, sm_state next_state)
+{
+    if (next_state != SM_STATE_ARMED) {
+        reset_cruise(state);
+    }
 }
 
 /* Debounced RC validity for this cycle: both control channels valid this frame,
@@ -64,6 +82,7 @@ static sm_inputs build_sm_inputs(const loop_inputs *in,
     sm_inputs si = {
         .rc_valid = rc_is_valid,
         .throttle_neutral = throttle_is_neutral(in->ch2.width_us, params),
+        .cruise_active = state->cruise_active,
         .calib_in_progress = state->state == SM_STATE_ESC_CALIBRATION,
         .settings_apply_in_progress = false,
         .ui_arm_request = in->ui_arm_request,
@@ -189,6 +208,7 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
                                   &next_state);
     uint32_t servo_us = servo_chain_step(in->ch1.width_us, sm.servo_target,
                                          params, &state->servo_slew);
+    apply_cruise_lifecycle(state, next_state);
     state->state = next_state;
 
     loop_outputs out = {
@@ -200,6 +220,8 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
             .esc_us = esc_us,
             .servo_us = servo_us,
             .arm_reason = sm_arm_block_reason(&si),
+            .cruise_active = state->cruise_active,
+            .cruise_command_pct = state->cruise_command_pct,
         },
     };
     return out;

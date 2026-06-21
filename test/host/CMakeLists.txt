@@ -34,6 +34,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/state_machine/src/state_machine.c
     ${REPO_ROOT}/components/state_machine/src/esc_calibration.c
     ${REPO_ROOT}/components/control_loop/src/loop_step.c
+    ${REPO_ROOT}/components/power_monitor/src/power_monitor.c
     ${REPO_ROOT}/components/web_panel/src/api_contract.c
     ${REPO_ROOT}/components/web_panel/src/command_parse.c
     ${REPO_ROOT}/components/web_panel/src/params_decide.c
@@ -54,6 +55,7 @@ set(PURE_INCLUDE_DIRS
     ${REPO_ROOT}/components/signal_chain/src
     ${REPO_ROOT}/components/state_machine/include
     ${REPO_ROOT}/components/control_loop/include
+    ${REPO_ROOT}/components/power_monitor/include
     ${REPO_ROOT}/components/web_panel/include
     ${REPO_ROOT}/components/led_status/include
     ${REPO_ROOT}/components/gps/include
@@ -80,6 +82,7 @@ set(TEST_SOURCES
     test_state_machine.c
     test_esc_calibration.c
     test_loop_step.c
+    test_power_monitor.c
     test_api_contract.c
     test_command_parse.c
     test_params_decide.c

@@ -64,6 +64,8 @@ typedef struct {
     throttle_ramp_state throttle_ramp; /* ramped throttle command + dwell */
     int32_t servo_slew;    /* slewed servo pulse width (us) */
     calib_step calib_step; /* current ESC calibration step (when in calib) */
+    bool cruise_active;    /* latent cruise hold, future feature-safe by default */
+    int16_t cruise_command_pct; /* diagnostic cruise target, percent, signed */
 } loop_state;
 
 /** Telemetry snapshot produced each cycle (read-only view for the web panel). */
@@ -73,6 +75,8 @@ typedef struct {
     uint32_t esc_us;          /* commanded ESC pulse width (post-clamp) */
     uint32_t servo_us;        /* commanded servo pulse width (post-clamp) */
     sm_arm_reason arm_reason; /* why arming is blocked this cycle (R7 gate) */
+    bool cruise_active;       /* cruise hold live flag for telemetry / UI */
+    int16_t cruise_command_pct; /* diagnostic cruise target, percent */
 } loop_telemetry;
 
 /** Actuator commands plus telemetry for one cycle. */

@@ -399,6 +399,44 @@ static void test_calibration_cancel_returns_to_disarmed_neutral(void)
     TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
 }
 
+static void test_cruise_active_blocks_arm_and_reports_reason(void)
+{
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    state.cruise_active = true;
+    state.cruise_command_pct = 25;
+
+    loop_inputs in = make_inputs(1500U, 1500U, true);
+    loop_outputs out = loop_step(&in, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.telemetry.state);
+    TEST_ASSERT_EQUAL(SM_ARM_CRUISE_ACTIVE, out.telemetry.arm_reason);
+    TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
+}
+
+static void test_cruise_lifecycle_clears_on_disarm(void)
+{
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm(&state, &cfg, &params);
+    state.cruise_active = true;
+    state.cruise_command_pct = 40;
+
+    loop_inputs disarm = make_inputs(1500U, 1500U, false);
+    disarm.ui_disarm_request = true;
+    loop_outputs out = loop_step(&disarm, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.telemetry.state);
+    TEST_ASSERT_FALSE(out.telemetry.cruise_active);
+    TEST_ASSERT_EQUAL_INT16(0, out.telemetry.cruise_command_pct);
+}
+
 static void test_pending_applies_only_in_disarmed(void)
 {
     /* The apply gate (R17/SI-6): pending params may be applied ONLY in DISARMED.
@@ -421,6 +459,8 @@ void run_loop_step_tests(void)
     RUN_TEST(test_calib_clamp_esc_snaps_out_of_window_value_to_boundary);
     RUN_TEST(test_calibration_rc_loss_aborts_to_failsafe);
     RUN_TEST(test_calibration_cancel_returns_to_disarmed_neutral);
+    RUN_TEST(test_cruise_active_blocks_arm_and_reports_reason);
+    RUN_TEST(test_cruise_lifecycle_clears_on_disarm);
     RUN_TEST(test_calibration_timeout_returns_to_disarmed_neutral);
     RUN_TEST(test_calibration_entry_frame_ignores_event_starts_at_neutral);
     RUN_TEST(test_calibration_reentry_reinitialises_step_to_neutral);

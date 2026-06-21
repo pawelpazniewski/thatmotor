@@ -15,6 +15,7 @@ const ARM_REASON_TEXT = [
   "Ready", // SM_ARM_READY
   "No valid RC signal", // SM_ARM_NO_RC
   "Throttle not at neutral", // SM_ARM_THROTTLE_NOT_NEUTRAL
+  "Cruise mode active", // SM_ARM_CRUISE_ACTIVE
   "Calibration in progress", // SM_ARM_CALIBRATING
   "Applying settings", // SM_ARM_SETTINGS_APPLYING
 ];
@@ -84,6 +85,8 @@ function applyTelemetry(t) {
   setText("ch2_valid", t.ch2_valid ? "yes" : "NO");
   setText("servo_us", t.servo_us);
   setText("esc_us", t.esc_us);
+  setText("cruise_active", t.cruise_active ? "ON" : "off");
+  setText("cruise_command_pct", t.cruise_command_pct || 0);
   setText("servo_trim_us", t.servo_trim_us);
   setText("gps_fix", t.gps_fix ? "yes" : "NO");
   setText("gps_sats", t.gps_sats);

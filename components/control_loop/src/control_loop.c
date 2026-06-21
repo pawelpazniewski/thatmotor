@@ -347,6 +347,8 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
                                          &s_validity_cfg.ch2);
     s_snapshot.servo_us = out->servo_us;
     s_snapshot.esc_us = out->esc_us;
+    s_snapshot.cruise_active = out->telemetry.cruise_active;
+    s_snapshot.cruise_command_pct = out->telemetry.cruise_command_pct;
     s_snapshot.servo_trim_us = s_params.servo_trim_us;
     s_snapshot.source = s_load_flags.source;
     s_snapshot.settings_valid = s_load_flags.settings_valid;
