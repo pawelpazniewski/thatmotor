@@ -177,3 +177,7 @@ postój przy zmianie kierunku **400 ms**, próg CH4 **1500 µs**, okno kliknię�
 - Requirements: [`docs/requirements/`](docs/requirements/)
 - Plan techniczny: [`docs/plans/`](docs/plans/)
 - Dokumentacja sprzętowa + diagramy: [`docs/hardware/`](docs/hardware/)
+
+---
+
+> _Branch `test/fullstackdev-claude-readme-smoke` to smoke test workflow fullstackdev + Claude Code + GitHub PR._
