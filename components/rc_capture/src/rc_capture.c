@@ -22,11 +22,13 @@ static inline uint32_t rc_cap_now_ticks_raw(void)
     return (uint32_t)((uint64_t)esp_timer_get_time() * RC_CAP_TICKS_PER_US);
 }
 
-/* GPIO assignment (fixed pin map from the plan). */
-#define RC_CAP_CH1_GPIO 34
-#define RC_CAP_CH2_GPIO 35
-#define RC_CAP_CH4_GPIO 32
-#define RC_CAP_CH3_GPIO 27
+/* GPIO assignment (ESP32-S3 N16R8 pin map). The classic-ESP32 input-only pins
+ * 34/35/32/27 do not exist or are taken by flash/PSRAM on the S3 module, so the
+ * RC channels move to plain I/O GPIOs free on this board. */
+#define RC_CAP_CH1_GPIO 4
+#define RC_CAP_CH2_GPIO 5
+#define RC_CAP_CH4_GPIO 6
+#define RC_CAP_CH3_GPIO 7
 
 /* Capture timer at the APB clock: 80 MHz -> 12.5 ns/tick, matching cap_math.
  * Prescale 1 keeps the per-channel resolution at the full tick rate. */
@@ -107,9 +109,9 @@ static esp_err_t configure_channel(mcpwm_cap_timer_handle_t timer,
                                    RcCaptureChannel channel)
 {
     /* Capture both edges: rising starts the pulse/sets the period reference,
-     * falling closes the pulse width. No internal pull configured: CH1/CH2 sit
-     * on GPIO34/35 (input-only, no internal pulls) and the RC receiver drives
-     * the lines actively. */
+     * falling closes the pulse width. No internal pull configured: the RC
+     * receiver drives the lines actively, so we leave the S3 I/O pins floating
+     * from the controller side. */
     mcpwm_capture_channel_config_t cfg = {
         .gpio_num = RC_CAP_GPIO_MAP[channel],
         .prescale = RC_CAP_PRESCALE,

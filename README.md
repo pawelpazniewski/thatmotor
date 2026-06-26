@@ -104,10 +104,10 @@ web/              index.html, app.js, style.css (embed w flash)
 Wymaga **ESP-IDF 5.5.x** (sourcing `export.sh`) oraz **CMake/Ninja**.
 
 ```bash
-# Build firmware + flash + monitor (target ESP32)
-idf.py set-target esp32
+# Build firmware + flash + monitor (target ESP32-S3 N16R8)
+idf.py set-target esp32s3
 idf.py build
-idf.py -p /dev/ttyUSB0 flash monitor      # podstaw swój port
+idf.py -p /dev/ttyACM0 flash monitor      # lewy USB-C (COM/UART); podstaw swój port
 
 # Testy hosta (pure-logic, standalone CMake + Unity — bez ESP-IDF)
 ./test/host/run.sh

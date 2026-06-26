@@ -1,5 +1,11 @@
 # Default sdkconfig for kayak-motor firmware. Pin via ESP-IDF v5.5.
 # Local `sdkconfig` (generated) is gitignored; this file is the source of truth.
+# Target: ESP32-S3 (set with `idf.py set-target esp32s3`).
+
+# --- ESP32-S3-WROOM-1 N16R8: 16 MB flash. Octal PSRAM (8 MB) is left DISABLED:
+# the real-time control firmware does not need it and PSRAM hurts determinism.
+# GPIO33-37 stay unused (wired to the PSRAM die inside the module). ---
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
 # --- Custom partition table (adds dedicated `appcfg` NVS partition) ---
 CONFIG_PARTITION_TABLE_CUSTOM=y

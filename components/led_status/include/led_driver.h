@@ -15,7 +15,7 @@ extern "C" {
  * layer only configures the pin and writes the level computed by led_pattern.
  */
 
-/** On-board LED GPIO on the ESP32 DevKit. */
+/** On-board LED GPIO on the ESP32-S3 DevKit. */
 #define LED_DRIVER_GPIO 2
 
 /**

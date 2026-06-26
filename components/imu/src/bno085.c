@@ -17,10 +17,12 @@ static const char *TAG = "imu";
  * unused here (we poll the data register instead of waiting on the line). --- */
 #define IMU_I2C_PORT I2C_NUM_0
 #define IMU_I2C_ADDR 0x4A
+/* ESP32-S3 N16R8 pin map: SDA stays on GPIO21; SCL/INT/RST move off the
+ * non-existent S3 pins 22/23/25 onto free I/O pins. */
 #define IMU_I2C_SDA_GPIO 21
-#define IMU_I2C_SCL_GPIO 22
-#define IMU_I2C_INT_GPIO 23
-#define IMU_I2C_RST_GPIO 25
+#define IMU_I2C_SCL_GPIO 47
+#define IMU_I2C_INT_GPIO 14
+#define IMU_I2C_RST_GPIO 13
 #define IMU_I2C_FREQ_HZ 100000 /* 100 kHz: safe for the long hobby wiring */
 #define IMU_I2C_TIMEOUT_MS 50
 

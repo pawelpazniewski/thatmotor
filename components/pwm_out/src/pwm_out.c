@@ -9,9 +9,10 @@
 _Static_assert(PWM_OUT_LOGIC_CHANNEL_COUNT == PWM_OUT_CHANNEL_COUNT,
                "pwm_out_logic channel count out of sync with PwmOutChannel");
 
-/* GPIO assignment (fixed pin map from the plan). */
+/* GPIO assignment (ESP32-S3 N16R8 pin map). ESC moves off GPIO19 (native USB
+ * D- on the S3) to a plain output pin; servo stays on GPIO18. */
 #define PWM_OUT_SERVO_GPIO 18
-#define PWM_OUT_ESC_GPIO 19
+#define PWM_OUT_ESC_GPIO 8
 
 #define PWM_OUT_SPEED_MODE LEDC_LOW_SPEED_MODE
 #define PWM_OUT_TIMER LEDC_TIMER_0
@@ -53,7 +54,7 @@ esp_err_t pwm_out_init(void)
 {
     ledc_timer_config_t timer = {
         .speed_mode = PWM_OUT_SPEED_MODE,
-        .duty_resolution = LEDC_TIMER_16_BIT,
+        .duty_resolution = LEDC_TIMER_14_BIT,
         .timer_num = PWM_OUT_TIMER,
         .freq_hz = PWM_FREQ_HZ,
         .clk_cfg = LEDC_AUTO_CLK,

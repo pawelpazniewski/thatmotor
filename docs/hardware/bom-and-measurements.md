@@ -14,7 +14,7 @@ ESP32 outputs are Hi-Z (no internal pull) during the boot/reset/brownout dead
 window, and on a brownout sag the core may emit a garbage pulse before reset.
 The real safety guarantee in that window is hardware:
 
-- **Pull-down resistors ~10 kΩ on GPIO18 (servo) and GPIO19 (ESC)** so the
+- **Pull-down resistors ~10 kΩ on GPIO18 (servo) and GPIO8 (ESC)** so the
   output lines cannot float during reset/boot/brownout.
 - **ESC's own failsafe** on loss of signal (WP880 must drive to neutral when
   PWM disappears — to be verified by measurement).
@@ -23,22 +23,28 @@ The real safety guarantee in that window is hardware:
 
 | Item | Detail | Purpose |
 |---|---|---|
-| ESP32 DevKit | dual-core, ESP-IDF v5.5 | controller |
+| ESP32-S3-WROOM-1 N16R8 DevKit | dual-core LX7, ESP-IDF v5.5, 16 MB flash | controller |
 | WP880 ESC | bidirectional brushed | motor drive |
 | Steering servo | DS3240 (or equivalent) | rudder/steering |
 | RC receiver | configurable failsafe — must output **no PWM** on RF loss | RC input source |
 | LiFePO4 12V 100Ah | main pack | supply |
 | Buck converter | 12V -> 5V | ESP32 / receiver supply |
-| Pull-down R (x2) | ~10 kΩ, GPIO18 and GPIO19 to GND | hold outputs low in dead window |
+| Pull-down R (x2) | ~10 kΩ, GPIO18 and GPIO8 to GND | hold outputs low in dead window |
 | Decoupling caps | bulk + local 100 nF near ESP32 / buck output | brownout-sag margin, noise |
 | 12V tap | **before the kill-switch** | keeps controller alive for FAILSAFE reporting while drive is cut |
 | E-stop / kill-switch | cuts motor drive, leaves ESP32 powered | R13 emergency stop |
 
-## Pin map (fixed)
+## Pin map (fixed — ESP32-S3 N16R8)
 
-GPIO34 <- CH1 (steering) · GPIO35 <- CH2 (throttle) · GPIO32 <- CH4 (diag) ·
-GPIO18 -> servo · GPIO19 -> ESC · GPIO2 -> status LED · common ground across
-ESP32 / receiver / ESC.
+GPIO4 <- CH1 (steering) · GPIO5 <- CH2 (throttle) · GPIO6 <- CH4 (diag) ·
+GPIO7 <- CH3 (diag) · GPIO16 <- GPS TXD (UART RX) · GPIO21/47 <- IMU SDA/SCL ·
+GPIO14/13 <- IMU INT/RST · GPIO18 -> servo · GPIO8 -> ESC · GPIO2 -> status LED ·
+common ground across ESP32-S3 / receiver / ESC.
+
+Reserved/unusable on N16R8: GPIO33-37 (octal PSRAM), GPIO26-32 (SPI flash),
+GPIO22-25 (do not exist), GPIO19/20 (native USB), GPIO43/44 (UART0 console),
+GPIO0/3/45/46 (strapping), GPIO48 (on-board RGB). Full I/O diagram:
+`docs/hardware/esp32s3-io-wiring.svg`.
 
 ## Measurement checklist
 

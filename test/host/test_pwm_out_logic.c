@@ -14,16 +14,16 @@ static const PwmWindow ESC_WINDOW = {.min_us = 1000U, .max_us = 2000U};
 #define CHANNEL_SERVO 0
 #define CHANNEL_ESC 1
 
-/* Expected 16-bit duty values at 50 Hz. */
-#define DUTY_1500US 4915U
-#define DUTY_MAX_US_2100 6881U
-#define DUTY_833US 2730U
-#define DUTY_2167US 7101U
-#define DUTY_500US 1638U
-#define DUTY_2500US 8192U
-#define DUTY_1000US 3277U
-#define DUTY_2000US 6554U
-#define DUTY_2300US 7537U
+/* Expected 14-bit duty values at 50 Hz (ESP32-S3 LEDC ceiling). */
+#define DUTY_1500US 1229U
+#define DUTY_MAX_US_2100 1720U
+#define DUTY_833US 682U
+#define DUTY_2167US 1775U
+#define DUTY_500US 410U
+#define DUTY_2500US 2048U
+#define DUTY_1000US 819U
+#define DUTY_2000US 1638U
+#define DUTY_2300US 1884U
 
 static void test_valid_channel_resolves_clamped_duty(void)
 {

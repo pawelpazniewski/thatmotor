@@ -1,0 +1,291 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1290" viewBox="0 0 1280 1290" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="1280" height="1290" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="640" y="40" text-anchor="middle" font-size="26" font-weight="bold" fill="#1a1a1a">ESP32-S3 N16R8 — pełny diagram wejść i wyjść (kayak motor)</text>
+  <text x="640" y="66" text-anchor="middle" font-size="14" fill="#666">Wejścia po lewej (odbiornik RC, GPS, kompas), wyjścia + zasilanie po prawej (serwo, ESC, LED). Wspólna masa.</text>
+  <text x="640" y="86" text-anchor="middle" font-size="13" fill="#a23">Mapa pinów dostosowana do ESP32-S3 (oktalny PSRAM 8 MB) — różni się od starej płytki ESP32-classic. Piny 22-25 nie istnieją; 26-37 = flash+PSRAM.</text>
+
+  <!-- ============ RC RECEIVER BOX ============ -->
+  <rect x="60" y="150" width="220" height="234" rx="8" fill="#F4F6F8" stroke="#333" stroke-width="1.5"/>
+  <text x="72" y="178" font-size="16" font-weight="bold" fill="#1a1a1a">Odbiornik RC</text>
+  <line x1="60" y1="188" x2="280" y2="188" stroke="#ccc" stroke-width="1"/>
+  <text x="270" y="216" text-anchor="end" font-size="14" fill="#222">CH1 · sterowanie</text>
+  <text x="270" y="244" text-anchor="end" font-size="14" fill="#222">CH2 · gaz</text>
+  <text x="270" y="272" text-anchor="end" font-size="14" fill="#222">CH4 · diagnostyka</text>
+  <text x="270" y="300" text-anchor="end" font-size="14" fill="#222">CH3 · diagnostyka</text>
+  <text x="270" y="328" text-anchor="end" font-size="14" fill="#222">+ (5 V)</text>
+  <text x="270" y="356" text-anchor="end" font-size="14" fill="#222">GND</text>
+
+  <!-- ============ GPS BOX ============ -->
+  <rect x="60" y="412" width="220" height="124" rx="8" fill="#F4F6F8" stroke="#333" stroke-width="1.5"/>
+  <text x="72" y="440" font-size="16" font-weight="bold" fill="#1a1a1a">GPS — NEO-M9N</text>
+  <line x1="60" y1="450" x2="280" y2="450" stroke="#ccc" stroke-width="1"/>
+  <text x="270" y="476" text-anchor="end" font-size="14" fill="#222">VDL (5 V)</text>
+  <text x="270" y="504" text-anchor="end" font-size="14" fill="#222">TXD</text>
+  <text x="270" y="532" text-anchor="end" font-size="14" fill="#222">GND</text>
+  <text x="64" y="558" font-size="12" fill="#a23" font-style="italic">RXD = niepodłączone</text>
+
+  <!-- ============ COMPASS BOX ============ -->
+  <rect x="60" y="582" width="220" height="262" rx="8" fill="#F4F6F8" stroke="#333" stroke-width="1.5"/>
+  <text x="72" y="610" font-size="16" font-weight="bold" fill="#1a1a1a">Kompas — BNO085</text>
+  <line x1="60" y1="620" x2="280" y2="620" stroke="#ccc" stroke-width="1"/>
+  <text x="270" y="646" text-anchor="end" font-size="14" fill="#222">VCC (3,3 V)</text>
+  <text x="270" y="679" text-anchor="end" font-size="14" fill="#222">SCL</text>
+  <text x="270" y="712" text-anchor="end" font-size="14" fill="#222">SDA</text>
+  <text x="270" y="745" text-anchor="end" font-size="14" fill="#222">INT</text>
+  <text x="270" y="778" text-anchor="end" font-size="14" fill="#222">RST</text>
+  <text x="270" y="808" text-anchor="end" font-size="14" fill="#222">GND</text>
+  <text x="64" y="828" font-size="11" fill="#a23" font-style="italic">ADO · PS1 · PS0 → GND  ·  CS = nc</text>
+
+  <!-- ============ ESP32-S3 BOX ============ -->
+  <rect x="500" y="130" width="280" height="690" rx="8" fill="#EAF2FB" stroke="#1F6FD6" stroke-width="1.8"/>
+  <text x="640" y="158" text-anchor="middle" font-size="18" font-weight="bold" fill="#10468f">ESP32-S3-WROOM-1</text>
+  <text x="640" y="176" text-anchor="middle" font-size="12" fill="#10468f">N16R8 · 16 MB flash · 8 MB PSRAM</text>
+  <line x1="500" y1="186" x2="780" y2="186" stroke="#bcd4ef" stroke-width="1"/>
+
+  <!-- left-edge pins (inputs) -->
+  <text x="512" y="218" font-size="14" fill="#222">GPIO4 · CH1 ster.</text>
+  <text x="512" y="250" font-size="14" fill="#222">GPIO5 · CH2 gaz</text>
+  <text x="512" y="282" font-size="14" fill="#222">GPIO6 · CH4 diag</text>
+  <text x="512" y="314" font-size="14" fill="#222">GPIO7 · CH3 diag</text>
+  <text x="512" y="388" font-size="14" fill="#222">5V</text>
+  <text x="512" y="458" font-size="14" fill="#222">GPIO16 · GPS RX</text>
+  <text x="512" y="588" font-size="14" fill="#222">3V3</text>
+  <text x="512" y="628" font-size="14" fill="#222">GPIO21 · SDA</text>
+  <text x="512" y="663" font-size="14" fill="#222">GPIO47 · SCL</text>
+  <text x="512" y="698" font-size="14" fill="#222">GPIO14 · INT</text>
+  <text x="512" y="733" font-size="14" fill="#222">GPIO13 · RST</text>
+  <text x="512" y="793" font-size="14" fill="#222">GND</text>
+
+  <!-- right-edge pins (outputs + power) -->
+  <text x="768" y="218" text-anchor="end" font-size="14" fill="#222">serwo · GPIO18</text>
+  <text x="768" y="318" text-anchor="end" font-size="14" fill="#222">ESC · GPIO8</text>
+  <text x="768" y="428" text-anchor="end" font-size="14" fill="#222">LED · GPIO2</text>
+  <text x="768" y="568" text-anchor="end" font-size="14" fill="#222">5V (z buck)</text>
+  <text x="768" y="628" text-anchor="end" font-size="14" fill="#222">GND</text>
+
+  <!-- reserved pins note under ESP -->
+  <text x="500" y="842" font-size="11" fill="#a23" font-style="italic">Niedostępne: 26-37 (flash+PSRAM) · 22-25 (brak na S3) · 19/20 (USB) · 43/44 (UART0 konsola) · 0/3/45/46 (strap) · 48 (RGB)</text>
+
+  <!-- ============ SERVO BOX ============ -->
+  <rect x="1000" y="150" width="220" height="140" rx="8" fill="#F7F2FB" stroke="#7B2FBE" stroke-width="1.5"/>
+  <text x="1012" y="178" font-size="16" font-weight="bold" fill="#5a1e8f">Serwo (sterowanie)</text>
+  <line x1="1000" y1="188" x2="1220" y2="188" stroke="#e3d3f0" stroke-width="1"/>
+  <text x="1012" y="216" font-size="14" fill="#222">Sygnał</text>
+  <text x="1208" y="248" text-anchor="end" font-size="14" fill="#222">+ (5 V)</text>
+  <text x="1208" y="280" text-anchor="end" font-size="14" fill="#222">– (GND)</text>
+
+  <!-- ============ ESC BOX ============ -->
+  <rect x="1000" y="330" width="220" height="140" rx="8" fill="#F7F2FB" stroke="#7B2FBE" stroke-width="1.5"/>
+  <text x="1012" y="358" font-size="16" font-weight="bold" fill="#5a1e8f">ESC (napęd)</text>
+  <line x1="1000" y1="368" x2="1220" y2="368" stroke="#e3d3f0" stroke-width="1"/>
+  <text x="1012" y="396" font-size="14" fill="#222">Sygnał</text>
+  <text x="1208" y="428" text-anchor="end" font-size="14" fill="#222">+ (12 V akum.)</text>
+  <text x="1208" y="460" text-anchor="end" font-size="14" fill="#222">– (GND)</text>
+
+  <!-- ============ STATUS LED BOX ============ -->
+  <rect x="1000" y="510" width="220" height="104" rx="8" fill="#FDF0F5" stroke="#E91E63" stroke-width="1.5"/>
+  <text x="1012" y="538" font-size="16" font-weight="bold" fill="#b01049">Status LED</text>
+  <line x1="1000" y1="548" x2="1220" y2="548" stroke="#f6cdde" stroke-width="1"/>
+  <text x="1012" y="574" font-size="14" fill="#222">Anoda (+R 330 Ω)</text>
+  <text x="1208" y="602" text-anchor="end" font-size="14" fill="#222">Katoda (GND)</text>
+
+  <!-- ============ POWER BOX ============ -->
+  <rect x="1000" y="654" width="220" height="150" rx="8" fill="#FFF7EA" stroke="#E8740C" stroke-width="1.5"/>
+  <text x="1012" y="682" font-size="16" font-weight="bold" fill="#a8540a">Zasilanie</text>
+  <line x1="1000" y1="692" x2="1220" y2="692" stroke="#f3dcc0" stroke-width="1"/>
+  <text x="1208" y="718" text-anchor="end" font-size="14" fill="#222">12 V akumulator</text>
+  <text x="1208" y="748" text-anchor="end" font-size="14" fill="#222">5 V (buck OUT)</text>
+  <text x="1208" y="778" text-anchor="end" font-size="14" fill="#222">GND wspólny</text>
+  <text x="1012" y="745" font-size="13" fill="#10468f">→ ESP 5V</text>
+  <text x="1012" y="775" font-size="13" fill="#10468f">→ ESP GND</text>
+
+  <!-- ============ INPUT WIRES (left box right edge x=270 -> ESP left x=500) ============ -->
+  <!-- RC CH1 steering : amber -->
+  <path d="M270,212 C390,212 380,212 500,212" fill="none" stroke="#E8B500" stroke-width="6"/>
+  <!-- RC CH2 throttle : red -->
+  <path d="M270,240 C390,240 380,244 500,244" fill="none" stroke="#D7263D" stroke-width="6"/>
+  <!-- RC CH4 diag : gray -->
+  <path d="M270,268 C390,268 380,276 500,276" fill="none" stroke="#888888" stroke-width="6"/>
+  <!-- RC CH3 diag : gray dashed -->
+  <path d="M270,296 C390,296 380,308 500,308" fill="none" stroke="#888888" stroke-width="6"/>
+  <path d="M270,296 C390,296 380,308 500,308" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- RC + 5V : orange -->
+  <path d="M270,324 C390,324 380,382 500,382" fill="none" stroke="#E8740C" stroke-width="6"/>
+  <!-- RC GND : blue/white -->
+  <path d="M270,352 C400,352 390,787 500,787" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <path d="M270,352 C400,352 390,787 500,787" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- GPS VDL 5V : orange -->
+  <path d="M270,472 C390,472 380,382 500,382" fill="none" stroke="#E8740C" stroke-width="6"/>
+  <!-- GPS TXD -> GPIO16 : orange/white -->
+  <path d="M270,500 C390,500 380,452 500,452" fill="none" stroke="#E8740C" stroke-width="6"/>
+  <path d="M270,500 C390,500 380,452 500,452" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- GPS GND : blue/white -->
+  <path d="M270,528 C400,528 390,787 500,787" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <path d="M270,528 C400,528 390,787 500,787" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- Compass VCC -> 3V3 : green -->
+  <path d="M270,642 C390,642 380,582 500,582" fill="none" stroke="#2E9E3F" stroke-width="6"/>
+  <!-- Compass SCL -> GPIO47 : green/white -->
+  <path d="M270,675 C390,675 380,658 500,658" fill="none" stroke="#2E9E3F" stroke-width="6"/>
+  <path d="M270,675 C390,675 380,658 500,658" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- Compass SDA -> GPIO21 : blue -->
+  <path d="M270,708 C390,708 380,623 500,623" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <!-- Compass INT -> GPIO14 : brown/white -->
+  <path d="M270,741 C390,741 380,693 500,693" fill="none" stroke="#6B4A2F" stroke-width="6"/>
+  <path d="M270,741 C390,741 380,693 500,693" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- Compass RST -> GPIO13 : brown -->
+  <path d="M270,774 C390,774 380,728 500,728" fill="none" stroke="#6B4A2F" stroke-width="6"/>
+  <!-- Compass GND : blue/white -->
+  <path d="M270,804 C400,804 390,787 500,787" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <path d="M270,804 C400,804 390,787 500,787" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+
+  <!-- ============ OUTPUT SIGNAL WIRES (ESP right x=780 -> right box left x=1000) ============ -->
+  <!-- servo signal : purple -->
+  <path d="M780,212 C890,212 890,212 1000,212" fill="none" stroke="#7B2FBE" stroke-width="6"/>
+  <!-- ESC signal : purple dashed -->
+  <path d="M780,312 C890,312 890,392 1000,392" fill="none" stroke="#7B2FBE" stroke-width="6"/>
+  <path d="M780,312 C890,312 890,392 1000,392" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- LED : pink -->
+  <path d="M780,422 C890,422 890,570 1000,570" fill="none" stroke="#E91E63" stroke-width="6"/>
+
+  <!-- ============ POWER WIRES ============ -->
+  <!-- buck 5V -> ESP 5V : orange -->
+  <path d="M1000,740 C900,740 900,562 780,562" fill="none" stroke="#E8740C" stroke-width="6"/>
+  <!-- buck GND -> ESP GND : blue/white -->
+  <path d="M1000,770 C910,770 900,622 780,622" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <path d="M1000,770 C910,770 900,622 780,622" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+
+  <!-- ============ FAR-RIGHT POWER BUS (x=1220) ============ -->
+  <!-- servo + (1220,244) <-> buck 5V (1220,744) : orange -->
+  <path d="M1220,244 C1258,244 1258,744 1220,744" fill="none" stroke="#E8740C" stroke-width="6"/>
+  <!-- ESC + (1220,424) <-> 12V akum (1220,714) : red thick -->
+  <path d="M1220,424 C1252,424 1252,714 1220,714" fill="none" stroke="#C01010" stroke-width="6"/>
+  <!-- servo - (1220,276) <-> GND (1220,774) : blue/white -->
+  <path d="M1220,276 C1264,276 1264,774 1220,774" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <path d="M1220,276 C1264,276 1264,774 1220,774" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- ESC - (1220,456) <-> GND (1220,774) : blue/white -->
+  <path d="M1220,456 C1248,456 1248,774 1220,774" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <path d="M1220,456 C1248,456 1248,774 1220,774" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+  <!-- LED katoda (1220,598) <-> GND (1220,774) : blue/white -->
+  <path d="M1220,598 C1242,598 1242,774 1220,774" fill="none" stroke="#1F6FD6" stroke-width="6"/>
+  <path d="M1220,598 C1242,598 1242,774 1220,774" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="9 9"/>
+
+  <!-- ============ CONNECTION DOTS ============ -->
+  <g fill="#222">
+    <!-- left box pins -->
+    <circle cx="270" cy="212" r="4"/><circle cx="270" cy="240" r="4"/><circle cx="270" cy="268" r="4"/>
+    <circle cx="270" cy="296" r="4"/><circle cx="270" cy="324" r="4"/><circle cx="270" cy="352" r="4"/>
+    <circle cx="270" cy="472" r="4"/><circle cx="270" cy="500" r="4"/><circle cx="270" cy="528" r="4"/>
+    <circle cx="270" cy="642" r="4"/><circle cx="270" cy="675" r="4"/><circle cx="270" cy="708" r="4"/>
+    <circle cx="270" cy="741" r="4"/><circle cx="270" cy="774" r="4"/><circle cx="270" cy="804" r="4"/>
+    <!-- ESP left pins -->
+    <circle cx="500" cy="212" r="4"/><circle cx="500" cy="244" r="4"/><circle cx="500" cy="276" r="4"/>
+    <circle cx="500" cy="308" r="4"/><circle cx="500" cy="382" r="4"/><circle cx="500" cy="452" r="4"/>
+    <circle cx="500" cy="582" r="4"/><circle cx="500" cy="623" r="4"/><circle cx="500" cy="658" r="4"/>
+    <circle cx="500" cy="693" r="4"/><circle cx="500" cy="728" r="4"/><circle cx="500" cy="787" r="4"/>
+    <!-- ESP right pins -->
+    <circle cx="780" cy="212" r="4"/><circle cx="780" cy="312" r="4"/><circle cx="780" cy="422" r="4"/>
+    <circle cx="780" cy="562" r="4"/><circle cx="780" cy="622" r="4"/>
+    <!-- right box left pins -->
+    <circle cx="1000" cy="212" r="4"/><circle cx="1000" cy="392" r="4"/><circle cx="1000" cy="570" r="4"/>
+    <circle cx="1000" cy="740" r="4"/><circle cx="1000" cy="770" r="4"/>
+    <!-- right box power pins -->
+    <circle cx="1220" cy="244" r="4"/><circle cx="1220" cy="276" r="4"/><circle cx="1220" cy="424" r="4"/>
+    <circle cx="1220" cy="456" r="4"/><circle cx="1220" cy="598" r="4"/>
+    <circle cx="1220" cy="714" r="4"/><circle cx="1220" cy="744" r="4"/><circle cx="1220" cy="774" r="4"/>
+  </g>
+
+  <!-- ============ LEGEND ============ -->
+  <text x="60" y="888" font-size="18" font-weight="bold" fill="#1a1a1a">Legenda — pełna mapa połączeń (ESP32-S3 N16R8)</text>
+  <rect x="60" y="900" width="1160" height="372" rx="8" fill="#FAFBFC" stroke="#ccc" stroke-width="1.2"/>
+
+  <!-- column headers -->
+  <text x="155" y="928" font-size="13" font-weight="bold" fill="#555">WEJŚCIA</text>
+  <text x="715" y="928" font-size="13" font-weight="bold" fill="#555">WYJŚCIA · ZASILANIE</text>
+  <line x1="80" y1="938" x2="600" y2="938" stroke="#ddd" stroke-width="1"/>
+  <line x1="640" y1="938" x2="1200" y2="938" stroke="#ddd" stroke-width="1"/>
+
+  <!-- LEFT COLUMN: inputs -->
+  <!-- 1 RC CH1 -->
+  <line x1="80" y1="962" x2="150" y2="962" stroke="#E8B500" stroke-width="7"/>
+  <text x="165" y="966" font-size="13" fill="#222">RC CH1 sterowanie · odbiornik CH1</text>
+  <text x="588" y="966" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO4</text>
+  <!-- 2 RC CH2 -->
+  <line x1="80" y1="990" x2="150" y2="990" stroke="#D7263D" stroke-width="7"/>
+  <text x="165" y="994" font-size="13" fill="#222">RC CH2 gaz · odbiornik CH2</text>
+  <text x="588" y="994" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO5</text>
+  <!-- 3 RC CH4 -->
+  <line x1="80" y1="1018" x2="150" y2="1018" stroke="#888888" stroke-width="7"/>
+  <text x="165" y="1022" font-size="13" fill="#222">RC CH4 diagnostyka · odbiornik CH4</text>
+  <text x="588" y="1022" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO6</text>
+  <!-- 4 RC CH3 -->
+  <line x1="80" y1="1046" x2="150" y2="1046" stroke="#888888" stroke-width="7"/>
+  <line x1="80" y1="1046" x2="150" y2="1046" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="165" y="1050" font-size="13" fill="#222">RC CH3 diagnostyka · odbiornik CH3</text>
+  <text x="588" y="1050" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO7</text>
+  <!-- 5 GPS data -->
+  <line x1="80" y1="1074" x2="150" y2="1074" stroke="#E8740C" stroke-width="7"/>
+  <line x1="80" y1="1074" x2="150" y2="1074" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="165" y="1078" font-size="13" fill="#222">GPS dane (UART RX) · GPS TXD</text>
+  <text x="588" y="1078" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO16</text>
+  <!-- 6 compass VCC -->
+  <line x1="80" y1="1102" x2="150" y2="1102" stroke="#2E9E3F" stroke-width="7"/>
+  <text x="165" y="1106" font-size="13" fill="#222">Kompas zasilanie 3,3 V · BNO085 VCC</text>
+  <text x="588" y="1106" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">3V3</text>
+  <!-- 7 SCL -->
+  <line x1="80" y1="1130" x2="150" y2="1130" stroke="#2E9E3F" stroke-width="7"/>
+  <line x1="80" y1="1130" x2="150" y2="1130" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="165" y="1134" font-size="13" fill="#222">I2C zegar · BNO085 SCL</text>
+  <text x="588" y="1134" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO47</text>
+  <!-- 8 SDA -->
+  <line x1="80" y1="1158" x2="150" y2="1158" stroke="#1F6FD6" stroke-width="7"/>
+  <text x="165" y="1162" font-size="13" fill="#222">I2C dane · BNO085 SDA</text>
+  <text x="588" y="1162" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO21</text>
+  <!-- 9 INT -->
+  <line x1="80" y1="1186" x2="150" y2="1186" stroke="#6B4A2F" stroke-width="7"/>
+  <line x1="80" y1="1186" x2="150" y2="1186" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="165" y="1190" font-size="13" fill="#222">Przerwanie data-ready · BNO085 INT</text>
+  <text x="588" y="1190" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO14</text>
+  <!-- 10 RST -->
+  <line x1="80" y1="1214" x2="150" y2="1214" stroke="#6B4A2F" stroke-width="7"/>
+  <text x="165" y="1218" font-size="13" fill="#222">Reset · BNO085 RST</text>
+  <text x="588" y="1218" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO13</text>
+
+  <!-- RIGHT COLUMN: outputs + power -->
+  <!-- servo -->
+  <line x1="640" y1="962" x2="710" y2="962" stroke="#7B2FBE" stroke-width="7"/>
+  <text x="725" y="966" font-size="13" fill="#222">Serwo sygnał (LEDC PWM)</text>
+  <text x="1198" y="966" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO18</text>
+  <!-- ESC -->
+  <line x1="640" y1="990" x2="710" y2="990" stroke="#7B2FBE" stroke-width="7"/>
+  <line x1="640" y1="990" x2="710" y2="990" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="725" y="994" font-size="13" fill="#222">ESC sygnał (LEDC PWM)</text>
+  <text x="1198" y="994" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO8</text>
+  <!-- LED -->
+  <line x1="640" y1="1018" x2="710" y2="1018" stroke="#E91E63" stroke-width="7"/>
+  <text x="725" y="1022" font-size="13" fill="#222">Status LED (anoda + R 330 Ω)</text>
+  <text x="1198" y="1022" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO2</text>
+  <!-- 5V rail -->
+  <line x1="640" y1="1046" x2="710" y2="1046" stroke="#E8740C" stroke-width="7"/>
+  <text x="725" y="1050" font-size="13" fill="#222">Szyna 5 V · buck OUT, RC +, GPS VDL, serwo +</text>
+  <text x="1198" y="1050" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">5V</text>
+  <!-- 12V -->
+  <line x1="640" y1="1074" x2="710" y2="1074" stroke="#C01010" stroke-width="7"/>
+  <text x="725" y="1078" font-size="13" fill="#222">12 V akumulator · ESC + (napęd)</text>
+  <text x="1198" y="1078" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">12 V</text>
+  <!-- GND -->
+  <line x1="640" y1="1102" x2="710" y2="1102" stroke="#1F6FD6" stroke-width="7"/>
+  <line x1="640" y1="1102" x2="710" y2="1102" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
+  <text x="725" y="1106" font-size="13" fill="#222">Masa wspólna · wszystkie GND (ESP, RC, GPS, kompas, ESC, serwo)</text>
+  <text x="1198" y="1106" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GND</text>
+
+  <!-- safety note -->
+  <line x1="640" y1="1126" x2="1200" y2="1126" stroke="#ddd" stroke-width="1"/>
+  <text x="640" y="1150" font-size="12" font-weight="bold" fill="#a23">Bezpieczeństwo (z BOM):</text>
+  <text x="640" y="1170" font-size="12" fill="#444">• Rezystory pull-down ~10 kΩ z GPIO18 (serwo) i GPIO8 (ESC) do GND —</text>
+  <text x="652" y="1186" font-size="12" fill="#444">trzymają wyjścia nisko w oknie boot/reset/brownout (Hi-Z).</text>
+  <text x="640" y="1208" font-size="12" fill="#444">• E-stop / kill-switch przerywa napęd, zostawia ESP zasilony (R13).</text>
+  <text x="640" y="1230" font-size="12" fill="#444">• Kondensatory odsprzęgające (bulk + 100 nF) przy ESP / wyjściu buck.</text>
+  <text x="640" y="1252" font-size="12" fill="#10468f">• Flashowanie/monitor: lewy USB-C (COM/UART). Prawy USB-C = natywny USB-OTG (GPIO19/20).</text>
+</svg>
