@@ -15,6 +15,10 @@ extern "C" {
  */
 typedef struct {
     bool fix;             /* true when GGA reports a usable fix quality (>0) */
+    bool fresh;           /* true while a fresh fix arrived within the staleness
+                           * window; set by the reader task (NOT by the parser),
+                           * mirrors imu_state.ok. Panel/spot-lock input only,
+                           * never a failsafe input. */
     uint8_t sats;         /* satellites used in the fix */
     int32_t lat_e7;       /* latitude in degrees * 1e7 (negative for S) */
     int32_t lon_e7;       /* longitude in degrees * 1e7 (negative for W) */
