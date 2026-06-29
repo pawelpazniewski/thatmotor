@@ -9,10 +9,10 @@
 _Static_assert(PWM_OUT_LOGIC_CHANNEL_COUNT == PWM_OUT_CHANNEL_COUNT,
                "pwm_out_logic channel count out of sync with PwmOutChannel");
 
-/* GPIO assignment (ESP32-S3 N16R8 pin map). ESC moves off GPIO19 (native USB
- * D- on the S3) to a plain output pin; servo stays on GPIO18. */
-#define PWM_OUT_SERVO_GPIO 18
-#define PWM_OUT_ESC_GPIO 8
+/* GPIO assignment (ESP32-S3 N16R8 pin map). Servo and ESC sit on an adjacent
+ * header pair (9,10) so the two output leads plug in side by side. */
+#define PWM_OUT_SERVO_GPIO 9
+#define PWM_OUT_ESC_GPIO 10
 
 #define PWM_OUT_SPEED_MODE LEDC_LOW_SPEED_MODE
 #define PWM_OUT_TIMER LEDC_TIMER_0

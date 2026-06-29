@@ -10,13 +10,13 @@
 
 static const char *TAG = "gps";
 
-/* UART wiring for the NEO-M9N (NMEA, 38400 8N1). UART1's default pins are the
- * flash pins (9/10), so we MUST remap with uart_set_pin. GPS TXD -> ESP RX,
- * GPS RXD <- ESP TX. */
+/* UART wiring for the NEO-M9N (NMEA, 38400 8N1). UART1's default pins are not
+ * usable here, so we remap with uart_set_pin. The GPS is receive-only: GPS TXD
+ * -> ESP RX (GPIO15); ESP TX is unused (GPS RXD is not wired). */
 #define GPS_UART_PORT UART_NUM_1
 #define GPS_UART_BAUD 38400
-#define GPS_UART_TX_GPIO 17
-#define GPS_UART_RX_GPIO 16
+#define GPS_UART_TX_GPIO UART_PIN_NO_CHANGE
+#define GPS_UART_RX_GPIO 15
 #define GPS_UART_RX_BUF 1024
 
 /* Reader task: low priority so it can never preempt or stall the 50 Hz control
@@ -118,8 +118,8 @@ esp_err_t gps_start(void)
     if (ok != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
-    ESP_LOGI(TAG, "GPS reader up: UART%d RX=GPIO%d TX=GPIO%d @ %d baud",
-             GPS_UART_PORT, GPS_UART_RX_GPIO, GPS_UART_TX_GPIO, GPS_UART_BAUD);
+    ESP_LOGI(TAG, "GPS reader up: UART%d RX=GPIO%d (TX unused) @ %d baud",
+             GPS_UART_PORT, GPS_UART_RX_GPIO, GPS_UART_BAUD);
     return ESP_OK;
 }
 
