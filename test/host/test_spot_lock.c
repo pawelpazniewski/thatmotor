@@ -277,6 +277,40 @@ void test_pause_on_imu_loss(void)
     TEST_ASSERT_EQUAL_INT32(0, out.servo_cmd);
 }
 
+void test_pause_on_fix_loss_then_resume_keeps_target(void)
+{
+    /* Arrange: ACTIVE, current ~10 m from the target so a held output would be
+     * observably non-neutral, but the fix is lost while still fresh (seed-fresh
+     * window). Re-validating the fix during hold must pause - if dropped, step 4
+     * would run and yield ACTIVE with thrust (oracle power). */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_base_inputs();
+    in.ch3_edge_on = false;
+    in.lat_e7 = REF_LAT_E7 - E7_10M; /* target north, bow aligned -> would thrust */
+    in.heading_deg10 = 0;
+    in.gps_fresh = true;  /* still inside the freshness window */
+    in.gps_has_fix = false; /* but no real fix */
+    in.imu_ok = true;
+    spot_lock_state st = make_active_state();
+
+    /* Act: fix lost. */
+    spot_lock_outputs paused = spot_lock_step(&in, &p, &st);
+
+    /* Assert: PAUSED with relaxed actuators, target retained. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_PAUSED, paused.substate);
+    TEST_ASSERT_EQUAL_INT32(0, paused.throttle_cmd);
+    TEST_ASSERT_EQUAL_INT32(0, paused.servo_cmd);
+    TEST_ASSERT_EQUAL_INT32(REF_LAT_E7, st.ref_lat_e7);
+
+    /* Act: fix returns. */
+    in.gps_has_fix = true;
+    spot_lock_outputs resumed = spot_lock_step(&in, &p, &st);
+
+    /* Assert: back to ACTIVE on the SAME target. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, resumed.substate);
+    TEST_ASSERT_EQUAL_INT32(REF_LAT_E7, st.ref_lat_e7);
+}
+
 void test_abort_on_ch3_off(void)
 {
     /* Arrange: ACTIVE, CH3 switched off. */
@@ -347,6 +381,7 @@ void run_spot_lock_tests(void)
     RUN_TEST(test_throttle_capped_at_max_for_large_distance);
     RUN_TEST(test_pause_on_gps_loss_then_resume_keeps_target);
     RUN_TEST(test_pause_on_imu_loss);
+    RUN_TEST(test_pause_on_fix_loss_then_resume_keeps_target);
     RUN_TEST(test_abort_on_ch3_off);
     RUN_TEST(test_abort_on_stick_out_of_deadband);
     RUN_TEST(test_step_is_deterministic);

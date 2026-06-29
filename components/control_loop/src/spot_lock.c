@@ -131,8 +131,10 @@ spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
         st->substate = SPOT_LOCK_ACTIVE;
     }
 
-    /* 3. Pause on sensor loss; retain the target and relax actuators (R5). */
-    if (!in->gps_fresh || !in->imu_ok) {
+    /* 3. Pause on sensor loss; retain the target and relax actuators (R5). The
+     * fix is re-validated each cycle: a stale fix can still be inside the
+     * freshness window (seed-fresh), so holding on a lost fix is unsafe. */
+    if (!in->gps_fresh || !in->imu_ok || !in->gps_has_fix) {
         st->substate = SPOT_LOCK_PAUSED;
         return make_idle_output(SPOT_LOCK_PAUSED);
     }

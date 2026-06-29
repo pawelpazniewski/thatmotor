@@ -107,6 +107,26 @@ Weryfikacja:
 
 ---
 
+## Do poprawy po review fazy 2
+
+Severity gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (0× P1, 1× P2). Pełny raport: `review-faza-2.md`.
+Bramki zielone: host-tests 327/327, `idf.py build` (esp32s3) OK, `geo_math.h` składniowo
+poprawny (bloki komentarzy zbalansowane). Brak odchyleń od planu.
+
+- [x] 🟠 [important] **components/control_loop/src/spot_lock.c:135** — `gps_has_fix` nie jest re-walidowany w trakcie ACTIVE hold (gate sprawdza tylko `!gps_fresh || !imu_ok`). Do rozstrzygnięcia w Unit 6: potwierdzić, że `gps_fresh` w trakcie hold prowoduje jakość fixu (fresh wygasa ≤1,5 s po utracie fixu); jeśli nie — dodać `|| !in->gps_has_fix` do warunku pauzy. ✅ Naprawione (cykl 1): warunek pauzy = `!gps_fresh || !imu_ok || !gps_has_fix`; host-test `test_pause_on_fix_loss_then_resume_keeps_target` z mocą wyroczni.
+
+Nity P3 (opcjonalne):
+- [ ] 🟡 [nit] **components/control_loop/src/spot_lock.c:73-77** — `throttle_command`: cast-before-clamp; dla `dist_m > ~32 km` iloczyn przekracza `INT32_MAX` (cast impl-defined). Cap i tak wymusza bezpieczny zakres; opcjonalnie clamp w `double` przed castem.
+- [ ] 🟡 [nit] **components/control_loop/src/spot_lock.c:113** — brak NULL-guardów na `in`/`p`/`st` (kontrakt non-NULL; akceptowalne dla czystej funkcji wewnętrznej).
+- [ ] 🟡 [nit] **components/control_loop/src/geo_math.c:31** — model equirectangular degeneruje przy biegunach (`cos(ref_lat)→0`); nagłówek nie dokumentuje tego limitu (bez znaczenia dla szerokości kajakowych).
+- [ ] 🟡 [nit] **geo_math.c / spot_lock.c** — duplikacja stałych `DEG10_*`; `SPOT_LOCK_CMD_FULL_SCALE` zdublowany względem `SIGNAL_NORMALIZED_FULL_SCALE` — Unit 6 musi utrzymać synchronizację.
+- [ ] 🟡 [nit] **components/control_loop/src/spot_lock.c:41-49** — `heading_error_deg10` przy błędzie 1800 zwraca +1800 (asymetria na granicy); nieszkodliwe (bramka ±600 odrzuca).
+- [ ] 🟡 [nit] **test/host/test_spot_lock.c** — wejściowy gate `gps_fresh` nie testowany osobno (pokryte `gps_has_fix=false` i brak zbocza; logika dzielona z pauzą).
+- [ ] 🟡 [nit] **test/host/test_spot_lock.c** — brak dedykowanego testu przejścia z sub-stanu PAUSED (PAUSED→OFF / PAUSED→PAUSED); wspólny pierwszy guard, ryzyko niskie.
+- [ ] 🟡 [nit] **test/host/test_spot_lock.c:157** — asercja `throttle_cmd==0` redundantna względem wyroczni deadbandu (oracle niesie `servo_cmd==0`); zostawić.
+
+---
+
 ## Faza 3 — Integracja, parametry, telemetria
 
 ### Unit 5: Parametry spot-lock w settings (SI-6) (R6, R7, R8)
