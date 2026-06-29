@@ -426,6 +426,10 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     s_snapshot.imu_ok = m.ok;
     s_snapshot.imu_heading_deg10 = m.heading_deg10;
     s_snapshot.imu_calib = m.calib;
+    /* Spot-lock telemetry from this cycle's loop outputs (ints only). */
+    s_snapshot.spot_lock_state = out->telemetry.spot_lock_substate;
+    s_snapshot.spot_lock_err_m = out->telemetry.spot_lock_err_m;
+    s_snapshot.spot_lock_bearing_deg10 = out->telemetry.spot_lock_bearing_deg10;
 }
 
 /* Drive the RGB status LED for this cycle from the pure pattern (Unit 11). */

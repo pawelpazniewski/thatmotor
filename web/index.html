@@ -60,6 +60,17 @@
   </section>
 
   <section class="card">
+    <h2>Spot-lock (CH3)</h2>
+    <div class="grid">
+      <div class="metric"><span class="label">State</span><span id="spot_lock_state" class="value">--</span></div>
+      <div class="metric"><span class="label">Error (m)</span><span id="spot_lock_err" class="value">--</span></div>
+      <div class="metric"><span class="label">Bearing to point (deg)</span><span id="spot_lock_bearing" class="value">--</span></div>
+      <div class="metric"><span class="label">Bow heading (deg)</span><span id="spot_lock_bow" class="value">--</span></div>
+    </div>
+    <p class="hint">Holds the GPS point only while ARMED. Losing GPS/heading pauses it (neutral); any stick movement or CH3 OFF returns to manual within one cycle.</p>
+  </section>
+
+  <section class="card">
     <h2>Status flags (R16)</h2>
     <div class="grid">
       <div class="metric"><span class="label">Source</span><span id="source" class="value">--</span></div>

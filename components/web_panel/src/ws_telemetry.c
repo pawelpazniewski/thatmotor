@@ -30,7 +30,9 @@ static int snapshot_to_json(const control_loop_snapshot *s, char *buf, size_t n)
         "\"defaults_used\":%s,\"nvs_error\":%s,"
         "\"gps_fix\":%s,\"gps_sats\":%u,\"gps_lat_e7\":%d,\"gps_lon_e7\":%d,"
         "\"gps_speed_cms\":%u,"
-        "\"imu_ok\":%s,\"imu_heading_deg10\":%u,\"imu_calib\":%u}",
+        "\"imu_ok\":%s,\"imu_heading_deg10\":%u,\"imu_calib\":%u,"
+        "\"spot_lock_state\":%u,\"spot_lock_err_m\":%u,"
+        "\"spot_lock_bearing_deg10\":%u}",
         (int)s->state, (unsigned)s->arm_reason, s->rc_valid ? "true" : "false",
         (unsigned)s->ch1_us, (unsigned)s->ch2_us, (unsigned)s->ch4_us,
         (unsigned)s->ch3_us,
@@ -45,7 +47,9 @@ static int snapshot_to_json(const control_loop_snapshot *s, char *buf, size_t n)
         s->gps_fix ? "true" : "false", (unsigned)s->gps_sats,
         (int)s->gps_lat_e7, (int)s->gps_lon_e7, (unsigned)s->gps_speed_cms,
         s->imu_ok ? "true" : "false", (unsigned)s->imu_heading_deg10,
-        (unsigned)s->imu_calib);
+        (unsigned)s->imu_calib,
+        (unsigned)s->spot_lock_state, (unsigned)s->spot_lock_err_m,
+        (unsigned)s->spot_lock_bearing_deg10);
 }
 
 /* httpd work callback: runs in the server task. Sends the latest snapshot to

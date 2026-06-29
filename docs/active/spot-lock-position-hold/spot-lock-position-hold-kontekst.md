@@ -1,7 +1,7 @@
 # Kontekst: Spot-lock — automatyczne utrzymywanie pozycji GPS (CH3)
 
 **Branch:** `feature/spot-lock-position-hold`
-**Ostatnia aktualizacja:** 2026-06-29 (Faza 2 ukończona)
+**Ostatnia aktualizacja:** 2026-06-29 (Faza 3 ukończona — implementacja)
 
 ## Źródła
 - Requirements doc: `docs/dev-brainstorms/2026-06-29-spot-lock-requirements.md`
@@ -151,6 +151,68 @@
     `components/control_loop/CMakeLists.txt` (kompilują się na toolchainie target,
     jeszcze nieużywane przez `loop_step` — integracja w Unit 6). Grep czysty: brak
     `esp_*`/`driver/*` include w `geo_math.h`/`spot_lock.h`.
+  - **Review Fazy 2 (2026-06-29):** ⚠️ severity gate ZASTRZEŻENIA — 0× P1, **1× P2**,
+    8× P3 (raport `review-faza-2.md`). Multi-agent: security / test-coverage +
+    architecture self-review (agent architecture zaciął się na szumie clangd xtensa —
+    analiza ręczna). Bramki: host-tests 327/327, `idf.py build` (esp32s3) zielony,
+    `geo_math.h`/`spot_lock.h` składniowo poprawne (bloki komentarzy zbalansowane —
+    pułapka `*/` naprawiona). Moc wyroczni testów (cap/bramka/deadband/cos) potwierdzona
+    EMPIRYCZNIE: każda transformacja FAILuje po usunięciu. Kierunek sterowania
+    (`geo_offset_m(ref,current)` = wektor ku celowi) zweryfikowany. Numerycznie bezpieczne
+    (różnice w `double`, `atan2(0,0)` short-circuit, brak NaN/overflow w realnym zakresie).
+    **P2 do Unit 6:** `gps_has_fix` NIE jest re-walidowany w gate hold (`spot_lock.c:135`
+    sprawdza tylko `!gps_fresh||!imu_ok`) — potwierdzić, że `fresh` prowoduje fix w trakcie
+    hold (fresh wygasa ≤1,5 s po utracie fixu) lub dodać `|| !gps_has_fix` do pauzy.
+  - **Re-review Fazy 2 (cykl 1, commit `f612827`):** ✅ CZYSTE — 0× P1, 0× P2. P2
+    NAPRAWIONY: gate pauzy = `!gps_fresh || !imu_ok || !gps_has_fix` (re-walidacja fixu
+    w trakcie hold; spójny z gate'em wejścia). Semantyka PAUSED→ACTIVE z tym samym celem
+    zachowana (`ref_*` ustawiane tylko na OFF→ACTIVE). Nowy `test_pause_on_fix_loss_then_
+    resume_keeps_target` z udowodnioną EMPIRYCZNIE mocą wyroczni (po usunięciu
+    `!gps_has_fix` test FAILuje: Expected 2/PAUSED Was 1/ACTIVE). Brak osłabienia asercji,
+    zero regresji. Bramki: host-tests **328/328**, `idf.py build` (esp32s3) zielony.
+    Pozostają tylko nity P3 (carry-over, opcjonalne). Pełny raport: `review-faza-2.md`.
+
+- **Faza 3 — Integracja, parametry, telemetria — UKOŃCZONA (implementacja, 2026-06-29).**
+  - Unit 5 (commit `22b934d`): 4 parametry spot-lock w `settings_params`
+    (`spot_lock_deadband_m`, `spot_lock_max_throttle_pct`, `spot_lock_throttle_gain`,
+    `spot_lock_servo_gain`) z łagodnymi defaultami (3 m / 35% / gain 30 per m /
+    gain 20 per deg). Bump `SETTINGS_SCHEMA_VERSION` 5→6 + migracja `blob_codec`
+    (`BLOB_CODEC_FIELD_BYTES` 53→61, SIZE 57→65; prior-schema v5 odrzucany →
+    reload defaults). Walidacja zakresów (deadband 0..100 m, pct reuse 0..100,
+    gain 0..1000). Serializacja w `/params` (U16_FIELDS). **SI-6 NIEZMIENIONE:**
+    `params_decide_write` bramkuje na stanie, nie na polach — POST nowych pól w
+    ARMED → 409. +5 host-testów (range/defaults/SI-6/blob round-trip v6).
+  - Unit 6 (commit `c16c924`): integracja w `loop_step`. Po `sm_step`, TYLKO w
+    gałęzi `sm.state==ARMED`, `resolve_spot_lock` woła czysty `spot_lock_step`
+    (mapuje `loop_inputs`→`spot_lock_inputs`, `settings`→`spot_lock_params`;
+    pct→`max_throttle_norm`). ACTIVE/PAUSED → `THROTTLE_TARGET_SPOT_LOCK` /
+    `SERVO_TARGET_SPOT_LOCK` (computed command threaded jako nowy param do
+    `throttle_chain_step`/`servo_chain_step`; ten sam tor ramp/slew →
+    `map_normalized_to_us` → hard clamp SI-3). **Failsafe ZAWSZE wygrywa:** poza
+    ARMED spot-lock forsowany OFF (resolve_spot_lock), override się nie wykonuje
+    → FAILSAFE daje neutral+center. Nowy predykat `steer_is_neutral` +
+    `sticks_within_neutral` (wspólna domena neutralności gazu i steru, R3/R4).
+    GPS/IMU do `loop_inputs` przez `apply_sensor_inputs` w `read_inputs` — tylko
+    wejścia spot-lock, NIGDY rc_valid/sm_inputs/failsafe. `loop_telemetry` niesie
+    substate/err_m/bearing. +10 host-testów (6 integracyjnych: hold z computed
+    throttle, failsafe-beats-spot-lock z mocą wyroczni, CH3 off→manual ≤1 cykl,
+    abort stickiem, pauza GPS, hard clamp; +2 throttle SPOT_LOCK; +2 servo
+    SPOT_LOCK). **Decyzja:** `spot_lock_cmd` jako dodatkowy param chainu
+    (po `mode`), ignorowany poza trybem SPOT_LOCK — uniknięto duplikacji toru
+    ramp/map/clamp; zaktualizowano 24 istniejące call-sites bez osłabienia asercji.
+  - Unit 7 (commit poniżej): telemetria + panel. `control_loop_snapshot` +
+    `spot_lock_state`/`err_m`/`bearing_deg10` (ints), `publish_snapshot` populuje
+    z `out->telemetry`. `snapshot_to_json` dodaje 3 pola (`%u`, ints only).
+    Panel: karta „Spot-lock (CH3)" (state off/active/paused, błąd[m], bearing do
+    punktu, dziób) + PARAM_LABELS dla 4 nowych parametrów. JSON serializacja to
+    cienki HAL — kontrakt int zweryfikowany `idf.py build`; wartości
+    `loop_telemetry.spot_lock_*` host-testowane w `test_spot_lock_holds_*`.
+  - Walidacja: host-tests **343/343** zielone (+15: 5 Unit 5 + 10 Unit 6);
+    `idf.py build` (esp32s3) zielony po każdym Unicie. Luki hardware/E2E spot-lock
+    odłożone do `known-issues.md` §4b.
+  - **control_loop.c** urósł ~448→~480 linii (>300, przerost istniejący/HAL).
+    Dodano spójny helper `apply_sensor_inputs`; ekstrakcja adaptera aux odłożona
+    (P3, jak w nocie review Fazy 1) — do rozważenia w przyszłym refaktorze HAL.
 
 ## Reguły projektu (bramki jakości)
 

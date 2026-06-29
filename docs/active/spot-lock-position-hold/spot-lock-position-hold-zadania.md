@@ -174,15 +174,15 @@ Weryfikacja:
 ### Unit 7: Telemetria spot-lock + panel (R9)
 
 Implementacja:
-- [ ] Modyfikuj `components/control_loop/include/control_loop.h` — `spot_lock_state` (u8), `spot_lock_err_m` (u16), `spot_lock_bearing_deg10` (u16)
-- [ ] Modyfikuj `control_loop.c::publish_snapshot` — populacja z `loop_outputs`/telemetry
-- [ ] Modyfikuj `components/web_panel/src/ws_telemetry.c::snapshot_to_json` — nowe pola (ints/bools only)
-- [ ] Modyfikuj front-end panelu — blok „Spot-lock: off/active/paused, błąd X m, kierunek Y° / dziób Z°"
-- [ ] Rozszerz host-test serializacji telemetrii (jeśli istnieje) lub zweryfikuj kontrakt JSON
+- [x] Modyfikuj `components/control_loop/include/control_loop.h` — `spot_lock_state` (u8), `spot_lock_err_m` (u16), `spot_lock_bearing_deg10` (u16)
+- [x] Modyfikuj `control_loop.c::publish_snapshot` — populacja z `loop_outputs`/telemetry
+- [x] Modyfikuj `components/web_panel/src/ws_telemetry.c::snapshot_to_json` — nowe pola (ints/bools only)
+- [x] Modyfikuj front-end panelu — blok „Spot-lock: off/active/paused, błąd X m, kierunek Y° / dziób Z°"
+- [x] Rozszerz host-test serializacji telemetrii (jeśli istnieje) lub zweryfikuj kontrakt JSON
 
 Testy:
-- [ ] Test: snapshot z ACTIVE serializuje `spot_lock_state=1`, `err_m`, `bearing_deg10` jako int
-- [ ] Test: [E2E] panel pokazuje off→active po CH3 ON, błąd maleje przy dopływaniu, paused przy utracie GPS (hardware — log w known-issues)
+- [x] Test: snapshot z ACTIVE serializuje `spot_lock_state=1`, `err_m`, `bearing_deg10` jako int (host: `test_spot_lock_holds_with_computed_throttle` asercje `loop_telemetry.spot_lock_*`; ścieżka JSON `snapshot_to_json` to cienki HAL `%u`, zweryfikowany `idf.py build`)
+- [ ] Test: [E2E] panel pokazuje off→active po CH3 ON, błąd maleje przy dopływaniu, paused przy utracie GPS (hardware — log w known-issues) — ODŁOŻONE do `docs/completed/kayak-motor-firmware-v1/known-issues.md` §4b
 
 Weryfikacja:
 - [ ] Weryfikacja: `idf.py build` zielony
