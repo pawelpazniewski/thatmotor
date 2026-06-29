@@ -16,16 +16,16 @@ Legenda: `Test:` = scenariusz testowy (host/Unity), `Weryfikacja:` = kryterium u
 ### Unit 1: Licznik świeżości GPS + czysty predykat wrap-safe (R5)
 
 Implementacja:
-- [ ] Stwórz `components/gps/include/sensor_freshness.h` (`bool sensor_is_fresh(uint32_t now_ms, uint32_t last_ms, uint32_t threshold_ms)`, kontrakt epoki w nagłówku)
-- [ ] Stwórz `components/gps/src/sensor_freshness.c`
-- [ ] Modyfikuj `components/gps/include/nmea_parse.h` — pole świeżości w `gps_state`
-- [ ] Modyfikuj `components/gps/src/gps_reader.c` — `s_last_fix_ms`, `GPS_STALE_AFTER_MS 1500`, staleness w pętli taska, odświeżanie `s_last_fix_ms` tylko przy parsie z fixem
-- [ ] Stwórz `test/host/test_sensor_freshness.c`; zarejestruj w `test/host/CMakeLists.txt` (PURE_SOURCES + TEST_SOURCES) i `test/host/test_main.c`
+- [x] Stwórz `components/gps/include/sensor_freshness.h` (`bool sensor_is_fresh(uint32_t now_ms, uint32_t last_ms, uint32_t threshold_ms)`, kontrakt epoki w nagłówku)
+- [x] Stwórz `components/gps/src/sensor_freshness.c`
+- [x] Modyfikuj `components/gps/include/nmea_parse.h` — pole świeżości w `gps_state`
+- [x] Modyfikuj `components/gps/src/gps_reader.c` — `s_last_fix_ms`, `GPS_STALE_AFTER_MS 1500`, staleness w pętli taska, odświeżanie `s_last_fix_ms` tylko przy parsie z fixem
+- [x] Stwórz `test/host/test_sensor_freshness.c`; zarejestruj w `test/host/CMakeLists.txt` (PURE_SOURCES + TEST_SOURCES) i `test/host/test_main.c`
 
 Testy (test-first dla `sensor_is_fresh`):
-- [ ] Test: `now-last < threshold` → fresh=true; `> threshold` → false; `== threshold` zdefiniowane i przetestowane
-- [ ] Test: granica wrapu uint32 (`last` tuż przed `UINT32_MAX`, `now` po przewinięciu) → poprawne; test FAILuje przy naiwnym `now-last`
-- [ ] Test: parse bez fixu nie odświeża `last_ms`
+- [x] Test: `now-last < threshold` → fresh=true; `> threshold` → false; `== threshold` zdefiniowane i przetestowane
+- [x] Test: granica wrapu uint32 (`last` tuż przed `UINT32_MAX`, `now` po przewinięciu) → poprawne; test FAILuje przy naiwnym `now-last`
+- [x] Test: parse bez fixu nie odświeża `last_ms`
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone (w tym wrap)
@@ -35,14 +35,14 @@ Weryfikacja:
 ### Unit 2: Wspólny moduł switch-debounce + odczyt CH3 (R1, R4)
 
 Implementacja:
-- [ ] Rename `components/rc_validity/src/ch4_switch.c` → `switch_debounce.c`, `include/ch4_switch.h` → `switch_debounce.h` (symbole `ch4_switch_*` → `switch_debounce_*`)
-- [ ] Aktualizuj konsumentów CH4: `control_loop.c::apply_ch4_switch`, `make_ch4_switch_cfg`; `components/rc_validity/CMakeLists.txt`; `test/host/CMakeLists.txt`
-- [ ] Modyfikuj `control_loop.c` — odczyt `RC_CAP_CH3`, instancja `switch_debounce_state s_ch3_switch` + cfg, wynik do `loop_inputs` (`spot_lock_switch_on` + zbocze)
-- [ ] Rename `test/host/test_ch4_switch.c` → `test_switch_debounce.c`; aktualizuj `test_main.c`
+- [x] Rename `components/rc_validity/src/ch4_switch.c` → `switch_debounce.c`, `include/ch4_switch.h` → `switch_debounce.h` (symbole `ch4_switch_*` → `switch_debounce_*`)
+- [x] Aktualizuj konsumentów CH4: `control_loop.c::apply_ch4_switch`, `make_ch4_switch_cfg`; `components/rc_validity/CMakeLists.txt`; `test/host/CMakeLists.txt`
+- [x] Modyfikuj `control_loop.c` — odczyt `RC_CAP_CH3`, instancja `switch_debounce_state s_ch3_switch` + cfg, wynik do `loop_inputs` (`spot_lock_switch_on` + zbocze)
+- [x] Rename `test/host/test_ch4_switch.c` → `test_switch_debounce.c`; aktualizuj `test_main.c`
 
 Testy:
-- [ ] Test: wszystkie istniejące scenariusze CH4 przechodzą pod nową nazwą (baseline bez eventu, debounce N ramek, hold przy out-of-band, edge-only)
-- [ ] Test: CH3 low→high po debounce → event TO_HIGH; high→low → TO_LOW; trzymanie nie powtarza eventu
+- [x] Test: wszystkie istniejące scenariusze CH4 przechodzą pod nową nazwą (baseline bez eventu, debounce N ramek, hold przy out-of-band, edge-only)
+- [x] Test: CH3 low→high po debounce → event TO_HIGH; high→low → TO_LOW; trzymanie nie powtarza eventu
 
 Weryfikacja:
 - [ ] Weryfikacja: pełny host-suite zielony (zero regresji CH4)

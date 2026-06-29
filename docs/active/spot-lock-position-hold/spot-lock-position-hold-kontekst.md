@@ -92,6 +92,23 @@
 - Faza 2 (Unit 3 → Unit 4) — Unit 4 zależy od geo_math.
 - Faza 3: Unit 5 niezależny; **Unit 6 zależy od 1, 2, 4, 5**; Unit 7 zależy od 6.
 
+## Postęp implementacji
+
+- **Faza 1 — Fundamenty wejść — UKOŃCZONA (2026-06-29).**
+  - Unit 1 (commit `c06795f`): czysty moduł `sensor_freshness` (`sensor_is_fresh`
+    wrap-safe modular subtraction; `sensor_freshness_stamp` odświeża znacznik tylko
+    przy fixie). Pole `gps_state.fresh` ustawiane przez task czytnika
+    (`GPS_STALE_AFTER_MS=1500`), poza failsafe. Boundary `==threshold` → stale (strict <).
+    Decyzja: wydzielono `sensor_freshness_stamp` zza HAL, by reguła "odśwież tylko
+    przy fixie" była host-testowalna (Pure ⊥ HAL).
+  - Unit 2 (commit `2983edd`): rename `ch4_switch` → `switch_debounce` (symbole
+    `switch_debounce_*` / `SWITCH_DEBOUNCE_*`), zero osłabienia asercji. Druga
+    instancja `s_ch3_switch` w `control_loop.c` (`SPOT_LOCK_CH3_THRESHOLD_US=1500`,
+    poza RC_valid). Nowe pola `loop_inputs.spot_lock_switch_on` /
+    `spot_lock_switch_edge_on` populowane w `read_inputs`; `loop_step` skonsumuje je
+    dopiero w Unit 6.
+  - Walidacja: host-tests 305/305 zielone; `idf.py build` (esp32s3) zielony.
+
 ## Reguły projektu (bramki jakości)
 
 - `.claude/rules/coding-rules.md`: pliki <300 linii, funkcje <50, nesting ≤2, NIGDY nie
