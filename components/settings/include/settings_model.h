@@ -18,8 +18,11 @@ extern "C" {
  * click (arm/disarm) from a triple click (deploy/stow).
  * v5: add the signed servo neutral trim (servo_trim_us): a mechanical-zero
  * correction added to the servo output before the hard clamp, so neutral,
- * endpoints and deploy all shift uniformly. */
-#define SETTINGS_SCHEMA_VERSION 5U
+ * endpoints and deploy all shift uniformly.
+ * v6: add the spot-lock (CH3 GPS position hold) regulator parameters
+ * (spot_lock_deadband_m, spot_lock_max_throttle_pct, spot_lock_throttle_gain,
+ * spot_lock_servo_gain). */
+#define SETTINGS_SCHEMA_VERSION 6U
 
 /* Signed servo neutral trim bounds/step (public: the control loop drives the
  * panel's live Step Left/Right with these; the validator/defaults reuse them).
@@ -80,6 +83,14 @@ typedef struct {
     /* Manual DEPLOY mode (raise the motor). */
     uint16_t deploy_servo_us;          /* servo pulse held in DEPLOY (motor off) */
     uint16_t click_window_ms;          /* CH4 click-gesture window (1 vs 3 clicks) */
+
+    /* Spot-lock (CH3 GPS position hold) regulator. All tunable in the panel;
+     * gentle defaults (de-risk: stable hold on mild gains, tuned in the field).
+     * The integration maps these onto the pure spot_lock_params each cycle. */
+    uint16_t spot_lock_deadband_m;       /* hold radius, metres (R6) */
+    uint16_t spot_lock_max_throttle_pct; /* forward thrust cap, percent (R7) */
+    uint16_t spot_lock_throttle_gain;    /* normalized throttle per metre error */
+    uint16_t spot_lock_servo_gain;       /* normalized servo per degree of bearing */
 } settings_params;
 
 #ifdef __cplusplus

@@ -98,3 +98,18 @@
 #define CLICK_WINDOW_MS_MIN 200U
 #define CLICK_WINDOW_MS_MAX 1000U
 #define CLICK_WINDOW_MS_DEFAULT 500U
+
+/* Spot-lock regulator (CH3 GPS position hold). Gentle defaults so the very first
+ * field test holds stably on mild authority; all tuned in the panel afterwards.
+ * Deadband ~3 m relaxes the motor near the point; the forward-thrust cap is a low
+ * 35% so an aggressive distance gain can never exceed a safe crawl. Gains are
+ * normalized command units (full scale 1000): per metre of position error
+ * (throttle) and per degree of bearing error (servo). */
+#define SPOT_LOCK_DEADBAND_M_MIN 0U
+#define SPOT_LOCK_DEADBAND_M_MAX 100U
+#define SPOT_LOCK_DEADBAND_M_DEFAULT 3U
+#define SPOT_LOCK_MAX_THROTTLE_PCT_DEFAULT 35U /* reuses MAX_THROTTLE_PCT_MIN/MAX */
+#define SPOT_LOCK_GAIN_MIN 0U
+#define SPOT_LOCK_GAIN_MAX 1000U
+#define SPOT_LOCK_THROTTLE_GAIN_DEFAULT 30U
+#define SPOT_LOCK_SERVO_GAIN_DEFAULT 20U

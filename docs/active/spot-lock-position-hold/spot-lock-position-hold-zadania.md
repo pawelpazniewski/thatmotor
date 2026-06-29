@@ -132,17 +132,17 @@ Nity P3 (opcjonalne):
 ### Unit 5: Parametry spot-lock w settings (SI-6) (R6, R7, R8)
 
 Implementacja:
-- [ ] Modyfikuj `components/settings/include/settings_model.h` — pola (`spot_lock_deadband_m/dm`, `spot_lock_max_throttle_pct`, `spot_lock_gain_*`), bump `SETTINGS_SCHEMA_VERSION`
-- [ ] Modyfikuj `components/settings/src/settings_ranges.h` — MIN/MAX/DEFAULT (deadband ~3 m, max gaz ~35%)
-- [ ] Modyfikuj `components/settings/src/settings_defaults.c` — przypisz defaults
-- [ ] Modyfikuj `components/settings/src/settings_validate.c` — walidacja zakresów
-- [ ] Modyfikuj `components/web_panel/src/params_json.c` — dopisz do `U16_FIELDS`
-- [ ] Rozszerz `test/host/test_settings_validate.c` (+ `test_blob_codec.c` round-trip nowej wersji, jeśli dotyczy)
+- [x] Modyfikuj `components/settings/include/settings_model.h` — pola (`spot_lock_deadband_m/dm`, `spot_lock_max_throttle_pct`, `spot_lock_gain_*`), bump `SETTINGS_SCHEMA_VERSION`
+- [x] Modyfikuj `components/settings/src/settings_ranges.h` — MIN/MAX/DEFAULT (deadband ~3 m, max gaz ~35%)
+- [x] Modyfikuj `components/settings/src/settings_defaults.c` — przypisz defaults
+- [x] Modyfikuj `components/settings/src/settings_validate.c` — walidacja zakresów
+- [x] Modyfikuj `components/web_panel/src/params_json.c` — dopisz do `U16_FIELDS`
+- [x] Rozszerz `test/host/test_settings_validate.c` (+ `test_blob_codec.c` round-trip nowej wersji, jeśli dotyczy)
 
 Testy:
-- [ ] Test: wartość poza zakresem (np. max gaz 200%) odrzucona/clampowana; w zakresie akceptowana
-- [ ] Test: defaults ładują się przy świeżej/skorrumpowanej NVS (UNCALIBRATED) z sensownymi wartościami spot-lock
-- [ ] Test: POST nowych pól w ARMED → 409 (SI-6 niezmienione)
+- [x] Test: wartość poza zakresem (np. max gaz 200%) odrzucona/clampowana; w zakresie akceptowana
+- [x] Test: defaults ładują się przy świeżej/skorrumpowanej NVS (UNCALIBRATED) z sensownymi wartościami spot-lock
+- [x] Test: POST nowych pól w ARMED → 409 (SI-6 niezmienione)
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone

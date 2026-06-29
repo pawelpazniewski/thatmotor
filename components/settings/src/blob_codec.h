@@ -34,8 +34,9 @@ extern "C" {
  * ch4_mode_switch_enabled (bool): +3 bytes over the v2 layout (44 -> 47).
  * schema v4 added deploy_servo_us (u16) and click_window_ms (u16): +4 bytes over
  * the v3 layout (47 -> 51). schema v5 added servo_trim_us (i16): +2 bytes over
- * the v4 layout (51 -> 53). */
-#define BLOB_CODEC_FIELD_BYTES 53U
+ * the v4 layout (51 -> 53). schema v6 added the four spot-lock regulator params
+ * (4x u16): +8 bytes over the v5 layout (53 -> 61). */
+#define BLOB_CODEC_FIELD_BYTES 61U
 #define BLOB_CODEC_CRC_BYTES 4U
 #define BLOB_CODEC_SIZE (BLOB_CODEC_FIELD_BYTES + BLOB_CODEC_CRC_BYTES)
 

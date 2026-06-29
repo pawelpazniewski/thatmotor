@@ -37,6 +37,10 @@ static const u16_field U16_FIELDS[] = {
     U16_FIELD(ch4_switch_threshold_us),
     U16_FIELD(deploy_servo_us),
     U16_FIELD(click_window_ms),
+    U16_FIELD(spot_lock_deadband_m),
+    U16_FIELD(spot_lock_max_throttle_pct),
+    U16_FIELD(spot_lock_throttle_gain),
+    U16_FIELD(spot_lock_servo_gain),
 };
 
 #define U16_FIELD_COUNT (sizeof(U16_FIELDS) / sizeof(U16_FIELDS[0]))
