@@ -20,7 +20,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/pwm_out/src/pwm_out_logic.c
     ${REPO_ROOT}/components/rc_capture/src/cap_math.c
     ${REPO_ROOT}/components/rc_validity/src/rc_validity.c
-    ${REPO_ROOT}/components/rc_validity/src/ch4_switch.c
+    ${REPO_ROOT}/components/rc_validity/src/switch_debounce.c
     ${REPO_ROOT}/components/rc_validity/src/click_counter.c
     ${REPO_ROOT}/components/settings/src/settings_defaults.c
     ${REPO_ROOT}/components/settings/src/settings_validate.c
@@ -69,7 +69,7 @@ set(TEST_SOURCES
     test_pwm_out_logic.c
     test_cap_math.c
     test_rc_validity.c
-    test_ch4_switch.c
+    test_switch_debounce.c
     test_click_counter.c
     test_settings_validate.c
     test_blob_codec.c

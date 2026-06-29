@@ -81,7 +81,7 @@
  * default 1500 us is the midpoint of a typical 2-position switch (~1000/~2000
  * us), so above it reads "high" (arm) and below it reads "low" (disarm). The
  * debounce-frame count is a property of the switch interpreter and is defined
- * in ch4_switch.h. */
+ * in switch_debounce.h. */
 #define CH4_MODE_SWITCH_ENABLED_DEFAULT true
 #define CH4_SWITCH_THRESHOLD_US_DEFAULT 1500U
 

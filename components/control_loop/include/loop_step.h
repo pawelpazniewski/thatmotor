@@ -49,6 +49,8 @@ typedef struct {
     bool stow_request;     /* explicit "leave DEPLOY" -> DISARMED this cycle */
     calib_event calib_event;/* calibration step event (next/cancel) this cycle */
     bool calib_timeout;    /* calibration idle timeout elapsed this cycle */
+    bool spot_lock_switch_on;      /* CH3 debounced level: spot-lock requested */
+    bool spot_lock_switch_edge_on; /* CH3 rising edge this cycle (enter intent) */
 } loop_inputs;
 
 /** Per-channel validity thresholds (constant across cycles). */
