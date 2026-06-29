@@ -344,6 +344,24 @@ static void apply_ui_events(loop_inputs *in)
     apply_trim_events(&ev);
 }
 
+/* Read the GPS + IMU shared state into the per-cycle inputs. Spot-lock control
+ * inputs ONLY: they feed spot_lock_step in the ARMED branch and NEVER rc_valid /
+ * channel_valid / sm_inputs / failsafe. Losing them pauses spot-lock, it does
+ * not trip failsafe (same diagnostic-only contract the snapshot uses). */
+static void apply_sensor_inputs(loop_inputs *in)
+{
+    gps_state g;
+    gps_get_state(&g);
+    in->gps_fresh = g.fresh;
+    in->gps_has_fix = g.fix;
+    in->gps_lat_e7 = g.lat_e7;
+    in->gps_lon_e7 = g.lon_e7;
+    imu_state m;
+    imu_get_state(&m);
+    in->imu_ok = m.ok;
+    in->imu_heading_deg10 = m.heading_deg10;
+}
+
 /* Read the two control channels into the per-cycle input snapshot. */
 static loop_inputs read_inputs(void)
 {
@@ -358,6 +376,7 @@ static loop_inputs read_inputs(void)
     /* CH3 spot-lock switch: debounced level + rising edge into the inputs.
      * Consumed by loop_step only in the ARMED branch (Unit 6); never failsafe. */
     apply_ch3_switch(&in);
+    apply_sensor_inputs(&in);
     return in;
 }
 

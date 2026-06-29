@@ -24,7 +24,7 @@ static uint32_t settle_servo(uint32_t raw_us, servo_target_mode mode,
     int32_t slew = (int32_t)servo_center_us(p);
     uint32_t servo_us = 0;
     for (int i = 0; i < SETTLE_CYCLES; i++) {
-        servo_us = servo_chain_step(raw_us, mode, p, &slew);
+        servo_us = servo_chain_step(raw_us, mode, 0, p, &slew);
     }
     return servo_us;
 }
@@ -84,7 +84,7 @@ static void test_slew_limits_speed_on_large_jump(void)
     int32_t slew = (int32_t)servo_center_us(&p);
 
     /* Act: a single large CH1 jump. */
-    uint32_t servo_us = servo_chain_step(2000U, SERVO_TARGET_TRACK, &p, &slew);
+    uint32_t servo_us = servo_chain_step(2000U, SERVO_TARGET_TRACK, 0, &p, &slew);
 
     /* Assert: moved by exactly the slew rate, NOT all the way to the endpoint. */
     TEST_ASSERT_EQUAL_UINT32(servo_center_us(&p) + p.servo_slew_us_per_cycle,
@@ -98,7 +98,7 @@ static void test_slew_never_overshoots_target(void)
     settings_params p = defaults_params();
     int32_t slew = (int32_t)servo_center_us(&p);
     for (int i = 0; i < SETTLE_CYCLES; i++) {
-        servo_chain_step(2000U, SERVO_TARGET_TRACK, &p, &slew);
+        servo_chain_step(2000U, SERVO_TARGET_TRACK, 0, &p, &slew);
     }
 
     /* Assert: lands exactly on the endpoint, never past it. */
@@ -112,7 +112,7 @@ static void test_failsafe_slews_to_center(void)
     int32_t slew = (int32_t)p.servo_max_us;
 
     /* Act: one FAILSAFE cycle must not jump straight to center. */
-    uint32_t after_one = servo_chain_step(2000U, SERVO_TARGET_CENTER, &p, &slew);
+    uint32_t after_one = servo_chain_step(2000U, SERVO_TARGET_CENTER, 0, &p, &slew);
 
     /* Assert: still off-center after one cycle (slew, not a jump). */
     TEST_ASSERT_NOT_EQUAL(servo_center_us(&p), after_one);
@@ -120,7 +120,7 @@ static void test_failsafe_slews_to_center(void)
 
     /* Act: settle. */
     for (int i = 0; i < SETTLE_CYCLES; i++) {
-        after_one = servo_chain_step(2000U, SERVO_TARGET_CENTER, &p, &slew);
+        after_one = servo_chain_step(2000U, SERVO_TARGET_CENTER, 0, &p, &slew);
     }
 
     /* Assert: rests at center. */
@@ -322,6 +322,48 @@ static void test_servo_trim_stepped_clamps_to_symmetric_bound(void)
     TEST_ASSERT_EQUAL_INT16(300, servo_trim_stepped(300, 1, 7, 300));
 }
 
+/* Settle the servo chain in SPOT_LOCK mode (stick centered, so manual would hold
+ * center) with a fixed signed normalized command. */
+static uint32_t settle_servo_spot_lock(int32_t cmd, const settings_params *p)
+{
+    int32_t slew = (int32_t)servo_center_us(p);
+    uint32_t servo_us = 0;
+    for (int i = 0; i < SETTLE_CYCLES; i++) {
+        servo_us = servo_chain_step(1500U, SERVO_TARGET_SPOT_LOCK, cmd, p, &slew);
+    }
+    return servo_us;
+}
+
+static void test_spot_lock_command_steers_through_chain(void)
+{
+    /* Spot-lock substitutes a signed servo command for the stick. With CH1
+     * centered (manual would hold center) a +full command settles at the max
+     * endpoint via the same map -> slew -> clamp path. */
+    settings_params p = defaults_params();
+
+    /* Act */
+    uint32_t servo_us = settle_servo_spot_lock(SIGNAL_NORMALIZED_FULL_SCALE, &p);
+
+    /* Assert: steered to the configured max endpoint, off center. */
+    TEST_ASSERT_EQUAL_UINT32(p.servo_max_us, servo_us);
+    TEST_ASSERT_GREATER_THAN_UINT32(servo_center_us(&p), servo_us);
+}
+
+static void test_spot_lock_servo_output_clamped_to_window(void)
+{
+    /* SI-3 ORACLE on the spot-lock path: an out-of-band max endpoint (2700 us set
+     * directly) with a full command maps to 2700 us; the hard clamp MUST snap it
+     * to the 2500 us electrical ceiling. */
+    settings_params p = defaults_params();
+    p.servo_max_us = 2700U; /* beyond the [500,2500] hard window on purpose */
+
+    /* Act */
+    uint32_t servo_us = settle_servo_spot_lock(SIGNAL_NORMALIZED_FULL_SCALE, &p);
+
+    /* Assert: clamped to the hard ceiling. */
+    TEST_ASSERT_EQUAL_UINT32(SERVO_HARD_MAX_US, servo_us);
+}
+
 void run_servo_chain_tests(void)
 {
     RUN_TEST(test_full_left_settles_at_min_endpoint);
@@ -345,4 +387,6 @@ void run_servo_chain_tests(void)
     RUN_TEST(test_deploy_target_shifted_by_trim);
     RUN_TEST(test_servo_trim_stepped_adds_and_subtracts);
     RUN_TEST(test_servo_trim_stepped_clamps_to_symmetric_bound);
+    RUN_TEST(test_spot_lock_command_steers_through_chain);
+    RUN_TEST(test_spot_lock_servo_output_clamped_to_window);
 }

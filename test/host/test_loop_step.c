@@ -409,6 +409,229 @@ static void test_pending_applies_only_in_disarmed(void)
     TEST_ASSERT_FALSE(loop_should_apply_pending(SM_STATE_ESC_CALIBRATION));
 }
 
+/* Build a spot-lock-ready input set: neutral sticks (so manual would be
+ * neutral/center), valid fresh RC, and a fresh GPS fix + IMU heading at the
+ * given position. ch3 level/edge control entry and abort. */
+static loop_inputs spot_lock_inputs_at(int32_t lat_e7, int32_t lon_e7,
+                                       uint16_t heading_deg10, bool ch3_on,
+                                       bool ch3_edge_on)
+{
+    loop_inputs in = make_inputs(1500U, 1500U, false);
+    in.spot_lock_switch_on = ch3_on;
+    in.spot_lock_switch_edge_on = ch3_edge_on;
+    in.gps_fresh = true;
+    in.gps_has_fix = true;
+    in.imu_ok = true;
+    in.gps_lat_e7 = lat_e7;
+    in.gps_lon_e7 = lon_e7;
+    in.imu_heading_deg10 = heading_deg10;
+    return in;
+}
+
+/* Reach ARMED, then enter spot-lock at the origin (CH3 rising edge, neutral
+ * sticks, fresh fix). Returns with substate ACTIVE and the target snapshot at
+ * (0,0). Heading of the entry frame is irrelevant (distance 0 -> idle). */
+static void arm_and_enter_spot_lock(loop_state *state,
+                                    const loop_validity_cfg *cfg,
+                                    const settings_params *params)
+{
+    arm(state, cfg, params);
+    loop_inputs enter = spot_lock_inputs_at(0, 0, 0, true, true);
+    loop_outputs out = loop_step(&enter, cfg, params, state);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+}
+
+/* Bow heading that points due SOUTH (deg*10): the bearing from a point NORTH of
+ * the target back to the target. Aligning heading with it engages forward thrust. */
+#define HEADING_SOUTH_DEG10 1800U
+/* A drift ~22 m north of the target (0.0002 deg lat); well outside the deadband. */
+#define DRIFT_NORTH_LAT_E7 2000
+
+static void test_spot_lock_holds_with_computed_throttle(void)
+{
+    /* Arrange: armed + spot-lock active, target at origin. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_enter_spot_lock(&state, &cfg, &params);
+
+    /* Act: drifted ~22 m north, bow already pointing south (toward target), so
+     * the regulator adds forward thrust. CH3 held on, sticks neutral. */
+    loop_inputs hold =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
+    loop_outputs out = {0};
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&hold, &cfg, &params, &state);
+    }
+
+    /* Assert: still ARMED + ACTIVE, ESC computed ABOVE neutral (manual at a
+     * neutral stick would be neutral), telemetry reports the error + bearing. */
+    TEST_ASSERT_EQUAL(SM_STATE_ARMED, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_GREATER_THAN_UINT32(ESC_NEUTRAL_US, out.esc_us);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_err_m > 0U);
+    TEST_ASSERT_EQUAL_UINT16(HEADING_SOUTH_DEG10,
+                             out.telemetry.spot_lock_bearing_deg10);
+}
+
+static void test_failsafe_beats_spot_lock(void)
+{
+    /* Arrange: spot-lock active and drifted (it WOULD command forward thrust). */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_enter_spot_lock(&state, &cfg, &params);
+
+    uint32_t center = ((uint32_t)params.servo_min_us +
+                       (uint32_t)params.servo_max_us) / 2U;
+
+    /* Act: RC dies (stale edges) while the GPS still shows a drifted, fresh fix
+     * with the bow aligned for thrust. sm_step latches FAILSAFE; spot-lock must
+     * NOT run outside ARMED. */
+    loop_inputs bad =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
+    bad.ch1 = stale_sample(1500U);
+    bad.ch2 = stale_sample(1500U);
+    loop_outputs out = {0};
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&bad, &cfg, &params, &state);
+    }
+
+    /* Assert: FAILSAFE wins -> ESC neutral + servo center, spot-lock forced OFF.
+     * If the override ran outside ARMED the ESC would be forward (FAIL). */
+    TEST_ASSERT_EQUAL(SM_STATE_FAILSAFE, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
+    TEST_ASSERT_EQUAL_UINT32(center, out.servo_us);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+}
+
+static void test_spot_lock_ch3_off_returns_to_manual(void)
+{
+    /* Arrange: spot-lock active and drifted (commanding forward thrust). */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_enter_spot_lock(&state, &cfg, &params);
+    loop_inputs hold =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
+    for (int i = 0; i < 400; i++) {
+        loop_step(&hold, &cfg, &params, &state);
+    }
+
+    /* Act: CH3 switched OFF -> manual must resume within ONE cycle. */
+    loop_inputs off =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, false, false);
+    loop_outputs out = loop_step(&off, &cfg, &params, &state);
+
+    /* Assert: spot-lock OFF after a single cycle (manual tracking resumed). */
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+}
+
+static void test_spot_lock_stick_aborts_immediately(void)
+{
+    /* Arrange: spot-lock active and drifted (forward thrust engaged). */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_enter_spot_lock(&state, &cfg, &params);
+    loop_inputs hold =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
+    loop_outputs out = {0};
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&hold, &cfg, &params, &state);
+    }
+    TEST_ASSERT_GREATER_THAN_UINT32(ESC_NEUTRAL_US, out.esc_us); /* was forward */
+
+    /* Act: operator nudges the STEERING stick off-center (throttle still
+     * neutral); CH3 stays on. The stick deflection aborts spot-lock at once. */
+    loop_inputs nudge =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
+    nudge.ch1 = sample_at(2000U); /* hard steer */
+    out = loop_step(&nudge, &cfg, &params, &state);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+
+    /* Assert: manual resumes -> throttle eases to neutral (stick neutral) and the
+     * servo follows the steering stick off center. */
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&nudge, &cfg, &params, &state);
+    }
+    uint32_t center = ((uint32_t)params.servo_min_us +
+                       (uint32_t)params.servo_max_us) / 2U;
+    TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
+    TEST_ASSERT_NOT_EQUAL(center, out.servo_us);
+}
+
+static void test_spot_lock_pauses_on_gps_loss(void)
+{
+    /* Arrange: spot-lock active and drifted. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_enter_spot_lock(&state, &cfg, &params);
+    loop_inputs hold =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
+    for (int i = 0; i < 400; i++) {
+        loop_step(&hold, &cfg, &params, &state);
+    }
+
+    uint32_t center = ((uint32_t)params.servo_min_us +
+                       (uint32_t)params.servo_max_us) / 2U;
+
+    /* Act: GPS freshness lost (still ARMED, CH3 on, sticks neutral). */
+    loop_inputs paused =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
+    paused.gps_fresh = false;
+    loop_outputs out = {0};
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&paused, &cfg, &params, &state);
+    }
+
+    /* Assert: PAUSED (NOT OFF, NOT failsafe) -> ESC neutral + servo center, state
+     * stays ARMED so recovering the fix resumes the hold. */
+    TEST_ASSERT_EQUAL(SM_STATE_ARMED, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_PAUSED, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
+    TEST_ASSERT_EQUAL_UINT32(center, out.servo_us);
+}
+
+static void test_spot_lock_output_passes_hard_clamp(void)
+{
+    /* SI-3 on the integrated spot-lock path: an out-of-band forward endpoint plus
+     * a 100% thrust cap would map a saturated command to 3000 us; the hard clamp
+     * MUST snap the ESC to the 2000 us window ceiling. */
+    settings_params params;
+    settings_load_defaults(&params);
+    params.spot_lock_max_throttle_pct = 100U;
+    params.esc_forward_max_us = 3000U; /* out of the [1000,2000] window */
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_enter_spot_lock(&state, &cfg, &params);
+
+    /* Act: large drift + bow aligned -> command saturates to the cap. */
+    loop_inputs hold =
+        spot_lock_inputs_at(50000, 0, HEADING_SOUTH_DEG10, true, false);
+    loop_outputs out = {0};
+    for (int i = 0; i < 800; i++) {
+        out = loop_step(&hold, &cfg, &params, &state);
+    }
+
+    /* Assert: clamped to the hard ceiling, never above it. */
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(2000U, out.esc_us);
+    TEST_ASSERT_EQUAL_UINT32(2000U, out.esc_us);
+}
+
 void run_loop_step_tests(void)
 {
     RUN_TEST(test_disarmed_full_throttle_outputs_neutral_esc);
@@ -425,4 +648,10 @@ void run_loop_step_tests(void)
     RUN_TEST(test_calibration_entry_frame_ignores_event_starts_at_neutral);
     RUN_TEST(test_calibration_reentry_reinitialises_step_to_neutral);
     RUN_TEST(test_pending_applies_only_in_disarmed);
+    RUN_TEST(test_spot_lock_holds_with_computed_throttle);
+    RUN_TEST(test_failsafe_beats_spot_lock);
+    RUN_TEST(test_spot_lock_ch3_off_returns_to_manual);
+    RUN_TEST(test_spot_lock_stick_aborts_immediately);
+    RUN_TEST(test_spot_lock_pauses_on_gps_loss);
+    RUN_TEST(test_spot_lock_output_passes_hard_clamp);
 }

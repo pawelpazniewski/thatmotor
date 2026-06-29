@@ -23,7 +23,7 @@ static uint32_t settle_throttle(uint32_t raw_us, throttle_target_mode mode,
     throttle_ramp_state st = {.value = 0, .dwell_remaining = 0};
     uint32_t esc_us = 0;
     for (int i = 0; i < SETTLE_CYCLES; i++) {
-        esc_us = throttle_chain_step(raw_us, mode, p, NO_DWELL_FRAMES, &st);
+        esc_us = throttle_chain_step(raw_us, mode, 0, p, NO_DWELL_FRAMES, &st);
     }
     return esc_us;
 }
@@ -200,7 +200,7 @@ static void test_ramp_up_climbs_with_ramp_up_rate(void)
 
     /* Act: one cycle only. */
     uint32_t esc_us =
-        throttle_chain_step(2000U, THROTTLE_TARGET_TRACK, &p, NO_DWELL_FRAMES,
+        throttle_chain_step(2000U, THROTTLE_TARGET_TRACK, 0, &p, NO_DWELL_FRAMES,
                             &st);
 
     /* Assert: after one cycle the ramped command equals esc_ramp_up (5), so the
@@ -220,7 +220,7 @@ static void test_ramp_down_uses_ramp_down_rate(void)
                               .dwell_remaining = 0}; /* at full */
 
     /* Act: command center -> target 0, one cycle. */
-    throttle_chain_step(1500U, THROTTLE_TARGET_TRACK, &p, NO_DWELL_FRAMES, &st);
+    throttle_chain_step(1500U, THROTTLE_TARGET_TRACK, 0, &p, NO_DWELL_FRAMES, &st);
 
     /* Assert: dropped by exactly esc_ramp_down (10), distinct from ramp_up. */
     TEST_ASSERT_EQUAL_INT32(
@@ -236,7 +236,7 @@ static void test_ramp_never_overshoots_target(void)
     p.max_throttle_rev_pct = 100U;
     throttle_ramp_state st = {.value = 0, .dwell_remaining = 0};
     for (int i = 0; i < SETTLE_CYCLES; i++) {
-        throttle_chain_step(2000U, THROTTLE_TARGET_TRACK, &p, NO_DWELL_FRAMES,
+        throttle_chain_step(2000U, THROTTLE_TARGET_TRACK, 0, &p, NO_DWELL_FRAMES,
                             &st);
     }
 
@@ -255,7 +255,7 @@ static void test_failsafe_override_soft_stops_to_neutral(void)
 
     /* Act: one FAILSAFE cycle must NOT jump straight to neutral. */
     uint32_t after_one =
-        throttle_chain_step(2000U, THROTTLE_TARGET_NEUTRAL, &p, NO_DWELL_FRAMES,
+        throttle_chain_step(2000U, THROTTLE_TARGET_NEUTRAL, 0, &p, NO_DWELL_FRAMES,
                             &st);
 
     /* Assert: still above neutral after one cycle (soft-stop, not a jump). */
@@ -263,7 +263,7 @@ static void test_failsafe_override_soft_stops_to_neutral(void)
 
     /* Act: let it settle. */
     for (int i = 0; i < SETTLE_CYCLES; i++) {
-        after_one = throttle_chain_step(2000U, THROTTLE_TARGET_NEUTRAL, &p,
+        after_one = throttle_chain_step(2000U, THROTTLE_TARGET_NEUTRAL, 0, &p,
                                         NO_DWELL_FRAMES, &st);
     }
 
@@ -328,7 +328,7 @@ static void test_reversing_never_crosses_neutral_until_dwell_elapses(void)
     uint32_t esc_us = 0;
     int rampdown_cycles = 0;
     do {
-        esc_us = throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, &p,
+        esc_us = throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, 0, &p,
                                      dwell_frames, &st);
         TEST_ASSERT_GREATER_OR_EQUAL_UINT32(p.esc_neutral_us, esc_us);
         rampdown_cycles++;
@@ -339,7 +339,7 @@ static void test_reversing_never_crosses_neutral_until_dwell_elapses(void)
     /* Act + Assert: the next `dwell_frames` cycles hold exactly neutral; the
      * output must NOT have crossed below neutral yet. */
     for (uint16_t i = 0; i < dwell_frames; i++) {
-        esc_us = throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, &p,
+        esc_us = throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, 0, &p,
                                      dwell_frames, &st);
         TEST_ASSERT_EQUAL_UINT32(p.esc_neutral_us, esc_us);
         TEST_ASSERT_EQUAL_INT32(0, st.value);
@@ -348,7 +348,7 @@ static void test_reversing_never_crosses_neutral_until_dwell_elapses(void)
     /* Act + Assert: only AFTER the dwell does the output finally drop below
      * neutral (reverse side). Removing the dwell logic would make this fire on
      * the first post-rampdown cycle, so the held-neutral asserts above fail. */
-    esc_us = throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, &p, dwell_frames,
+    esc_us = throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, 0, &p, dwell_frames,
                                  &st);
     TEST_ASSERT_LESS_THAN_UINT32(p.esc_neutral_us, esc_us);
     TEST_ASSERT_LESS_THAN_INT32(0, st.value);
@@ -365,18 +365,18 @@ static void test_dwell_holds_neutral_for_exactly_the_requested_frames(void)
         .dwell_remaining = 0};
 
     /* Act: first cycle reaches neutral and arms the dwell. */
-    throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, &p, dwell_frames, &st);
+    throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, 0, &p, dwell_frames, &st);
     TEST_ASSERT_EQUAL_INT32(0, st.value);
     TEST_ASSERT_EQUAL_UINT16(dwell_frames, st.dwell_remaining);
 
     /* Act + Assert: exactly `dwell_frames` cycles hold neutral. */
     for (uint16_t i = 0; i < dwell_frames; i++) {
-        throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, &p, dwell_frames, &st);
+        throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, 0, &p, dwell_frames, &st);
         TEST_ASSERT_EQUAL_INT32(0, st.value);
     }
 
     /* Assert: the next cycle finally moves into reverse. */
-    throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, &p, dwell_frames, &st);
+    throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, 0, &p, dwell_frames, &st);
     TEST_ASSERT_LESS_THAN_INT32(0, st.value);
 }
 
@@ -389,7 +389,7 @@ static void test_start_from_neutral_ramps_immediately_without_dwell(void)
     throttle_ramp_state st = {.value = 0, .dwell_remaining = 0};
 
     /* Act: one cycle. */
-    throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, &p, dwell_frames, &st);
+    throttle_chain_step(1000U, THROTTLE_TARGET_TRACK, 0, &p, dwell_frames, &st);
 
     /* Assert: ramped straight into reverse with no forced dwell. Spinning UP away
      * from neutral uses the gentle accel rate (rate_up) in EITHER direction
@@ -409,7 +409,7 @@ static void test_deadband_signal_is_not_treated_as_reversing(void)
                               .dwell_remaining = 0};
 
     /* Act: 1580 us is exactly at the deadband edge -> target 0. */
-    throttle_chain_step(1580U, THROTTLE_TARGET_TRACK, &p, dwell_frames, &st);
+    throttle_chain_step(1580U, THROTTLE_TARGET_TRACK, 0, &p, dwell_frames, &st);
 
     /* Assert: eased down by one ramp-down step, still positive, no dwell armed. */
     TEST_ASSERT_EQUAL_INT32(
@@ -431,7 +431,7 @@ static void test_failsafe_soft_stops_without_blocking_dwell(void)
     /* Act: settle under FAILSAFE. */
     uint32_t esc_us = 0;
     for (int i = 0; i < SETTLE_CYCLES; i++) {
-        esc_us = throttle_chain_step(2000U, THROTTLE_TARGET_NEUTRAL, &p,
+        esc_us = throttle_chain_step(2000U, THROTTLE_TARGET_NEUTRAL, 0, &p,
                                      dwell_frames, &st);
     }
 
@@ -439,6 +439,51 @@ static void test_failsafe_soft_stops_without_blocking_dwell(void)
     TEST_ASSERT_EQUAL_UINT32(p.esc_neutral_us, esc_us);
     TEST_ASSERT_EQUAL_INT32(0, st.value);
     TEST_ASSERT_EQUAL_UINT16(0, st.dwell_remaining);
+}
+
+/* Settle the throttle chain in SPOT_LOCK mode (stick centered, so manual would
+ * be neutral) with a fixed forward normalized command. */
+static uint32_t settle_throttle_spot_lock(int32_t cmd, const settings_params *p)
+{
+    throttle_ramp_state st = {.value = 0, .dwell_remaining = 0};
+    uint32_t esc_us = 0;
+    for (int i = 0; i < SETTLE_CYCLES; i++) {
+        esc_us = throttle_chain_step(1500U, THROTTLE_TARGET_SPOT_LOCK, cmd, p,
+                                     NO_DWELL_FRAMES, &st);
+    }
+    return esc_us;
+}
+
+static void test_spot_lock_command_drives_forward_through_chain(void)
+{
+    /* Spot-lock substitutes a forward normalized command for the stick. With CH2
+     * centered (manual would settle at neutral) a 500-unit command instead
+     * settles above neutral at the mapped forward pulse, proving the override
+     * rides the same ramp -> map -> clamp path. */
+    settings_params p = defaults_params();
+
+    /* Act: 500/1000 of the forward span -> 1500 + (1900-1500)*500/1000 = 1700. */
+    uint32_t esc_us = settle_throttle_spot_lock(500, &p);
+
+    /* Assert */
+    TEST_ASSERT_EQUAL_UINT32(1700U, esc_us);
+    TEST_ASSERT_GREATER_THAN_UINT32(p.esc_neutral_us, esc_us);
+}
+
+static void test_spot_lock_output_never_exceeds_clamp_window(void)
+{
+    /* SI-3 ORACLE on the spot-lock path: an out-of-band forward endpoint (3000 us
+     * set directly) with a full-scale command maps to 3000 us; the hard clamp
+     * MUST snap it to the 2000 us window ceiling. Without the clamp it would pass
+     * through at 3000. */
+    settings_params p = defaults_params();
+    p.esc_forward_max_us = 3000U; /* out of the [1000,2000] window on purpose */
+
+    /* Act */
+    uint32_t esc_us = settle_throttle_spot_lock(SIGNAL_NORMALIZED_FULL_SCALE, &p);
+
+    /* Assert: clamped to the hard window ceiling. */
+    TEST_ASSERT_EQUAL_UINT32(2000U, esc_us);
 }
 
 void run_throttle_chain_tests(void)
@@ -464,4 +509,6 @@ void run_throttle_chain_tests(void)
     RUN_TEST(test_start_from_neutral_ramps_immediately_without_dwell);
     RUN_TEST(test_deadband_signal_is_not_treated_as_reversing);
     RUN_TEST(test_failsafe_soft_stops_without_blocking_dwell);
+    RUN_TEST(test_spot_lock_command_drives_forward_through_chain);
+    RUN_TEST(test_spot_lock_output_never_exceeds_clamp_window);
 }

@@ -46,11 +46,17 @@ static int32_t apply_power_limit(int32_t command, uint16_t fwd_pct,
 }
 
 /* Step 7: per-state override acts on the TARGET. NEUTRAL forces 0 so the ramp
- * soft-stops; TRACK keeps the limited stick command. */
-static int32_t resolve_target(int32_t limited, throttle_target_mode mode)
+ * soft-stops; SPOT_LOCK substitutes the regulator's forward command (already
+ * capped + forward-only); TRACK keeps the limited stick command. The spot-lock
+ * command still rides the same ramp -> map -> hard clamp below. */
+static int32_t resolve_target(int32_t limited, throttle_target_mode mode,
+                              int32_t spot_lock_cmd)
 {
     if (mode == THROTTLE_TARGET_NEUTRAL) {
         return 0;
+    }
+    if (mode == THROTTLE_TARGET_SPOT_LOCK) {
+        return spot_lock_cmd;
     }
     return limited;
 }
@@ -151,6 +157,7 @@ bool throttle_is_neutral(uint32_t raw_ch2_us, const settings_params *params)
 }
 
 uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
+                             int32_t spot_lock_cmd,
                              const settings_params *params,
                              uint16_t reverse_dwell_frames,
                              throttle_ramp_state *st)
@@ -158,7 +165,7 @@ uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
     int32_t command = shape_command(raw_ch2_us, params);
     int32_t limited = apply_power_limit(command, params->max_throttle_fwd_pct,
                                         params->max_throttle_rev_pct);
-    int32_t target = resolve_target(limited, mode);
+    int32_t target = resolve_target(limited, mode, spot_lock_cmd);
 
     advance_ramp(st, target, reverse_dwell_frames, params);
 

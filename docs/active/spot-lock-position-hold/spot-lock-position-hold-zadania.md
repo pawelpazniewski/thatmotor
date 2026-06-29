@@ -152,19 +152,19 @@ Weryfikacja:
 ### Unit 6: Integracja spot_lock w loop_step (R1, R2, R3, R4, R5, R7)
 
 Implementacja:
-- [ ] Modyfikuj `components/control_loop/include/loop_step.h` — `loop_inputs` (gps lat/lon+fresh, imu heading+ok, `spot_lock_switch_on`+zbocze), `loop_state` (`spot_lock_state`)
-- [ ] Modyfikuj `components/control_loop/src/loop_step.c` — po `sm_step`: gdy `state==ARMED` wywołaj `spot_lock_step`; ACTIVE/PAUSED → nadpisz tryby celu na `*_SPOT_LOCK`; predykat `stick_within_neutral`
-- [ ] Modyfikuj `components/signal_chain/include/signal_chain.h` + `src/throttle_chain.c` + `src/servo_chain.c` — tryby `THROTTLE_TARGET_SPOT_LOCK`/`SERVO_TARGET_SPOT_LOCK` z computed command (ramp/slew → `map_normalized_to_us` → hard clamp)
-- [ ] Modyfikuj `control_loop.c::read_inputs` — odczyt `gps_get_state`/`imu_get_state`/`RC_CAP_CH3` → `loop_inputs`; współdziel z `publish_snapshot`
-- [ ] Rozszerz `test/host/test_loop_step.c`, `test_throttle_chain.c`, `test_servo_chain.c` o tryb spot-lock
+- [x] Modyfikuj `components/control_loop/include/loop_step.h` — `loop_inputs` (gps lat/lon+fresh, imu heading+ok, `spot_lock_switch_on`+zbocze), `loop_state` (`spot_lock_state`)
+- [x] Modyfikuj `components/control_loop/src/loop_step.c` — po `sm_step`: gdy `state==ARMED` wywołaj `spot_lock_step`; ACTIVE/PAUSED → nadpisz tryby celu na `*_SPOT_LOCK`; predykat `stick_within_neutral`
+- [x] Modyfikuj `components/signal_chain/include/signal_chain.h` + `src/throttle_chain.c` + `src/servo_chain.c` — tryby `THROTTLE_TARGET_SPOT_LOCK`/`SERVO_TARGET_SPOT_LOCK` z computed command (ramp/slew → `map_normalized_to_us` → hard clamp)
+- [x] Modyfikuj `control_loop.c::read_inputs` — odczyt `gps_get_state`/`imu_get_state`/`RC_CAP_CH3` → `loop_inputs`; współdziel z `publish_snapshot`
+- [x] Rozszerz `test/host/test_loop_step.c`, `test_throttle_chain.c`, `test_servo_chain.c` o tryb spot-lock
 
 Testy (najpierw failing test integracyjny wejście→hold→abort):
-- [ ] Test: ARMED+fresh+neutral+CH3 ON → servo/ESC computed (≠ tor stickowy), flaga ACTIVE
-- [ ] Test: ACTIVE + utrata RC → `sm_step`=FAILSAFE → ESC neutral + servo center (override się NIE wykonuje); FAILuje gdyby override działał poza ARMED
-- [ ] Test: ACTIVE + CH3 OFF → tor manualny ≤ 1 cykl
-- [ ] Test: ACTIVE + gaz/ster poza deadband → natychmiast manual (override)
-- [ ] Test: ACTIVE + `!gps_fresh`/`!imu_ok` → ESC neutral + servo center, flaga PAUSED (nie OFF, nie failsafe)
-- [ ] Test: każde wyjście spot-lock przez hard clamp (out-of-window computed → clamp)
+- [x] Test: ARMED+fresh+neutral+CH3 ON → servo/ESC computed (≠ tor stickowy), flaga ACTIVE
+- [x] Test: ACTIVE + utrata RC → `sm_step`=FAILSAFE → ESC neutral + servo center (override się NIE wykonuje); FAILuje gdyby override działał poza ARMED
+- [x] Test: ACTIVE + CH3 OFF → tor manualny ≤ 1 cykl
+- [x] Test: ACTIVE + gaz/ster poza deadband → natychmiast manual (override)
+- [x] Test: ACTIVE + `!gps_fresh`/`!imu_ok` → ESC neutral + servo center, flaga PAUSED (nie OFF, nie failsafe)
+- [x] Test: każde wyjście spot-lock przez hard clamp (out-of-window computed → clamp)
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone; zero regresji `loop_step`/state_machine/chain

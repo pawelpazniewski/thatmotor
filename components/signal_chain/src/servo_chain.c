@@ -33,8 +33,11 @@ static int32_t shape_command(uint32_t raw_us, const settings_params *params)
 }
 
 /* Steps 6-7: map command onto the servo endpoints, then apply the per-state
- * override on the TARGET (FAILSAFE -> center so the slew drives there). */
+ * override on the TARGET (FAILSAFE -> center so the slew drives there). In
+ * SPOT_LOCK mode the regulator's signed command replaces the stick command but
+ * rides the SAME map -> slew -> hard clamp. */
 static uint32_t resolve_target_us(int32_t command, servo_target_mode mode,
+                                  int32_t spot_lock_cmd,
                                   const settings_params *params)
 {
     if (mode == SERVO_TARGET_CENTER) {
@@ -43,7 +46,8 @@ static uint32_t resolve_target_us(int32_t command, servo_target_mode mode,
     if (mode == SERVO_TARGET_DEPLOY) {
         return params->deploy_servo_us; /* slew here; the hard clamp follows */
     }
-    return map_normalized_to_us(command, params->servo_min_us,
+    int32_t mapped = mode == SERVO_TARGET_SPOT_LOCK ? spot_lock_cmd : command;
+    return map_normalized_to_us(mapped, params->servo_min_us,
                                 servo_center_us(params), params->servo_max_us);
 }
 
@@ -61,10 +65,11 @@ static uint32_t apply_trim(int32_t slewed_us, int16_t trim_us)
 }
 
 uint32_t servo_chain_step(uint32_t raw_ch1_us, servo_target_mode mode,
-                          const settings_params *params, int32_t *slew_state)
+                          int32_t spot_lock_cmd, const settings_params *params,
+                          int32_t *slew_state)
 {
     int32_t command = shape_command(raw_ch1_us, params);
-    uint32_t target_us = resolve_target_us(command, mode, params);
+    uint32_t target_us = resolve_target_us(command, mode, spot_lock_cmd, params);
 
     *slew_state = slew_step(*slew_state, (int32_t)target_us,
                             (int32_t)params->servo_slew_us_per_cycle);
@@ -73,6 +78,17 @@ uint32_t servo_chain_step(uint32_t raw_ch1_us, servo_target_mode mode,
     PwmWindow window = {.min_us = SERVO_WINDOW_MIN_US,
                         .max_us = SERVO_WINDOW_MAX_US};
     return clamp_pwm_us(trimmed_us, window);
+}
+
+bool steer_is_neutral(uint32_t raw_ch1_us, const settings_params *params)
+{
+    int32_t normalized = normalize_us(raw_ch1_us, params->rc_min_us,
+                                      params->rc_mid_us, params->rc_max_us);
+    int32_t after_deadband = shape_deadband(normalized,
+                                            params->steer_deadband_us,
+                                            params->rc_min_us, params->rc_mid_us,
+                                            params->rc_max_us);
+    return after_deadband == 0;
 }
 
 int16_t servo_trim_stepped(int16_t current, int dir, int16_t step,

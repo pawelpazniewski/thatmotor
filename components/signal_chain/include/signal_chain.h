@@ -37,8 +37,9 @@ extern "C" {
  * separate code path (Unit 9) and is not modelled here.
  */
 typedef enum {
-    THROTTLE_TARGET_NEUTRAL = 0, /* DISARMED / FAILSAFE -> target 0 */
-    THROTTLE_TARGET_TRACK = 1,   /* ARMED -> track processed stick */
+    THROTTLE_TARGET_NEUTRAL = 0,  /* DISARMED / FAILSAFE -> target 0 */
+    THROTTLE_TARGET_TRACK = 1,    /* ARMED -> track processed stick */
+    THROTTLE_TARGET_SPOT_LOCK = 2,/* spot-lock -> track the supplied command */
 } throttle_target_mode;
 
 /**
@@ -48,9 +49,10 @@ typedef enum {
  * center; the slew limiter then drives the servo there.
  */
 typedef enum {
-    SERVO_TARGET_TRACK = 0,  /* RC valid -> track processed stick */
-    SERVO_TARGET_CENTER = 1, /* FAILSAFE -> target center */
-    SERVO_TARGET_DEPLOY = 2, /* DEPLOY -> target deploy_servo_us (motor off) */
+    SERVO_TARGET_TRACK = 0,     /* RC valid -> track processed stick */
+    SERVO_TARGET_CENTER = 1,    /* FAILSAFE -> target center */
+    SERVO_TARGET_DEPLOY = 2,    /* DEPLOY -> target deploy_servo_us (motor off) */
+    SERVO_TARGET_SPOT_LOCK = 3, /* spot-lock -> map the supplied signed command */
 } servo_target_mode;
 
 /**
@@ -79,6 +81,9 @@ typedef struct {
  *
  * @param raw_ch2_us           Raw CH2 pulse width in microseconds.
  * @param mode                 Per-state target override.
+ * @param spot_lock_cmd        Forward normalized command [0, full-scale] used
+ *                             ONLY in THROTTLE_TARGET_SPOT_LOCK mode; ignored in
+ *                             every other mode.
  * @param params               Active control parameters (must be non-NULL).
  * @param reverse_dwell_frames Neutral dwell expressed in cycles (computed by the
  *                             caller so this function stays period-agnostic).
@@ -87,6 +92,7 @@ typedef struct {
  * @return ESC pulse width in microseconds, clamped to the actuator window.
  */
 uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
+                             int32_t spot_lock_cmd,
                              const settings_params *params,
                              uint16_t reverse_dwell_frames,
                              throttle_ramp_state *st);
@@ -97,15 +103,18 @@ uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
  * Steps 3-10 of the servo chain. The result is the servo pulse width AFTER the
  * SI-3 hard clamp; no chain output bypasses the clamp.
  *
- * @param raw_ch1_us  Raw CH1 pulse width in microseconds.
- * @param mode        Per-state target override.
- * @param params      Active control parameters (must be non-NULL).
- * @param slew_state  Previous slewed servo pulse width in microseconds; updated
- *                    in place to the new slewed pulse width (must be non-NULL).
+ * @param raw_ch1_us    Raw CH1 pulse width in microseconds.
+ * @param mode          Per-state target override.
+ * @param spot_lock_cmd Signed normalized command (0 = center) used ONLY in
+ *                      SERVO_TARGET_SPOT_LOCK mode; ignored in every other mode.
+ * @param params        Active control parameters (must be non-NULL).
+ * @param slew_state    Previous slewed servo pulse width in microseconds; updated
+ *                      in place to the new slewed pulse width (must be non-NULL).
  * @return Servo pulse width in microseconds, clamped to the actuator window.
  */
 uint32_t servo_chain_step(uint32_t raw_ch1_us, servo_target_mode mode,
-                          const settings_params *params, int32_t *slew_state);
+                          int32_t spot_lock_cmd, const settings_params *params,
+                          int32_t *slew_state);
 
 /**
  * Step the signed servo neutral trim by one panel click and clamp it to the
@@ -133,6 +142,20 @@ int16_t servo_trim_stepped(int16_t current, int dir, int16_t step,
  * @return true when the post-deadband throttle command is exactly neutral.
  */
 bool throttle_is_neutral(uint32_t raw_ch2_us, const settings_params *params);
+
+/**
+ * Whether the steering stick is within its neutral band this cycle.
+ *
+ * Applies the SAME normalize + steering-deadband steps the servo chain uses, so
+ * the spot-lock entry/abort gate (R3/R4) and the chain agree on what "centered"
+ * means. With the default steer_deadband_us of 0 any deflection counts as
+ * non-neutral (a strict abort). Independent of the reverse flag.
+ *
+ * @param raw_ch1_us  Raw CH1 pulse width in microseconds.
+ * @param params      Active control parameters (must be non-NULL).
+ * @return true when the post-deadband steering command is exactly centered.
+ */
+bool steer_is_neutral(uint32_t raw_ch1_us, const settings_params *params);
 
 #ifdef __cplusplus
 }
