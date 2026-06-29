@@ -193,6 +193,71 @@ static void test_deploy_independent_of_calibrated(void)
     }
 }
 
+/* --- RGB colour mapping at 25% brightness (255 -> 63, 160 -> 40) --- */
+
+static void test_armed_colour_is_green(void)
+{
+    /* ARMED is solid on -> green scaled to 25%. */
+    LedColor c = led_pattern_color(SM_STATE_ARMED, true, 0);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.r);
+    TEST_ASSERT_EQUAL_UINT8(63U, c.g);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.b);
+}
+
+static void test_disarmed_colour_is_amber_on_phase(void)
+{
+    /* DISARMED on-half (t=0) -> amber. */
+    LedColor c = led_pattern_color(SM_STATE_DISARMED, true, 0);
+    TEST_ASSERT_EQUAL_UINT8(63U, c.r);
+    TEST_ASSERT_EQUAL_UINT8(40U, c.g);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.b);
+}
+
+static void test_failsafe_colour_is_red_on_phase(void)
+{
+    /* FAILSAFE on-half (t=0 in the 200 ms period) -> red. */
+    LedColor c = led_pattern_color(SM_STATE_FAILSAFE, false, 0);
+    TEST_ASSERT_EQUAL_UINT8(63U, c.r);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.g);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.b);
+}
+
+static void test_calibration_colour_is_blue_on_phase(void)
+{
+    /* ESC_CALIBRATION first blink slot (t=0) is on -> blue. */
+    LedColor c = led_pattern_color(SM_STATE_ESC_CALIBRATION, false, 0);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.r);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.g);
+    TEST_ASSERT_EQUAL_UINT8(63U, c.b);
+}
+
+static void test_deploy_colour_is_cyan_on_phase(void)
+{
+    /* DEPLOY first blink slot (t=0) is on -> cyan. */
+    LedColor c = led_pattern_color(SM_STATE_DEPLOY, true, 0);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.r);
+    TEST_ASSERT_EQUAL_UINT8(63U, c.g);
+    TEST_ASSERT_EQUAL_UINT8(63U, c.b);
+}
+
+static void test_off_phase_is_black(void)
+{
+    /* FAILSAFE off-half (t=100 in the 200 ms period) -> LED dark, colour gone. */
+    LedColor c = led_pattern_color(SM_STATE_FAILSAFE, false, 100);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.r);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.g);
+    TEST_ASSERT_EQUAL_UINT8(0U, c.b);
+}
+
+static void test_brightness_capped_at_quarter(void)
+{
+    /* Oracle for the 25% spec: the brightest channel of any solid state is 63
+     * (255 * 25 / 100), never full 255 — fails if brightness scaling is lost. */
+    LedColor armed = led_pattern_color(SM_STATE_ARMED, true, 0);
+    TEST_ASSERT_EQUAL_UINT8(63U, armed.g);
+    TEST_ASSERT_TRUE(armed.g < 255U);
+}
+
 void run_led_pattern_tests(void)
 {
     RUN_TEST(test_armed_is_solid_on_at_any_time);
@@ -215,4 +280,11 @@ void run_led_pattern_tests(void)
     RUN_TEST(test_deploy_third_blink_distinguishes_from_calibration);
     RUN_TEST(test_deploy_waveform_differs_from_every_other_state);
     RUN_TEST(test_deploy_independent_of_calibrated);
+    RUN_TEST(test_armed_colour_is_green);
+    RUN_TEST(test_disarmed_colour_is_amber_on_phase);
+    RUN_TEST(test_failsafe_colour_is_red_on_phase);
+    RUN_TEST(test_calibration_colour_is_blue_on_phase);
+    RUN_TEST(test_deploy_colour_is_cyan_on_phase);
+    RUN_TEST(test_off_phase_is_black);
+    RUN_TEST(test_brightness_capped_at_quarter);
 }

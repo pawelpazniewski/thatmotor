@@ -371,10 +371,10 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     s_snapshot.imu_calib = m.calib;
 }
 
-/* Drive the status LED for this cycle from the pure pattern (Unit 11). */
+/* Drive the RGB status LED for this cycle from the pure pattern (Unit 11). */
 static void drive_led(sm_state state)
 {
-    led_driver_set(led_pattern_on(state, s_load_flags.calibrated, now_ms()));
+    led_driver_show(led_pattern_color(state, s_load_flags.calibrated, now_ms()));
 }
 
 static void run_one_cycle(void)
