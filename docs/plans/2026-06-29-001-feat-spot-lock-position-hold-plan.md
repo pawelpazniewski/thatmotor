@@ -178,7 +178,7 @@ Pogrupowane w 3 fazy. Fazy 1–2 nie zmieniają zachowania aktuatorów (fundamen
 
 ### Faza 2 — Czysta logika spot-lock (host-testowana, jeszcze nie steruje)
 
-- [ ] **Unit 3: Czysty moduł geo_math (odległość + bearing)**
+- [x] **Unit 3: Czysty moduł geo_math (odległość + bearing)**
 
 **Cel:** Konwersja lat/lon (e7) na błąd pozycji w metrach i kierunek (bearing) do celu.
 
@@ -207,7 +207,7 @@ Pogrupowane w 3 fazy. Fazy 1–2 nie zmieniają zachowania aktuatorów (fundamen
 
 **Weryfikacja:** Host-tests zielone; grep braku `esp_*`/`driver/*` w `geo_math.h`.
 
-- [ ] **Unit 4: Czysty regulator spot_lock_step()**
+- [x] **Unit 4: Czysty regulator spot_lock_step()**
 
 **Cel:** Pełna decyzja spot-lock: sub-stan (OFF/ACTIVE/PAUSED), wejście/abort, deadband pozycji, bramka ±60°, P-control, limit max-gazu — jako czysta funkcja.
 

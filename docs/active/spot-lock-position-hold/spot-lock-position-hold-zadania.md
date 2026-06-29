@@ -51,20 +51,33 @@ Weryfikacja:
 
 ---
 
+## Do poprawy po review fazy 1
+
+Severity gate: ✅ GOTOWE DO KONTYNUACJI (0× P1, 0× P2). Pełny raport: `review-faza-1.md`.
+Bramki zielone: host-tests 305/305, `idf.py build` (esp32s3) OK. Brak odchyleń od planu.
+
+Tylko nity P3 (opcjonalne):
+- [ ] 🟡 [nit] **components/rc_capture/include/rc_sample.h:13-16** — nieaktualne komentarze pinów (`CH3 → GPIO27`, faktycznie GPIO8; też CH1/CH2/CH4). Już wytrackowane w „Zamknięcie".
+- [ ] 🟡 [nit] **components/gps/src/sensor_freshness.c** — opis „mirrors imu_state.ok contract" nieścisły o 1 ms (GPS strict `<`, IMU `>`); zmiękczyć opis lub zrównać IMU.
+- [ ] 🟡 [nit] **components/control_loop/src/control_loop.c** — 448 linii (>300); przerost istniejący. Jeśli rośnie dalej, rozważyć ekstrakcję adaptera `aux_switch` (CH3/CH4).
+- [ ] 🟡 [nit] Nota do Unit 6: seed `s_last_fix_ms` daje ~1.5 s `fresh=true` bez realnego fixu — wejście w hold MUSI bramkować też `s_state.fix` (nie sam `fresh`).
+
+---
+
 ## Faza 2 — Czysta logika spot-lock
 
 ### Unit 3: Czysty moduł geo_math (odległość + bearing) (R1, R2)
 
 Implementacja:
-- [ ] Stwórz `components/control_loop/include/geo_math.h` (`geo_offset_m`, `geo_distance_m`, `geo_bearing_deg10`)
-- [ ] Stwórz `components/control_loop/src/geo_math.c` (equirectangular, named constants, tylko `math.h`)
-- [ ] Stwórz `test/host/test_geo_math.c`; zarejestruj w CMake + `test_main.c`
+- [x] Stwórz `components/control_loop/include/geo_math.h` (`geo_offset_m`, `geo_distance_m`, `geo_bearing_deg10`)
+- [x] Stwórz `components/control_loop/src/geo_math.c` (equirectangular, named constants, tylko `math.h`)
+- [x] Stwórz `test/host/test_geo_math.c`; zarejestruj w CMake + `test_main.c`
 
 Testy (test-first, oracle o znanej geometrii):
-- [ ] Test: punkt na N → bearing ≈ 0; E ≈ 90; S ≈ 180; W ≈ 270 (z tolerancją)
-- [ ] Test: znany dystans (np. 0,001° lat ≈ 111 m) w tolerancji
-- [ ] Test: zerowy offset → dystans 0; bearing zdefiniowany i przetestowany
-- [ ] Test: korekcja cos(lat) na wyższej szerokości zmniejsza dE (FAILuje bez korekcji)
+- [x] Test: punkt na N → bearing ≈ 0; E ≈ 90; S ≈ 180; W ≈ 270 (z tolerancją)
+- [x] Test: znany dystans (np. 0,001° lat ≈ 111 m) w tolerancji
+- [x] Test: zerowy offset → dystans 0; bearing zdefiniowany i przetestowany
+- [x] Test: korekcja cos(lat) na wyższej szerokości zmniejsza dE (FAILuje bez korekcji)
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone
@@ -73,19 +86,19 @@ Weryfikacja:
 ### Unit 4: Czysty regulator spot_lock_step() (R2, R3, R4, R5, R6, R7)
 
 Implementacja:
-- [ ] Stwórz `components/control_loop/include/spot_lock.h` (`spot_lock_inputs`, `spot_lock_state`, `spot_lock_outputs`, `spot_lock_step(...)`)
-- [ ] Stwórz `components/control_loop/src/spot_lock.c` (sub-stan OFF/ACTIVE/PAUSED, wejście/abort, deadband, bramka ±60°, P-control, cap gazu)
-- [ ] Modyfikuj `test/host/CMakeLists.txt` (dodaj `spot_lock.c`)
-- [ ] Stwórz `test/host/test_spot_lock.c`; zarejestruj w `test_main.c`
+- [x] Stwórz `components/control_loop/include/spot_lock.h` (`spot_lock_inputs`, `spot_lock_state`, `spot_lock_outputs`, `spot_lock_step(...)`)
+- [x] Stwórz `components/control_loop/src/spot_lock.c` (sub-stan OFF/ACTIVE/PAUSED, wejście/abort, deadband, bramka ±60°, P-control, cap gazu)
+- [x] Modyfikuj `test/host/CMakeLists.txt` (dodaj `spot_lock.c`)
+- [x] Stwórz `test/host/test_spot_lock.c`; zarejestruj w `test_main.c`
 
 Testy (test-first; cap/bramka/deadband wejściem POZA zakresem — oracle power):
-- [ ] Test: wejście ARMED+fresh+neutral+CH3 zbocze ON → ACTIVE, cel = bieżąca pozycja
-- [ ] Test: blokada wejścia — CH3 ON ale DISARMED → OFF; brak fixu → OFF; drążek wychylony → OFF (każdy warunek osobno)
-- [ ] Test: deadband — `dist` w strefie → throttle neutral + servo center; poza strefą → throttle>neutral
-- [ ] Test: bramka ±60° — błąd 80° → throttle neutral, servo skręca; błąd 10° → throttle>neutral
-- [ ] Test: cap gazu — bardzo duży `dist` → throttle == max_throttle_pct (nie wyżej)
-- [ ] Test: pauza — ACTIVE + `gps_fresh=false` → PAUSED + neutral + center; powrót → ACTIVE z tym celem; to samo dla `imu_ok=false`
-- [ ] Test: abort — ACTIVE + CH3 OFF → OFF; ACTIVE + drążek poza deadbandem → OFF
+- [x] Test: wejście ARMED+fresh+neutral+CH3 zbocze ON → ACTIVE, cel = bieżąca pozycja
+- [x] Test: blokada wejścia — CH3 ON ale DISARMED → OFF; brak fixu → OFF; drążek wychylony → OFF (każdy warunek osobno)
+- [x] Test: deadband — `dist` w strefie → throttle neutral + servo center; poza strefą → throttle>neutral
+- [x] Test: bramka ±60° — błąd 80° → throttle neutral, servo skręca; błąd 10° → throttle>neutral
+- [x] Test: cap gazu — bardzo duży `dist` → throttle == max_throttle_pct (nie wyżej)
+- [x] Test: pauza — ACTIVE + `gps_fresh=false` → PAUSED + neutral + center; powrót → ACTIVE z tym celem; to samo dla `imu_ok=false`
+- [x] Test: abort — ACTIVE + CH3 OFF → OFF; ACTIVE + drążek poza deadbandem → OFF
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone

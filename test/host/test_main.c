@@ -22,6 +22,8 @@ void run_servo_chain_tests(void);
 void run_state_machine_tests(void);
 void run_esc_calibration_tests(void);
 void run_loop_step_tests(void);
+void run_geo_math_tests(void);
+void run_spot_lock_tests(void);
 void run_api_contract_tests(void);
 void run_command_parse_tests(void);
 void run_params_decide_tests(void);
@@ -51,6 +53,8 @@ int main(void)
     run_state_machine_tests();
     run_esc_calibration_tests();
     run_loop_step_tests();
+    run_geo_math_tests();
+    run_spot_lock_tests();
     run_api_contract_tests();
     run_command_parse_tests();
     run_params_decide_tests();

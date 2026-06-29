@@ -34,6 +34,8 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/state_machine/src/state_machine.c
     ${REPO_ROOT}/components/state_machine/src/esc_calibration.c
     ${REPO_ROOT}/components/control_loop/src/loop_step.c
+    ${REPO_ROOT}/components/control_loop/src/geo_math.c
+    ${REPO_ROOT}/components/control_loop/src/spot_lock.c
     ${REPO_ROOT}/components/web_panel/src/api_contract.c
     ${REPO_ROOT}/components/web_panel/src/command_parse.c
     ${REPO_ROOT}/components/web_panel/src/params_decide.c
@@ -81,6 +83,8 @@ set(TEST_SOURCES
     test_state_machine.c
     test_esc_calibration.c
     test_loop_step.c
+    test_geo_math.c
+    test_spot_lock.c
     test_api_contract.c
     test_command_parse.c
     test_params_decide.c

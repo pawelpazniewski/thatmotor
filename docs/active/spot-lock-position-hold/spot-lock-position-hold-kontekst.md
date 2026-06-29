@@ -1,7 +1,7 @@
 # Kontekst: Spot-lock — automatyczne utrzymywanie pozycji GPS (CH3)
 
 **Branch:** `feature/spot-lock-position-hold`
-**Ostatnia aktualizacja:** 2026-06-29
+**Ostatnia aktualizacja:** 2026-06-29 (Faza 2 ukończona)
 
 ## Źródła
 - Requirements doc: `docs/dev-brainstorms/2026-06-29-spot-lock-requirements.md`
@@ -108,6 +108,49 @@
     `spot_lock_switch_edge_on` populowane w `read_inputs`; `loop_step` skonsumuje je
     dopiero w Unit 6.
   - Walidacja: host-tests 305/305 zielone; `idf.py build` (esp32s3) zielony.
+  - **Review Fazy 1 (2026-06-29):** ✅ severity gate CZYSTE — 0× P1, 0× P2, 5× P3
+    (raport `review-faza-1.md`). Multi-agent: architecture / test-coverage / security.
+    Potwierdzono: Pure⊥HAL (cienki `apply_ch3_switch`), single-writer `s_last_fix_ms`,
+    wrap-safe `sensor_is_fresh` z mocą wyroczni (empirycznie FAILuje przy naiwnym
+    `now-last`), kontrakt R12 (CH3/CH4 poza `rc_valid` — grep w `rc_validity.c`),
+    rename CH4→switch_debounce bez osłabienia asercji (8 testów 1:1 + 1 CH3),
+    czyste nagłówki (brak `esp_*`/`driver/*`). Zero odchyleń od planu technicznego.
+    Nity P3: stale komentarze pinów `rc_sample.h` (GPIO27 vs faktyczne GPIO8 — w
+    „Zamknięcie"), opis „mirror IMU" nieścisły o 1 ms granicy (GPS strict `<`),
+    `control_loop.c` 448 linii (>300, przerost istniejący).
+    **Do Unit 6:** seed `s_last_fix_ms=now_ms()` daje ~1.5 s `fresh=true` bez fixu —
+    wejście w hold MUSI bramkować również `s_state.fix`, nie sam `fresh`.
+
+- **Faza 2 — Czysta logika spot-lock — UKOŃCZONA (2026-06-29).**
+  - Unit 3 (geo_math): czysty moduł `components/control_loop/{include,src}/geo_math`
+    (equirectangular). `geo_offset_m` → ENU (north/east w metrach) względem ref,
+    `geo_distance_m` (hypot), `geo_bearing_deg10` (atan2(east,north), [0,3599],
+    zero-offset → 0). Korekcja `cos(ref_lat)` na długości geograficznej; named
+    constants (EARTH_RADIUS_M, METERS_PER_DEG_LAT). Tylko `math.h`. 7 host-testów:
+    N/E/S/W bearing, znany dystans 0,001°≈111 m, zerowy offset, oracle cos(lat)
+    (wschód na 60°N ~ połowa wartości równikowej — FAILuje bez korekcji).
+  - Unit 4 (spot_lock): czysty regulator `components/control_loop/{include,src}/spot_lock`.
+    Sub-stan `SPOT_LOCK_OFF/ACTIVE/PAUSED` (osobny od `sm_state`). Priorytet przejść:
+    (1) ANY→OFF gdy `!armed||!ch3_on||!sticks_neutral` (abort R4); (2) OFF→ACTIVE
+    tylko na `ch3_edge_on && gps_fresh && gps_has_fix` ze snapshotem celu (R1/R3);
+    (3) ACTIVE/PAUSED→PAUSED gdy `!gps_fresh||!imu_ok` (neutral+center, cel zachowany,
+    R5); (4) ACTIVE: deadband→luz (R6), poza nim P-servo (∝ błąd kierunku) + P-throttle
+    (∝ dist, cap R7) tylko w bramce ±60° (R2). Komendy znormalizowane
+    (`SPOT_LOCK_CMD_FULL_SCALE=1000`), telemetria na intach (`err_m`, `bearing_deg10`).
+    **Decyzja:** `spot_lock_params` jako samodzielna struktura w nagłówku (odsprzężona
+    od `settings_model.h`) — Unit 6 zmapuje settings→params; utrzymuje Pure⊥HAL.
+    **Uwzględniono notę z review Fazy 1:** wejście bramkuje `gps_has_fix` (realny fix),
+    nie sam `gps_fresh` — osobny test `test_entry_blocked_without_real_fix`.
+    15 host-testów (wejście, 4× blokada wejścia w tym brak fixu + brak zbocza, deadband
+    in/out, bramka 80°/10°, cap gazu, pauza GPS+IMU z powrotem, 2× abort, determinizm).
+    Cap/bramkę/deadband testowano wejściem POZA zakresem (oracle power).
+  - Pułapka: komentarz `esp_*/driver/*` w nagłówku zamykał blok `/* */` (sekwencja `*/`
+    w `esp_*/`) — przeredagowano na „esp_ or driver".
+  - Walidacja: host-tests 327/327 zielone (+22: 7 geo_math + 15 spot_lock);
+    `idf.py build` (esp32s3) zielony — `geo_math.c`/`spot_lock.c` dodane do
+    `components/control_loop/CMakeLists.txt` (kompilują się na toolchainie target,
+    jeszcze nieużywane przez `loop_step` — integracja w Unit 6). Grep czysty: brak
+    `esp_*`/`driver/*` include w `geo_math.h`/`spot_lock.h`.
 
 ## Reguły projektu (bramki jakości)
 
