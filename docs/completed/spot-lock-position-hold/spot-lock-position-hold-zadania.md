@@ -191,6 +191,20 @@ Weryfikacja:
 
 ---
 
+## Do poprawy po review fazy 3
+
+Severity gate: ✅ CZYSTE / GOTOWE DO KONTYNUACJI (0× P1, 0× P2). Pełny raport: `review-faza-3.md`.
+Bramki zielone: host-tests 343/343, `idf.py build` (esp32s3) OK. Brak odchyleń od planu.
+Bezpieczeństwo potwierdzone: failsafe-precedence OK, hard-clamp SI-3 OK, abort ≤1 cykl OK,
+pauza (neutral+center, nie failsafe) OK, SI-6 (POST w ARMED → 409) OK.
+
+Tylko nity P3 (opcjonalne):
+- [ ] 🟡 [nit] **components/control_loop/src/control_loop.c** — 471 linii (>300; przerost istniejący, urósł ~23 l. przez spójny `apply_sensor_inputs`). Jeśli rośnie dalej — ekstrakcja adaptera `aux_switch`+`sensor_inputs`.
+- [ ] 🟡 [nit] **components/control_loop/include/spot_lock.h:31** — `SPOT_LOCK_CMD_FULL_SCALE` duplikuje `SIGNAL_NORMALIZED_FULL_SCALE` (oba 1000), zgodność tylko w komentarzu; rozważyć `_Static_assert`.
+- [ ] 🟡 [nit] **components/signal_chain/src/throttle_chain.c** — komenda spot-lock omija globalny `max_throttle_fwd_pct` (ma własny cap `spot_lock_max_throttle_pct`, do 100%); hard clamp SI-3 i tak ogranicza. Udokumentować kontrakt przy polu w `settings_model.h`.
+
+---
+
 ## Zamknięcie
 
 - [ ] Aktualizacja `README`/pinout: CH3=GPIO8 aktywny przełącznik spot-lock; ujednolić mylący komentarz w `rc_sample.h` (CH3=GPIO8, nie GPIO27)

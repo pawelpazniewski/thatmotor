@@ -224,3 +224,21 @@
 - Self-check przed „gotowe": host-tests (`test/host/run.sh`) + `idf.py build`.
 - Luki tylko-hardware (akwizycja fixu, realna reakcja silnika, zawrót za rufą) → log w
   `docs/completed/kayak-motor-firmware-v1/known-issues.md`.
+
+## Review fazy 3 (2026-06-29)
+
+Multi-perspektywiczny review Unit 5-7 (commity `22b934d`/`c16c924`/`6af50c2`). Wynik:
+**✅ CZYSTE** (0× P1, 0× P2, 3× P3 opcjonalne). Raport: `review-faza-3.md`.
+
+Kluczowe wnioski:
+- Inwarianty bezpieczeństwa potwierdzone kodem + testami o realnej mocy wyroczni:
+  failsafe-precedence (override TYLKO w `sm.state==ARMED`, poza tym wymuszony OFF;
+  `rc_valid`/`sm_inputs` nietknięte), hard-clamp SI-3 (każde wyjście przez
+  `map_normalized_to_us`→`clamp_pwm_us`), abort ≤1 cykl (CH3 OFF / stick poza neutral),
+  pauza = neutral+center (nie OFF, nie failsafe), SI-6 (POST w ARMED→409 na stanie).
+- `test_failsafe_beats_spot_lock` i `test_spot_lock_output_passes_hard_clamp` mają moc
+  wyroczni (FAILują przy przecieku override poza ARMED / braku clampu).
+- Bramki: host-tests 343/343, `idf.py build` (esp32s3) zielone.
+- P3 do rozważenia: rozmiar `control_loop.c` (471 l.), duplikacja stałej full-scale
+  (1000) bez `_Static_assert`, obejście globalnego `max_throttle_fwd_pct` przez własny
+  cap spot-lock — wszystkie nieblokujące.
