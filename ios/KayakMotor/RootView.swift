@@ -1,39 +1,88 @@
 import SwiftUI
 import KayakContract
 
-/// Korzeń aplikacji (Unit 5): mapa offline z markerem łodzi + status łącza i
-/// atrybucja. Sterowanie goto/waypointy dokładane w kolejnych Unitach.
+/// Korzeń aplikacji: mapa offline + status łącza + tap-to-goto + STOP/Rozbrój +
+/// waypointy + ostrzeżenie geofence. Cienki klient — cała logika ruchu w firmware.
 struct RootView: View {
-    @State private var store = TelemetryStore()
+    @State private var model = AppModel()
+    @State private var showWaypoints = false
 
     var body: some View {
         ZStack(alignment: .top) {
-            LakeMapView(boat: store.boat)
-                .ignoresSafeArea()
+            LakeMapView(
+                boat: model.telemetry.boat,
+                target: model.target.stagedCoordinate,
+                onTap: { model.handleMapTap($0) }
+            )
+            .ignoresSafeArea()
 
+            topBar
+
+            bottomPanel
+        }
+        .confirmationDialog(
+            "Ten punkt wygląda na ląd / poza jeziorem — na pewno?",
+            isPresented: $model.showGeofenceWarning,
+            titleVisibility: .visible
+        ) {
+            Button("Płyń mimo to", role: .destructive) { model.confirmGeofencedGoto() }
+            Button("Anuluj", role: .cancel) {}
+        }
+        .sheet(isPresented: $showWaypoints) {
+            WaypointListView(
+                waypoints: model.waypointList,
+                canSave: model.canSaveWaypoint,
+                onSave: { model.saveCurrentPosition(name: $0) },
+                onSelect: { model.selectWaypoint($0) },
+                onDelete: { model.deleteWaypoint($0) }
+            )
+        }
+        .task { model.start() }
+    }
+
+    private var topBar: some View {
+        HStack {
+            LinkBadge(state: model.telemetry.linkState)
+            Spacer()
+            Button { showWaypoints = true } label: {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.title3)
+                    .frame(width: SunlightTheme.minHitTarget, height: SunlightTheme.minHitTarget)
+                    .background(SunlightTheme.panelBackground, in: Circle())
+                    .foregroundStyle(.white)
+            }
+        }
+        .padding()
+    }
+
+    private var bottomPanel: some View {
+        VStack {
+            Spacer()
+            if model.telemetry.latest?.gotoArrived == true {
+                ArrivalHintView()
+            }
+            GotoControlsView(
+                hasTarget: model.target.staged != nil,
+                sendState: model.target.sendState,
+                telemetry: model.telemetry.latest,
+                blockReason: model.telemetry.gotoBlockReason,
+                onGoto: { model.requestGoto() }
+            )
             HStack {
-                LinkBadge(state: store.linkState)
+                SafetyControlsView(
+                    onStop: { model.stopGoto() },
+                    onDisarm: { model.disarm() }
+                )
                 Spacer()
-                if let reason = store.gotoBlockReason {
-                    Text(reason.message)
-                        .font(.caption.bold())
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(.orange.opacity(0.85), in: Capsule())
-                }
-            }
-            .padding()
-
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    AttributionOverlay().padding(8)
-                }
+                AttributionOverlay()
             }
         }
-        .task {
-            store.start()
-        }
+        .padding()
+        .background(
+            LinearGradient(colors: [.clear, SunlightTheme.panelBackground],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+        )
     }
 }
 

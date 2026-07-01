@@ -37,13 +37,7 @@ struct CommandClient: CommandSending {
         guard let http = response as? HTTPURLResponse else {
             throw CommandClientError.notHTTP
         }
-        guard (200...299).contains(http.statusCode) else {
-            // Firmware zwraca kopertę błędu z code/message — preferuj typed ApiError.
-            if let envelope = try? JSONDecoder().decode(CommandEnvelope.self, from: data),
-               let apiError = envelope.error {
-                throw apiError
-            }
-            throw CommandClientError.httpStatus(http.statusCode)
-        }
+        // Mapowanie status/koperta → wynik jest czystą, host-testowaną funkcją.
+        try HTTPCommandResponse.validate(statusCode: http.statusCode, body: data)
     }
 }
