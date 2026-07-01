@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "natural": "water",
+        "note": "PLACEHOLDER — zastąp realnym konturem akwenu z OSM (natural=water). © OpenStreetMap contributors"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [21.000, 52.000],
+            [21.040, 52.002],
+            [21.060, 52.020],
+            [21.050, 52.045],
+            [21.020, 52.050],
+            [20.995, 52.030],
+            [21.000, 52.000]
+          ]
+        ]
+      }
+    }
+  ]
+}

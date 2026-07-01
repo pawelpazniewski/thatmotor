@@ -1,0 +1,12 @@
+{
+  "version": 8,
+  "name": "offline-blank",
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#0b1e33" }
+    }
+  ]
+}

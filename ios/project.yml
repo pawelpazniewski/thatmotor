@@ -33,6 +33,10 @@ targets:
     platform: iOS
     sources:
       - path: KayakMotor
+        excludes:
+          - "Resources/**"
+      - path: KayakMotor/Resources
+        buildPhase: resources
     dependencies:
       - target: KayakContract
       - package: MapLibre
