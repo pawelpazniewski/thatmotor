@@ -26,10 +26,20 @@ cd ios/KayakKit && swift test
 ```
 
 ## Build (Simulator, sanity)
+Uwaga: buduj przez `-target ... -sdk iphonesimulator` (a NIE `-scheme`). W tym
+środowisku SDK to iphoneos/simulator 26.5, ale zainstalowany runtime symulatora to
+26.2 → resolucja destynacji schematu gubi się. Build `-target` omija ten problem.
+MapLibre (binarny pakiet SwiftPM) rozwiązuje się z GitHuba przy pierwszym buildzie.
 ```
 cd ios
+xcodebuild -project KayakMotor.xcodeproj -target KayakMotor  -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
 xcodebuild -project KayakMotor.xcodeproj -target DeRiskProbe -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
 ```
+
+Architektura zależności: `KayakContract` istnieje podwójnie — jako **pakiet SwiftPM**
+(`KayakKit/`, do `swift test` na hoście) i jako **framework target** (te same źródła,
+do buildu aplikacji przez `-target`, bo `-target` nie kompiluje lokalnych pakietów
+źródłowych SwiftPM). MapLibre pozostaje binarnym pakietem SwiftPM.
 
 ## Bramka de-risk (Unit 0) — NA URZĄDZENIU
 1. Otwórz `KayakMotor.xcodeproj`, wybierz target **DeRiskProbe**, ustaw swój Team

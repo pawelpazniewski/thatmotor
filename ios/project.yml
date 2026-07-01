@@ -11,7 +11,40 @@ settings:
     SWIFT_VERSION: "6.0"
     GENERATE_INFOPLIST_FILE: YES
     TARGETED_DEVICE_FAMILY: "1" # iPhone only (MVP)
+packages:
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    from: "6.27.0"
 targets:
+  # Czysta logika kontraktu jako natywny framework (te same źródła co pakiet
+  # SwiftPM KayakKit, który służy do host-testów `swift test`). Framework — bo
+  # build przez -target nie kompiluje lokalnych pakietów źródłowych SwiftPM.
+  KayakContract:
+    type: framework
+    platform: iOS
+    sources:
+      - path: KayakKit/Sources/KayakContract
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pawel.kayak.contract
+  # Produkcyjna aplikacja (Unit 1+). Cienki klient kontraktu firmware.
+  KayakMotor:
+    type: application
+    platform: iOS
+    sources:
+      - path: KayakMotor
+    dependencies:
+      - target: KayakContract
+      - package: MapLibre
+        product: MapLibre
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pawel.kayak.motor
+        CODE_SIGN_ENTITLEMENTS: KayakMotor/KayakMotor.entitlements
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Łączy się z silnikiem kajaka (AP kayak-motor) po Wi‑Fi, by wysyłać cel nawigacji i odbierać telemetrię."
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+
   # Unit 0 — bramka de-risk. Throwaway app: dowód łączności iPhone↔192.168.4.1.
   DeRiskProbe:
     type: application

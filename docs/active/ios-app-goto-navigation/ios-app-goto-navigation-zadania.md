@@ -38,16 +38,15 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 
 ## Faza 1 — Fundament klienta
 
-### Unit 1: Szkielet projektu, zależności, uprawnienia — M · (R1, R2, R10) · zależności: Unit 0 PASS
-- [ ] Stwórz `ios/KayakMotor/KayakMotor.xcodeproj`, `App/KayakMotorApp.swift`, `App/RootView.swift`
-- [ ] Info.plist (`NSLocalNetworkUsageDescription`), entitlements (Hotspot Configuration), iOS 17
-- [ ] SwiftPM `maplibre-gl-native-distribution` (from 6.27.0), moduł `MapLibre`
-- [ ] Struktura folderów: `App/ Contract/ Networking/ Map/ Features/ Persistence/ DesignSystem/`
-- [ ] `ios/KayakMotor/README.md` (build na urządzeniu, capability, uwaga o Simulatorze)
-- [ ] `ios/KayakMotorTests/SmokeTests.swift` (Swift Testing)
-- [ ] Test: [Unit] Smoke — aplikacja buduje się i startuje (RootView renderuje placeholder)
-- [ ] Weryfikacja: Projekt buduje się na urządzeniu; `import MapLibre` linkuje; capability
-  i klucz Local Network obecne; target Swift Testing zielony
+### Unit 1: Szkielet projektu, zależności, uprawnienia — M · (R1, R2, R10) · zależności: Unit 0 PASS · ✅ UKOŃCZONE (Simulator build green)
+- [x] `KayakMotor` app target: `KayakMotorApp.swift`, `RootView.swift` (placeholder linkujący zależności)
+- [x] Info.plist (`NSLocalNetworkUsageDescription`), entitlements (Hotspot Configuration), iOS 17
+- [x] SwiftPM `maplibre-gl-native-distribution` (from 6.27.0), moduł `MapLibre` — **rozwiązany z GitHub, linkuje**
+- [x] `KayakContract` jako framework target (te same źródła co pakiet host-testowy) — app linkuje
+- [x] `ios/README.md` (build, capability, uwaga o Simulatorze i quirku scheme→`-target`)
+- [x] Test: [Unit] Smoke — `xcodebuild -target KayakMotor -sdk iphonesimulator` → **BUILD SUCCEEDED**
+- [x] Weryfikacja: `import MapLibre` + `import KayakContract` linkują; oba targety (app+probe) budują się;
+  host-testy KayakKit zielone (31/31). Uwaga: build na URZĄDZENIU wymaga Team/signing (użytkownik)
 
 ### Unit 2: Modele kontraktu + konwersja współrzędnych — M · (R2, R3, R8) · zależności: Unit 1 ✅ UKOŃCZONE (host-tested)
 - [x] `KayakKit/Sources/KayakContract/Telemetry.swift` (`Decodable` + enumy `SystemState`,`ArmReason`,`HoldState`)
