@@ -60,23 +60,23 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 - [x] Test: [Unit] Dekoduje kopertę błędu 400 → `ApiError`; sukces `{"data":null,"error":null}` → `isSuccess`
 - [x] Weryfikacja: **13/13 testów Contract zielonych** (`swift test`); walidacja w domenie double przed castem (moc wyroczni)
 
-### Unit 3: Warstwa sieciowa — join, wymuszenie Wi‑Fi, HTTP, WS — L · (R1, R9) · zależności: Unit 0, Unit 2
-- [ ] `Networking/HotspotJoiner.swift` (`NEHotspotConfiguration` + fallback manual)
-- [ ] `Networking/CommandClient.swift` (protokół `CommandSending`; impl `URLSession`; miejsce na `NWConnection`)
-- [ ] `Networking/TelemetrySocket.swift` (Network.framework WS pinowany `.wifi`, reconnect + backoff)
-- [ ] `Networking/LinkState.swift` (`enum` dyskryminowany: disconnected/joining/connected/stale)
-- [ ] Testy: `CommandClientTests.swift`, `LinkStateMachineTests.swift`
-- [ ] Test: [Unit] `goto(lat,lon)` → poprawny URL, `Content-Type`, body `{"cmd":"goto","lat_e7":..,"lon_e7":..}`
-- [ ] Test: [Unit] Odpowiedź 400 → typed `ApiError`, nie ignoruje
-- [ ] Test: [Unit] LinkState: brak ramki > próg → `stale`; ramka wraca → `connected`; zerwanie
-  → `disconnected`. Moc wyroczni: usunięcie progu stale → test „stale" FAILuje
-- [ ] Test: [E2E] Połącz łączy z `kayak-motor`, WS zaczyna publikować telemetrię
-- [ ] Weryfikacja: Testy zielone; na urządzeniu status linku odzwierciedla realny stan; `goto_cancel` → 200
+### Unit 3: Warstwa sieciowa — join, wymuszenie Wi‑Fi, HTTP, WS — L · (R1, R9) · zależności: Unit 0, Unit 2 · CZĘŚCIOWO (LinkState/request host-tested, reszta compile-verified)
+- [x] `Networking/HotspotJoiner.swift` (`NEHotspotConfiguration` join + fallback manual)
+- [x] `Networking/CommandClient.swift` (protokół `CommandSending`; impl `URLSession`; miejsce na `NWConnection`)
+- [x] `Networking/TelemetrySocket.swift` (Network.framework WS pinowany `.wifi`, `AsyncStream<TelemetryStreamEvent>`)
+- [x] `KayakContract/LinkState.swift` (`LinkStateMachine` — disconnected/joining/connected/stale)
+- [x] `KayakContract/HTTPCommandRequest.swift` (czysty builder żądania) + testy
+- [x] Test: [Unit] `goto(lat,lon)` → poprawny URL, `Content-Type`, body `{"cmd":"goto","lat_e7":..,"lon_e7":..}` (host)
+- [ ] Test: [Unit] Odpowiedź 400 → typed `ApiError` — logika w `CommandClient` (app; wymaga mock URLProtocol, TODO)
+- [x] Test: [Unit] LinkState: brak ramki > próg → `stale`; ramka → `connected`; zerwanie → `disconnected`.
+  Moc wyroczni: usunięcie progu stale → test „stale" FAILuje (host)
+- [ ] Test: [E2E] Połącz łączy z `kayak-motor`, WS zaczyna publikować telemetrię (device)
+- [ ] Weryfikacja: część host-tested zielona (LinkState+request); na urządzeniu status linku realny; `goto_cancel`→200 (device)
 
 ### Unit 4: Store telemetrii + świeżość + status/HUD — M · (R2, R8, R9) · zależności: Unit 3 · CZĘŚCIOWO (logika host-tested)
-- [ ] `Features/Telemetry/TelemetryStore.swift` (`@Observable`; ostatnia ramka + `isStale`) — app-target, po Unit 1/3
+- [x] `Features/Telemetry/TelemetryStore.swift` (`@Observable`; ostatnia ramka + LinkStateMachine + boat/readiness) — compile-verified
 - [x] `KayakContract/GotoReadiness.swift` (czysta `(Telemetry)->GotoBlockReason?`)
-- [ ] `Features/Telemetry/StatusHUDView.swift` (stan, gps_fix/sats, prędkość, `app_link_fresh`, powód) — app-target
+- [~] `Features/Telemetry/StatusHUDView.swift` — na razie badge łącza + powód blokady w RootView; pełny HUD (sats/prędkość) TODO
 - [x] Test: `GotoReadinessTests.swift` (host)
 - [x] Test: [Unit] ARMED+fix → `nil` (gotowe)
 - [x] Test: [Unit] DISARMED → powód; fix=false → „Brak fixu"; arm_reason→powód. Moc wyroczni:
@@ -88,17 +88,15 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 
 ## Faza 2 — Mapa i nawigacja
 
-### Unit 5: Mapa offline (kontur + marker + jakość GPS) — L · (R2, R10) · zależności: Unit 4, Unit 1
-- [ ] `Map/LakeMapView.swift` (`UIViewRepresentable` + Coordinator)
-- [ ] `Map/MapStyle.swift` (ładowanie `blank-style.json`, wiązanie warstw)
-- [ ] Zasoby: `Resources/blank-style.json`, `Resources/lake.geojson` (OSM, atrybucja), `Resources/boat-icon`
-- [ ] `Map/AttributionOverlay.swift` (stały „© OpenStreetMap contributors")
-- [ ] Test: `MapStyleResourcesTests.swift`
-- [ ] Test: [Unit] `lake.geojson` i `blank-style.json` w bundlu i parsują się; GeoJSON zawiera polygon
-- [ ] Test: [E2E] Bez internetu (AP): kontur renderuje się, marker na pozycji GPS obraca się
-  wg kursu; zero requestów sieciowych (tryb samolotowy + AP / Instruments)
-- [ ] Test: [E2E] Marker płynny przy ~10 Hz (brak janku), kamera podąża
-- [ ] Weryfikacja: Bez internetu mapa i pozycja/kurs żyją; atrybucja OSM widoczna; zero ruchu sieciowego
+### Unit 5: Mapa offline (kontur + marker + jakość GPS) — L · (R2, R10) · zależności: Unit 4, Unit 1 · CZĘŚCIOWO (compile-verified; render device-gated)
+- [x] `Map/LakeMapView.swift` (`UIViewRepresentable` + Coordinator; kontur + boat symbol layer + follow)
+- [x] Ładowanie `blank-style.json` + wiązanie warstw (w Coordinatorze LakeMapView; osobny MapStyle.swift zbędny)
+- [x] Zasoby: `Resources/blank-style.json`, `Resources/lake.geojson` (placeholder OSM); boat-icon = SF Symbol w kodzie
+- [x] `Map/AttributionOverlay.swift` (stały „© OpenStreetMap contributors")
+- [x] Test: parsowanie konturu — `LakeContourTests.swift` (host; GeoJSON→[GeoPoint], łączy się z geofence)
+- [ ] Test: [E2E] Bez internetu (AP): kontur renderuje się, marker na pozycji GPS obraca się wg kursu; zero requestów (device)
+- [ ] Test: [E2E] Marker płynny przy ~10 Hz (brak janku), kamera podąża (device)
+- [ ] Weryfikacja: render offline + atrybucja + zero ruchu sieciowego (device; kompilacja + parser host-tested zielone)
 
 ### Unit 6: Tap-to-goto (pin, linia, wysłanie, err/bearing) — M · (R3) · zależności: Unit 5, Unit 3, Unit 4
 - [ ] `Features/Goto/GotoTargetController.swift` (stan celu; źródło mapa vs waypoint)
