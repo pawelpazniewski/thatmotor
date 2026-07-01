@@ -36,6 +36,21 @@
   `err_m` → `params set` zmienia zachowanie (§4c). Weryfikacja: `run.sh`/`idf.py build` pozostają dla
   review.
 
+- **Review Fazy 3 (2026-07-01): ✅ CZYSTE (P1=0, P2=0, P3=4).** Raport: `review-faza-3.md`.
+  Zweryfikowane empirycznie: `run.sh` 391/391 zielone, `idf.py build` zielony (bin 0xf0f70, 37% free
+  — zgodne z deklaracją). **Console-primary-switch (USB Serial/JTAG) = P3 akceptowalny z uwagą** —
+  flash/monitor działają na USB-Serial/JTAG (esptool), dump = surowy printf filtrowalny po schemacie
+  CSV, zapisy VFS liniowo-atomowe (log wpada MIĘDZY wiersze, nie w środek); parsowalność „na żywo" →
+  known-issues §4c. **SI-6 respektowane** — `params_cmd_decide_set` komponuje ten SAM `settings_validate`
+  co HTTP (`settings_valid=!repaired` potwierdza moc wyroczni out-of-range); `control_loop_post_pending`
+  → `maybe_apply_pending` aplikuje tylko w DISARMED z TOCTOU re-checkiem, single-writer; ARMED→staged
+  (nie gubione). **CSV jednoznaczny** — full-string oracle nagłówek==kolejność kolumn, 22 płaskie
+  kolumny, każdy wiersz session_id+cel+4 nastawy. Obserwator ✅ (opcjonalny start, prio 2, poza
+  failsafe). Pure ⊥ HAL ✅ (csv/params_cmd bez esp_/driver). Rozmiary ✅ (nowe <300, record.c 302
+  niepogorszony). P3 nity: ESP_LOG↔REPL współdzielenie portu, mailbox depth-1 przy multi-set w ARMED,
+  read_all↔append bez locka (dump off-water), `params get` brak trailing \n. Wolna droga do zamknięcia
+  zadania (Faza 3 = ostatnia).
+
 - **Faza 2 ukończona (Unit 3 — HAL flash + recorder task).** Komponent `blackbox`
   wchodzi teraz do buildu IDF: `components/blackbox/CMakeLists.txt` rejestruje
   wszystkie 5 plików .c (record, ring, sampler, blackbox HAL, recorder), REQUIRES

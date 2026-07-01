@@ -150,6 +150,20 @@ sampler oracle power ✅ OK, Pure ⊥ HAL ✅ OK, rozmiary/SRP ✅ OK.
 - [ ] 🟡 [nit] **components/blackbox/src/blackbox_recorder.c:82-100** — `write_header` konsumuje `session_seq`/`start_ms` przed encode; przy encode-fail id sesji przepada bez nagłówka na flash (best-effort, kosmetyczne).
 - [ ] 🟡 [nit] **components/blackbox/src/blackbox_recorder.c:61-64** — cast `u32→u16` na pulse-width; glitch >65535 by uciął (RC/clamp ogranicza, dane obserwatora — akceptowalne).
 
+## Do poprawy po review fazy 3
+
+Review 2026-07-01 — severity gate ✅ CZYSTE (P1=0, P2=0, P3=4). Brak blokerów.
+Raport: `review-faza-3.md`. Werdykt: console-primary-switch (USB Serial/JTAG) = P3 akceptowalny
+z uwagą (dump filtrowalny po schemacie CSV, flash/monitor działają); SI-6 respektowane ✅
+(ten sam `settings_validate` co HTTP, apply gated DISARMED, single-writer, out-of-range odrzucone
+z mocą wyroczni); CSV jednoznaczny ✅ (full-string oracle nagłówek==kolumny, 22 płaskie kolumny).
+Empirycznie: `run.sh` 391/391 zielone, `idf.py build` zielony (37% free).
+
+- [ ] 🟡 [nit] **sdkconfig.defaults / usb_console.c** — primary console na USB Serial/JTAG: ESP_LOG dzieli port z REPL; parsowalność `spotlog dump` „na żywo" przy gęstym logowaniu = weryfikacja sprzętowa (known-issues §4c). Opcjonalnie wyciszyć logi na czas dumpu (nie wymagane).
+- [ ] 🟡 [nit] **components/usb_console/src/usb_console.c:135-159** — dwa kolejne `params set` na różne pola W ARMED (obie staged) → mailbox depth-1 nadpisuje, zmiana pierwszego pola gubiona do rozbrojenia (baza = aktywne params). W DISARMED bez problemu. Zgodne z zachowaniem mailbox HTTP. Udokumentować „w ARMED jedno pole albo rozbrój między setami".
+- [ ] 🟡 [nit] **components/blackbox/src/blackbox.c (read_all ↔ append)** — carry z Fazy 2, teraz wpięty: `spotlog dump` czyta region równolegle do `append` recordera bez locka. Mitygacja: dump w DISARMED/off-water (known-issues §4c).
+- [ ] 🟡 [nit] **components/usb_console/src/usb_console.c:107** — `params get` `printf("%s", buf)` bez końcowego `\n` poza treścią (kosmetyczne; każda linia ma własny `\n`).
+
 ## Zamknięcie
 
 - [ ] Finalny self-check: `test/host/run.sh` zielony + `idf.py build` zielony
