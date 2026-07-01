@@ -48,13 +48,45 @@ static spot_lock_inputs make_base_inputs(void)
     return in;
 }
 
-/* An ACTIVE carry-over state holding REF as the target. */
+/* An ACTIVE CH3-hold carry-over state holding REF as the target. */
 static spot_lock_state make_active_state(void)
 {
     spot_lock_state st = {
         .substate = SPOT_LOCK_ACTIVE,
+        .target_source = SPOT_LOCK_SRC_HOLD,
         .ref_lat_e7 = REF_LAT_E7,
         .ref_lon_e7 = REF_LON_E7,
+    };
+    return st;
+}
+
+/* A goto target offset ~10 m east of REF (distinct from any current position
+ * placed to the north), so a snapshot is observably NOT the goto point. */
+#define GOTO_LAT_E7 REF_LAT_E7
+#define GOTO_LON_E7 (REF_LON_E7 + E7_10M)
+
+/* Base inputs for an app-driven goto: ARMED, sticks neutral, CH3 OFF, fresh
+ * GPS/IMU and fresh app link, goto latched to the external target. */
+static spot_lock_inputs make_goto_inputs(void)
+{
+    spot_lock_inputs in = make_base_inputs();
+    in.ch3_on = false;
+    in.ch3_edge_on = false;
+    in.goto_engage = true;
+    in.goto_lat_e7 = GOTO_LAT_E7;
+    in.goto_lon_e7 = GOTO_LON_E7;
+    in.comms_fresh = true;
+    return in;
+}
+
+/* An ACTIVE goto carry-over state referencing the external goto target. */
+static spot_lock_state make_active_goto_state(void)
+{
+    spot_lock_state st = {
+        .substate = SPOT_LOCK_ACTIVE,
+        .target_source = SPOT_LOCK_SRC_GOTO,
+        .ref_lat_e7 = GOTO_LAT_E7,
+        .ref_lon_e7 = GOTO_LON_E7,
     };
     return st;
 }
@@ -367,6 +399,150 @@ void test_step_is_deterministic(void)
     TEST_ASSERT_EQUAL_INT(a.err_m, b.err_m);
 }
 
+/* --- Unit 3: goto source arbitration + comms gate (R2-R6) --- */
+
+void test_goto_engages_active_with_external_target(void)
+{
+    /* Arrange: OFF, no CH3, goto latched with fresh sensors + link. Current is
+     * ~10 m south of the external target with the bow aligned north, so a
+     * running goto must drive forward thrust. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_inputs();
+    in.lat_e7 = REF_LAT_E7 - E7_10M; /* target (REF) lies north, bow aligned */
+    in.heading_deg10 = 0;
+    spot_lock_state st = { .substate = SPOT_LOCK_OFF,
+                           .target_source = SPOT_LOCK_SRC_NONE };
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: ACTIVE on the EXTERNAL goto target (not a snapshot), driving. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, st.target_source);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7, st.ref_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
+    TEST_ASSERT_TRUE(out.throttle_cmd > 0);
+}
+
+void test_ch3_preempts_active_goto_and_snapshots_here_and_now(void)
+{
+    /* Arrange: a goto is ACTIVE on the external target; CH3 comes on (edge) with
+     * the current position ~10 m NORTH of the goto point. CH3 must preempt goto
+     * and snapshot the CURRENT position - not keep the goto target. Removing the
+     * preemption (entry keyed only on OFF) leaves ref at the goto point -> fail. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_base_inputs(); /* CH3 on, rising edge, fresh */
+    in.lat_e7 = REF_LAT_E7 + E7_10M;          /* current != goto target */
+    in.goto_engage = true;
+    in.goto_lat_e7 = GOTO_LAT_E7;
+    in.goto_lon_e7 = GOTO_LON_E7;
+    spot_lock_state st = make_active_goto_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: SRC_HOLD on the current position snapshot, not the goto target. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_HOLD, st.target_source);
+    TEST_ASSERT_EQUAL_INT32(in.lat_e7, st.ref_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(in.lon_e7, st.ref_lon_e7);
+    TEST_ASSERT_TRUE(st.ref_lat_e7 != GOTO_LAT_E7);
+    TEST_ASSERT_NOT_EQUAL(SPOT_LOCK_OFF, out.substate);
+}
+
+void test_goto_pauses_on_comms_loss_then_resumes_same_target(void)
+{
+    /* Arrange: goto ACTIVE ~10 m from the target, app link goes stale. The comms
+     * gate applies to SRC_GOTO: link loss must pause (neutral+center), target
+     * retained. Removing the comms gate keeps it ACTIVE with thrust -> fail. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_inputs();
+    in.lat_e7 = REF_LAT_E7 - E7_10M;
+    in.comms_fresh = false;
+    spot_lock_state st = make_active_goto_state();
+
+    /* Act: link lost. */
+    spot_lock_outputs paused = spot_lock_step(&in, &p, &st);
+
+    /* Assert: PAUSED, relaxed, goto target retained. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_PAUSED, paused.substate);
+    TEST_ASSERT_EQUAL_INT32(0, paused.throttle_cmd);
+    TEST_ASSERT_EQUAL_INT32(0, paused.servo_cmd);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7, st.ref_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
+
+    /* Act: link returns. */
+    in.comms_fresh = true;
+    spot_lock_outputs resumed = spot_lock_step(&in, &p, &st);
+
+    /* Assert: back to ACTIVE on the SAME external target. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, resumed.substate);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
+}
+
+void test_comms_gate_does_not_pause_ch3_hold(void)
+{
+    /* Arrange: SRC_HOLD ACTIVE ~10 m from target, bow aligned, but the app link
+     * is stale. Link freshness must NOT gate the RC-owned CH3 hold - it keeps
+     * driving. Extending the comms gate to SRC_HOLD would pause here -> fail. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_base_inputs(); /* CH3 on, fresh GPS/IMU */
+    in.ch3_edge_on = false;
+    in.lat_e7 = REF_LAT_E7 - E7_10M;
+    in.heading_deg10 = 0;
+    in.comms_fresh = false; /* link down - must be ignored for SRC_HOLD */
+    spot_lock_state st = make_active_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: still ACTIVE and driving despite the stale link. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    TEST_ASSERT_TRUE(out.throttle_cmd > 0);
+}
+
+void test_goto_override_on_stick_deflection(void)
+{
+    /* Arrange: goto ACTIVE, a stick leaves its neutral band. Manual override
+     * wins structurally -> OFF and source cleared. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_inputs();
+    in.sticks_neutral = false;
+    spot_lock_state st = make_active_goto_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: OFF, no engaged source. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_OFF, out.substate);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_NONE, st.target_source);
+}
+
+void test_goto_arrived_flag_tracks_deadband(void)
+{
+    /* Arrange: goto ACTIVE exactly on target -> arrived; then ~10 m off -> not
+     * arrived. Oracle: a hard-coded arrived fails one branch or the other. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_inputs();
+    in.lat_e7 = GOTO_LAT_E7; /* on target */
+    in.lon_e7 = GOTO_LON_E7;
+    spot_lock_state on_st = make_active_goto_state();
+
+    /* Act: on target. */
+    spot_lock_outputs on_target = spot_lock_step(&in, &p, &on_st);
+
+    /* Assert: arrived. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, on_target.substate);
+    TEST_ASSERT_TRUE(on_target.arrived);
+
+    /* Act: ~10 m off target. */
+    in.lon_e7 = GOTO_LON_E7 + E7_10M;
+    spot_lock_state off_st = make_active_goto_state();
+    spot_lock_outputs off_target = spot_lock_step(&in, &p, &off_st);
+
+    /* Assert: not arrived. */
+    TEST_ASSERT_FALSE(off_target.arrived);
+}
+
 void run_spot_lock_tests(void)
 {
     RUN_TEST(test_entry_on_edge_arms_active_and_snapshots_target);
@@ -385,4 +561,10 @@ void run_spot_lock_tests(void)
     RUN_TEST(test_abort_on_ch3_off);
     RUN_TEST(test_abort_on_stick_out_of_deadband);
     RUN_TEST(test_step_is_deterministic);
+    RUN_TEST(test_goto_engages_active_with_external_target);
+    RUN_TEST(test_ch3_preempts_active_goto_and_snapshots_here_and_now);
+    RUN_TEST(test_goto_pauses_on_comms_loss_then_resumes_same_target);
+    RUN_TEST(test_comms_gate_does_not_pause_ch3_hold);
+    RUN_TEST(test_goto_override_on_stick_deflection);
+    RUN_TEST(test_goto_arrived_flag_tracks_deadband);
 }

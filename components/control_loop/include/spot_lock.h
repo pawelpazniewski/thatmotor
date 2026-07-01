@@ -37,6 +37,14 @@ typedef enum {
     SPOT_LOCK_PAUSED = 2, /* sensor data lost: neutral+center, target retained */
 } spot_lock_substate;
 
+/** Source of the active target (arbitration outcome for this cycle). CH3 hold
+ * physically preempts an app-driven goto (SRC_HOLD wins over SRC_GOTO). */
+typedef enum {
+    SPOT_LOCK_SRC_NONE = 0, /* no source engaged: OFF */
+    SPOT_LOCK_SRC_HOLD = 1, /* CH3 snapshot of "here and now" (RC-owned) */
+    SPOT_LOCK_SRC_GOTO = 2, /* external app target (link-gated) */
+} spot_lock_target_source;
+
 /** Per-cycle inputs. All flags/coords come from the loop's read_inputs. */
 typedef struct {
     bool armed;          /* sm.state == ARMED (override allowed only here) */
@@ -50,6 +58,10 @@ typedef struct {
     int32_t lat_e7;      /* current latitude, degrees * 1e7 */
     int32_t lon_e7;      /* current longitude, degrees * 1e7 */
     uint16_t heading_deg10; /* current bow heading, degrees * 10, [0, 3599] */
+    bool goto_engage;    /* app goto latch (source-of-target request, R3) */
+    int32_t goto_lat_e7; /* external goto target latitude, degrees * 1e7 */
+    int32_t goto_lon_e7; /* external goto target longitude, degrees * 1e7 */
+    bool comms_fresh;    /* app link freshness (R5): gates SRC_GOTO only */
 } spot_lock_inputs;
 
 /** Tunable regulator parameters (mapped from settings by the integration). */
@@ -62,9 +74,10 @@ typedef struct {
 
 /** Carry-over state owned by the loop, updated in place each cycle. */
 typedef struct {
-    spot_lock_substate substate; /* current sub-state */
-    int32_t ref_lat_e7;          /* target latitude snapshot (entry) */
-    int32_t ref_lon_e7;          /* target longitude snapshot (entry) */
+    spot_lock_substate substate;          /* current sub-state */
+    spot_lock_target_source target_source; /* which source owns the target */
+    int32_t ref_lat_e7;                   /* target latitude (snapshot or goto) */
+    int32_t ref_lon_e7;                   /* target longitude (snapshot or goto) */
 } spot_lock_state;
 
 /** Decision outputs for one cycle. */
@@ -74,20 +87,27 @@ typedef struct {
     int32_t servo_cmd;           /* normalized signed, 0 = center */
     uint16_t err_m;              /* position error in metres (telemetry) */
     uint16_t bearing_deg10;      /* bearing to target, deg*10 (telemetry) */
+    bool arrived;                /* err_m <= deadband_m while ACTIVE (telemetry) */
 } spot_lock_outputs;
 
 /**
  * Run one spot-lock decision cycle (pure, deterministic).
  *
- * Transition priority:
- *   1. ANY -> OFF when !armed || !ch3_on || !sticks_neutral (abort, R4).
- *   2. OFF -> ACTIVE only on ch3_edge_on && gps_fresh && gps_has_fix
- *      (snapshots the current position as the target, R1/R3).
- *   3. ACTIVE/PAUSED -> PAUSED when !gps_fresh || !imu_ok (neutral+center,
- *      target retained, R5); recovers to ACTIVE when data returns.
- *   4. ACTIVE: within deadband -> neutral+center (R6); outside -> steer toward
- *      target, and add forward thrust (capped, R7) only while the bearing error
- *      is within the +/-60 deg gate (R2).
+ * Source arbitration in ARMED (physical CH3 preempts app-driven goto):
+ *   1. ANY -> OFF when !armed || !sticks_neutral (manual override, R4/R6).
+ *   2. ch3_on -> SRC_HOLD: on entry (edge + fresh real fix) snapshot the
+ *      current position as the target; a running goto is preempted here (R4).
+ *   3. goto_engage && !ch3_on -> SRC_GOTO: target is the external goto point
+ *      (ref_* = goto_*), gated by comms_fresh in addition to GPS/IMU (R3/R5).
+ *   4. otherwise -> OFF.
+ *
+ * Within an engaged source:
+ *   - PAUSED when !gps_fresh || !imu_ok || !gps_has_fix (SRC_HOLD/SRC_GOTO), or
+ *     additionally !comms_fresh for SRC_GOTO only (link loss never pauses the
+ *     RC-owned SRC_HOLD, R5); target retained, recovers to ACTIVE on return.
+ *   - ACTIVE: within deadband -> neutral+center (R6); outside -> steer toward
+ *     target and add forward thrust (capped, R7) only while the bearing error
+ *     is within the +/-60 deg gate (R2). arrived = err_m <= deadband_m.
  *
  * @param in  Per-cycle inputs (must be non-NULL).
  * @param p   Regulator parameters (must be non-NULL).

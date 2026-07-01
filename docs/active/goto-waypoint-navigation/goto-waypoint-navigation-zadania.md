@@ -59,17 +59,17 @@ Severity gate: ⛔ BLOKUJE (1× P1). Raport: `review-faza-1.md`. Host-tests 400/
 Zależności: brak (równolegle do Fazy 1)
 
 Implementacja:
-- [ ] Modyfikuj `components/control_loop/include/spot_lock.h` — `spot_lock_inputs`: `goto_engage`, `goto_lat_e7/lon_e7`, `comms_fresh`; `spot_lock_state`: `target_source` {SRC_NONE/SRC_HOLD/SRC_GOTO}; `spot_lock_outputs`: `bool arrived`
-- [ ] Modyfikuj `components/control_loop/src/spot_lock.c` — arbitraż źródła; dla SRC_GOTO `ref_*=goto_*`; bramka `comms_fresh` w pauzie tylko dla SRC_GOTO; CH3 preemptuje goto; `arrived=(err_m<=deadband_m)`
-- [ ] Rozszerz `test/host/test_spot_lock.c`
+- [x] Modyfikuj `components/control_loop/include/spot_lock.h` — `spot_lock_inputs`: `goto_engage`, `goto_lat_e7/lon_e7`, `comms_fresh`; `spot_lock_state`: `target_source` {SRC_NONE/SRC_HOLD/SRC_GOTO}; `spot_lock_outputs`: `bool arrived`
+- [x] Modyfikuj `components/control_loop/src/spot_lock.c` — arbitraż źródła; dla SRC_GOTO `ref_*=goto_*`; bramka `comms_fresh` w pauzie tylko dla SRC_GOTO; CH3 preemptuje goto; `arrived=(err_m<=deadband_m)`
+- [x] Rozszerz `test/host/test_spot_lock.c`
 
 Testy (test-first, moc wyroczni — wchodź w stan, który bez bramki przecieka):
-- [ ] Test: SRC_GOTO — goto_engage+ARMED+neutral+fresh, CH3 OFF → ACTIVE, `ref_*==goto_*`; throttle>neutral gdy poza deadbandem i w ±60°
-- [ ] Test: priorytet CH3 — goto ACTIVE, `ch3_on`(edge) → SRC_HOLD, `ref_*`=bieżąca pozycja (FAILuje bez preempcji)
-- [ ] Test: bramka linku — SRC_GOTO ACTIVE, `comms_fresh=false` → PAUSED (neutral+center, cel zachowany); powrót → ACTIVE ten sam cel
-- [ ] Test: bramka linku NIE dotyczy SRC_HOLD — CH3-hold z `comms_fresh=false` nie pauzuje (FAILuje, gdy bramka obejmie SRC_HOLD)
-- [ ] Test: override — SRC_GOTO ACTIVE + `!sticks_neutral` → OFF
-- [ ] Test: regresja CH3 — wszystkie istniejące scenariusze spot-lock przechodzą bez zmian
+- [x] Test: SRC_GOTO — goto_engage+ARMED+neutral+fresh, CH3 OFF → ACTIVE, `ref_*==goto_*`; throttle>neutral gdy poza deadbandem i w ±60° (`test_goto_engages_active_with_external_target`)
+- [x] Test: priorytet CH3 — goto ACTIVE, `ch3_on`(edge) → SRC_HOLD, `ref_*`=bieżąca pozycja (FAILuje bez preempcji) (`test_ch3_preempts_active_goto_and_snapshots_here_and_now` — mutacja preempt→OFF-only FAILuje ten test)
+- [x] Test: bramka linku — SRC_GOTO ACTIVE, `comms_fresh=false` → PAUSED (neutral+center, cel zachowany); powrót → ACTIVE ten sam cel (`test_goto_pauses_on_comms_loss_then_resumes_same_target`)
+- [x] Test: bramka linku NIE dotyczy SRC_HOLD — CH3-hold z `comms_fresh=false` nie pauzuje (FAILuje, gdy bramka obejmie SRC_HOLD) (`test_comms_gate_does_not_pause_ch3_hold` — mutacja comms-gate→hold FAILuje ten test)
+- [x] Test: override — SRC_GOTO ACTIVE + `!sticks_neutral` → OFF (`test_goto_override_on_stick_deflection`)
+- [x] Test: regresja CH3 — wszystkie istniejące scenariusze spot-lock przechodzą bez zmian (16 istniejących asercji `test_spot_lock` bez zmian; `arrived` pokryte `test_goto_arrived_flag_tracks_deadband`)
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone (nowe + wszystkie istniejące `test_spot_lock`); grep braku `esp_*`/`driver/*` w `spot_lock.h`; funkcja deterministyczna

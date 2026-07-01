@@ -33,6 +33,7 @@ static spot_lock_outputs make_idle_output(spot_lock_substate substate)
         .servo_cmd = 0,
         .err_m = 0,
         .bearing_deg10 = 0,
+        .arrived = false,
     };
     return out;
 }
@@ -91,7 +92,9 @@ static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
         .servo_cmd = 0,
         .err_m = dist_to_err_m(dist),
         .bearing_deg10 = geo_bearing_deg10(off),
+        .arrived = false,
     };
+    out.arrived = (out.err_m <= p->deadband_m);
 
     /* Deadband: inside the hold radius we relax (no heading hold, R6). */
     if (dist <= (float)p->deadband_m) {
@@ -110,36 +113,80 @@ static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
     return out;
 }
 
+/** Force the OFF sub-state with no engaged source. */
+static spot_lock_outputs make_off(spot_lock_state *st)
+{
+    st->substate = SPOT_LOCK_OFF;
+    st->target_source = SPOT_LOCK_SRC_NONE;
+    return make_idle_output(SPOT_LOCK_OFF);
+}
+
+/**
+ * Pause-or-run for an engaged source with the target already set in st.
+ * The fix is re-validated each cycle: a stale fix can still be inside the
+ * freshness window (seed-fresh), so holding on a lost fix is unsafe. The comms
+ * gate applies to SRC_GOTO only - link loss must never pause the RC-owned
+ * SRC_HOLD (R5).
+ */
+static spot_lock_outputs hold_or_pause(const spot_lock_inputs *in,
+                                       const spot_lock_params *p,
+                                       spot_lock_state *st, bool comms_gated)
+{
+    bool sensors_lost = !in->gps_fresh || !in->imu_ok || !in->gps_has_fix;
+    if (comms_gated && !in->comms_fresh) {
+        sensors_lost = true;
+    }
+    if (sensors_lost) {
+        st->substate = SPOT_LOCK_PAUSED;
+        return make_idle_output(SPOT_LOCK_PAUSED);
+    }
+    st->substate = SPOT_LOCK_ACTIVE;
+    return compute_active_output(in, p, st);
+}
+
+/**
+ * CH3 hold branch (SRC_HOLD). On transition into hold - a fresh CH3 request or
+ * preempting a running goto - snapshot "here and now" as the target; this
+ * requires a rising edge and a real, fresh fix. A held CH3 keeps its existing
+ * snapshot. Link freshness never gates SRC_HOLD.
+ */
+static spot_lock_outputs run_ch3_hold(const spot_lock_inputs *in,
+                                      const spot_lock_params *p,
+                                      spot_lock_state *st)
+{
+    if (st->target_source != SPOT_LOCK_SRC_HOLD) {
+        if (!in->ch3_edge_on || !in->gps_fresh || !in->gps_has_fix) {
+            return make_off(st);
+        }
+        st->ref_lat_e7 = in->lat_e7;
+        st->ref_lon_e7 = in->lon_e7;
+        st->target_source = SPOT_LOCK_SRC_HOLD;
+    }
+    return hold_or_pause(in, p, st, false);
+}
+
 spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
                                  const spot_lock_params *p,
                                  spot_lock_state *st)
 {
-    /* 1. Abort to OFF from any sub-state: disarm, CH3 off, or stick moved (R4). */
-    if (!in->armed || !in->ch3_on || !in->sticks_neutral) {
-        st->substate = SPOT_LOCK_OFF;
-        return make_idle_output(SPOT_LOCK_OFF);
+    /* 1. Manual override / disarm wins unconditionally (R4/R6). */
+    if (!in->armed || !in->sticks_neutral) {
+        return make_off(st);
     }
 
-    /* 2. Entry OFF -> ACTIVE: rising edge with a real, fresh fix (R1/R3). The
-     * real-fix gate prevents the seed-fresh window from arming without a fix. */
-    if (st->substate == SPOT_LOCK_OFF) {
-        if (!in->ch3_edge_on || !in->gps_fresh || !in->gps_has_fix) {
-            return make_idle_output(SPOT_LOCK_OFF);
-        }
-        st->ref_lat_e7 = in->lat_e7;
-        st->ref_lon_e7 = in->lon_e7;
-        st->substate = SPOT_LOCK_ACTIVE;
+    /* 2. CH3 physically preempts goto: hold "here and now" (R4). */
+    if (in->ch3_on) {
+        return run_ch3_hold(in, p, st);
     }
 
-    /* 3. Pause on sensor loss; retain the target and relax actuators (R5). The
-     * fix is re-validated each cycle: a stale fix can still be inside the
-     * freshness window (seed-fresh), so holding on a lost fix is unsafe. */
-    if (!in->gps_fresh || !in->imu_ok || !in->gps_has_fix) {
-        st->substate = SPOT_LOCK_PAUSED;
-        return make_idle_output(SPOT_LOCK_PAUSED);
+    /* 3. App-driven goto: external target, link-gated (R3/R5). */
+    if (in->goto_engage) {
+        st->ref_lat_e7 = in->goto_lat_e7;
+        st->ref_lon_e7 = in->goto_lon_e7;
+        st->target_source = SPOT_LOCK_SRC_GOTO;
+        return hold_or_pause(in, p, st, true);
     }
 
-    /* 4. Hold position. */
-    st->substate = SPOT_LOCK_ACTIVE;
-    return compute_active_output(in, p, st);
+    /* 4. No source engaged. */
+    return make_off(st);
 }

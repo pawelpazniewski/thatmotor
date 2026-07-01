@@ -312,7 +312,7 @@ dla obu ścieżek; UI event dociera do `apply_ui_events`.
 
 ### Faza 2 — Rdzeń decyzyjny (rozszerzenie silnika, jeszcze nie steruje przez goto)
 
-- [ ] **Unit 3: Rozszerzenie `spot_lock_step` o źródło celu + arbitraż CH3/goto + bramka linku**
+- [x] **Unit 3: Rozszerzenie `spot_lock_step` o źródło celu + arbitraż CH3/goto + bramka linku**
 
 **Cel:** Czysta logika arbitrażu źródła celu (`SRC_HOLD` vs `SRC_GOTO`), wejścia z zewnętrznym celem,
 priorytet CH3 nad goto, pauza na utratę linku, kasowanie latcha przy override — jako rozszerzenie
