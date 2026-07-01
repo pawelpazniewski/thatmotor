@@ -44,6 +44,8 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/gps/src/nmea_parse.c
     ${REPO_ROOT}/components/gps/src/sensor_freshness.c
     ${REPO_ROOT}/components/imu/src/quat_to_yaw.c
+    ${REPO_ROOT}/components/blackbox/src/blackbox_record.c
+    ${REPO_ROOT}/components/blackbox/src/blackbox_ring.c
 )
 
 set(PURE_INCLUDE_DIRS
@@ -61,6 +63,7 @@ set(PURE_INCLUDE_DIRS
     ${REPO_ROOT}/components/led_status/include
     ${REPO_ROOT}/components/gps/include
     ${REPO_ROOT}/components/imu/include
+    ${REPO_ROOT}/components/blackbox/include
 )
 
 # Test sources.
@@ -93,6 +96,8 @@ set(TEST_SOURCES
     test_nmea_parse.c
     test_sensor_freshness.c
     test_quat_to_yaw.c
+    test_blackbox_record.c
+    test_blackbox_ring.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})

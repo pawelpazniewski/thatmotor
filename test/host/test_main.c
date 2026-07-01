@@ -32,6 +32,8 @@ void run_led_pattern_tests(void);
 void run_nmea_parse_tests(void);
 void run_sensor_freshness_tests(void);
 void run_quat_to_yaw_tests(void);
+void run_blackbox_record_tests(void);
+void run_blackbox_ring_tests(void);
 
 int main(void)
 {
@@ -63,5 +65,7 @@ int main(void)
     run_nmea_parse_tests();
     run_sensor_freshness_tests();
     run_quat_to_yaw_tests();
+    run_blackbox_record_tests();
+    run_blackbox_ring_tests();
     return UNITY_END();
 }
