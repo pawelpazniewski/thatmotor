@@ -55,6 +55,11 @@ typedef struct {
     bool imu_ok;               /* fresh rotation-vector data is flowing */
     uint16_t imu_heading_deg10;/* yaw / heading in degrees * 10, [0, 3599] */
     uint8_t imu_calib;         /* SH-2 accuracy / calibration status, 0..3 */
+    /* Spot-lock (CH3 GPS position hold) telemetry. State 0=off, 1=active,
+     * 2=paused. err/bearing are meaningful while active/paused. */
+    uint8_t spot_lock_state;        /* spot_lock_substate this cycle (0/1/2) */
+    uint16_t spot_lock_err_m;       /* position error to target, metres */
+    uint16_t spot_lock_bearing_deg10;/* bearing to target, degrees * 10 */
 } control_loop_snapshot;
 
 /**

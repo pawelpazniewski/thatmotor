@@ -20,7 +20,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/pwm_out/src/pwm_out_logic.c
     ${REPO_ROOT}/components/rc_capture/src/cap_math.c
     ${REPO_ROOT}/components/rc_validity/src/rc_validity.c
-    ${REPO_ROOT}/components/rc_validity/src/ch4_switch.c
+    ${REPO_ROOT}/components/rc_validity/src/switch_debounce.c
     ${REPO_ROOT}/components/rc_validity/src/click_counter.c
     ${REPO_ROOT}/components/settings/src/settings_defaults.c
     ${REPO_ROOT}/components/settings/src/settings_validate.c
@@ -34,12 +34,15 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/state_machine/src/state_machine.c
     ${REPO_ROOT}/components/state_machine/src/esc_calibration.c
     ${REPO_ROOT}/components/control_loop/src/loop_step.c
+    ${REPO_ROOT}/components/control_loop/src/geo_math.c
+    ${REPO_ROOT}/components/control_loop/src/spot_lock.c
     ${REPO_ROOT}/components/web_panel/src/api_contract.c
     ${REPO_ROOT}/components/web_panel/src/command_parse.c
     ${REPO_ROOT}/components/web_panel/src/params_decide.c
     ${REPO_ROOT}/components/web_panel/src/wifi_ap_config.c
     ${REPO_ROOT}/components/led_status/src/led_pattern.c
     ${REPO_ROOT}/components/gps/src/nmea_parse.c
+    ${REPO_ROOT}/components/gps/src/sensor_freshness.c
     ${REPO_ROOT}/components/imu/src/quat_to_yaw.c
 )
 
@@ -68,7 +71,7 @@ set(TEST_SOURCES
     test_pwm_out_logic.c
     test_cap_math.c
     test_rc_validity.c
-    test_ch4_switch.c
+    test_switch_debounce.c
     test_click_counter.c
     test_settings_validate.c
     test_blob_codec.c
@@ -80,12 +83,15 @@ set(TEST_SOURCES
     test_state_machine.c
     test_esc_calibration.c
     test_loop_step.c
+    test_geo_math.c
+    test_spot_lock.c
     test_api_contract.c
     test_command_parse.c
     test_params_decide.c
     test_wifi_ap_config.c
     test_led_pattern.c
     test_nmea_parse.c
+    test_sensor_freshness.c
     test_quat_to_yaw.c
 )
 

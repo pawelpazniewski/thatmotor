@@ -9,6 +9,7 @@
 #include "safety_clamp.h"
 #include "settings_model.h"
 #include "signal_chain.h"
+#include "spot_lock.h"
 #include "state_machine.h"
 
 #ifdef __cplusplus
@@ -49,6 +50,17 @@ typedef struct {
     bool stow_request;     /* explicit "leave DEPLOY" -> DISARMED this cycle */
     calib_event calib_event;/* calibration step event (next/cancel) this cycle */
     bool calib_timeout;    /* calibration idle timeout elapsed this cycle */
+    bool spot_lock_switch_on;      /* CH3 debounced level: spot-lock requested */
+    bool spot_lock_switch_edge_on; /* CH3 rising edge this cycle (enter intent) */
+    /* GPS + IMU: spot-lock control inputs ONLY (consumed by spot_lock_step in the
+     * ARMED branch). They NEVER feed rc_valid / channel_valid / sm_inputs /
+     * failsafe -- losing them pauses spot-lock, it does not trip failsafe. */
+    bool gps_fresh;            /* GPS freshness predicate (R5) */
+    bool gps_has_fix;          /* real fix quality (>0) (R3) */
+    int32_t gps_lat_e7;        /* current latitude, degrees * 1e7 */
+    int32_t gps_lon_e7;        /* current longitude, degrees * 1e7 */
+    bool imu_ok;               /* heading data fresh (R5) */
+    uint16_t imu_heading_deg10;/* current bow heading, degrees * 10, [0, 3599] */
 } loop_inputs;
 
 /** Per-channel validity thresholds (constant across cycles). */
@@ -64,6 +76,7 @@ typedef struct {
     throttle_ramp_state throttle_ramp; /* ramped throttle command + dwell */
     int32_t servo_slew;    /* slewed servo pulse width (us) */
     calib_step calib_step; /* current ESC calibration step (when in calib) */
+    spot_lock_state spot_lock; /* spot-lock sub-state + target snapshot */
 } loop_state;
 
 /** Telemetry snapshot produced each cycle (read-only view for the web panel). */
@@ -73,6 +86,9 @@ typedef struct {
     uint32_t esc_us;          /* commanded ESC pulse width (post-clamp) */
     uint32_t servo_us;        /* commanded servo pulse width (post-clamp) */
     sm_arm_reason arm_reason; /* why arming is blocked this cycle (R7 gate) */
+    uint8_t spot_lock_substate;      /* spot_lock_substate this cycle (0/1/2) */
+    uint16_t spot_lock_err_m;        /* position error to target, metres */
+    uint16_t spot_lock_bearing_deg10;/* bearing to target, degrees * 10 */
 } loop_telemetry;
 
 /** Actuator commands plus telemetry for one cycle. */

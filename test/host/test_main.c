@@ -10,7 +10,7 @@ void run_pwm_us_to_duty_tests(void);
 void run_pwm_out_logic_tests(void);
 void run_cap_math_tests(void);
 void run_rc_validity_tests(void);
-void run_ch4_switch_tests(void);
+void run_switch_debounce_tests(void);
 void run_click_counter_tests(void);
 void run_settings_validate_tests(void);
 void run_blob_codec_tests(void);
@@ -22,12 +22,15 @@ void run_servo_chain_tests(void);
 void run_state_machine_tests(void);
 void run_esc_calibration_tests(void);
 void run_loop_step_tests(void);
+void run_geo_math_tests(void);
+void run_spot_lock_tests(void);
 void run_api_contract_tests(void);
 void run_command_parse_tests(void);
 void run_params_decide_tests(void);
 void run_wifi_ap_config_tests(void);
 void run_led_pattern_tests(void);
 void run_nmea_parse_tests(void);
+void run_sensor_freshness_tests(void);
 void run_quat_to_yaw_tests(void);
 
 int main(void)
@@ -38,7 +41,7 @@ int main(void)
     run_pwm_out_logic_tests();
     run_cap_math_tests();
     run_rc_validity_tests();
-    run_ch4_switch_tests();
+    run_switch_debounce_tests();
     run_click_counter_tests();
     run_settings_validate_tests();
     run_blob_codec_tests();
@@ -50,12 +53,15 @@ int main(void)
     run_state_machine_tests();
     run_esc_calibration_tests();
     run_loop_step_tests();
+    run_geo_math_tests();
+    run_spot_lock_tests();
     run_api_contract_tests();
     run_command_parse_tests();
     run_params_decide_tests();
     run_wifi_ap_config_tests();
     run_led_pattern_tests();
     run_nmea_parse_tests();
+    run_sensor_freshness_tests();
     run_quat_to_yaw_tests();
     return UNITY_END();
 }

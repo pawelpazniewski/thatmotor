@@ -363,6 +363,83 @@ static void test_servo_trim_below_min_recovers(void)
     TEST_ASSERT_EQUAL_INT16(0, out.servo_trim_us);
 }
 
+static void test_spot_lock_defaults_are_sane(void)
+{
+    /* Arrange: fresh/empty NVS -> defaults (UNCALIBRATED). The spot-lock params
+     * must load with the gentle field-test defaults, not zero/garbage. */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(NULL, false, &out);
+
+    /* Assert: defaults source, and the spot-lock seeds are the documented gentle
+     * values (3 m deadband, 35% thrust cap, mild gains). */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_DEFAULTS, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_EQUAL_UINT16(3U, out.spot_lock_deadband_m);
+    TEST_ASSERT_EQUAL_UINT16(35U, out.spot_lock_max_throttle_pct);
+    TEST_ASSERT_EQUAL_UINT16(30U, out.spot_lock_throttle_gain);
+    TEST_ASSERT_EQUAL_UINT16(20U, out.spot_lock_servo_gain);
+}
+
+static void test_spot_lock_max_throttle_out_of_range_recovers(void)
+{
+    /* Arrange: a 200% spot-lock thrust cap is out of the [0,100] percent band. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.spot_lock_max_throttle_pct = 200U; /* > 100, invalid */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: mixed recovery, the bad field falls back to its 35% default. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_FALSE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(35U, out.spot_lock_max_throttle_pct);
+}
+
+static void test_spot_lock_deadband_out_of_range_recovers(void)
+{
+    /* Arrange: a 500 m deadband is far above the [0,100] m band. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.spot_lock_deadband_m = 500U; /* > 100, invalid */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: deadband repaired to its 3 m default; rest untouched. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_EQUAL_UINT16(3U, out.spot_lock_deadband_m);
+}
+
+static void test_spot_lock_params_in_range_preserved(void)
+{
+    /* Arrange: in-band custom spot-lock params survive a clean NVS load. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.spot_lock_deadband_m = 8U;
+    stored.spot_lock_max_throttle_pct = 50U;
+    stored.spot_lock_throttle_gain = 60U;
+    stored.spot_lock_servo_gain = 40U;
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: clean NVS load, every spot-lock field preserved verbatim. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_NVS, result.source);
+    TEST_ASSERT_TRUE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(8U, out.spot_lock_deadband_m);
+    TEST_ASSERT_EQUAL_UINT16(50U, out.spot_lock_max_throttle_pct);
+    TEST_ASSERT_EQUAL_UINT16(60U, out.spot_lock_throttle_gain);
+    TEST_ASSERT_EQUAL_UINT16(40U, out.spot_lock_servo_gain);
+}
+
 void run_settings_validate_tests(void)
 {
     RUN_TEST(test_empty_nvs_yields_defaults);
@@ -384,4 +461,8 @@ void run_settings_validate_tests(void)
     RUN_TEST(test_servo_trim_in_range_preserved);
     RUN_TEST(test_servo_trim_above_max_recovers);
     RUN_TEST(test_servo_trim_below_min_recovers);
+    RUN_TEST(test_spot_lock_defaults_are_sane);
+    RUN_TEST(test_spot_lock_max_throttle_out_of_range_recovers);
+    RUN_TEST(test_spot_lock_deadband_out_of_range_recovers);
+    RUN_TEST(test_spot_lock_params_in_range_preserved);
 }

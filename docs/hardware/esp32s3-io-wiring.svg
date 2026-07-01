@@ -45,23 +45,23 @@
   <line x1="500" y1="186" x2="780" y2="186" stroke="#bcd4ef" stroke-width="1"/>
 
   <!-- left-edge pins (inputs) -->
-  <text x="512" y="218" font-size="14" fill="#222">GPIO4 · CH1 ster.</text>
-  <text x="512" y="250" font-size="14" fill="#222">GPIO5 · CH2 gaz</text>
-  <text x="512" y="282" font-size="14" fill="#222">GPIO6 · CH4 diag</text>
-  <text x="512" y="314" font-size="14" fill="#222">GPIO7 · CH3 diag</text>
+  <text x="512" y="218" font-size="14" fill="#222">GPIO16 · CH1 ster.</text>
+  <text x="512" y="250" font-size="14" fill="#222">GPIO17 · CH2 gaz</text>
+  <text x="512" y="282" font-size="14" fill="#222">GPIO8 · CH3 diag</text>
+  <text x="512" y="314" font-size="14" fill="#222">GPIO18 · CH4 diag</text>
   <text x="512" y="388" font-size="14" fill="#222">5V</text>
-  <text x="512" y="458" font-size="14" fill="#222">GPIO16 · GPS RX</text>
+  <text x="512" y="458" font-size="14" fill="#222">GPIO15 · GPS RX</text>
   <text x="512" y="588" font-size="14" fill="#222">3V3</text>
-  <text x="512" y="628" font-size="14" fill="#222">GPIO21 · SDA</text>
-  <text x="512" y="663" font-size="14" fill="#222">GPIO47 · SCL</text>
-  <text x="512" y="698" font-size="14" fill="#222">GPIO14 · INT</text>
-  <text x="512" y="733" font-size="14" fill="#222">GPIO13 · RST</text>
+  <text x="512" y="628" font-size="14" fill="#222">GPIO4 · SDA</text>
+  <text x="512" y="663" font-size="14" fill="#222">GPIO5 · SCL</text>
+  <text x="512" y="698" font-size="14" fill="#222">GPIO6 · INT</text>
+  <text x="512" y="733" font-size="14" fill="#222">GPIO7 · RST</text>
   <text x="512" y="793" font-size="14" fill="#222">GND</text>
 
   <!-- right-edge pins (outputs + power) -->
-  <text x="768" y="218" text-anchor="end" font-size="14" fill="#222">serwo · GPIO18</text>
-  <text x="768" y="318" text-anchor="end" font-size="14" fill="#222">ESC · GPIO8</text>
-  <text x="768" y="428" text-anchor="end" font-size="14" fill="#222">LED · GPIO2</text>
+  <text x="768" y="218" text-anchor="end" font-size="14" fill="#222">serwo · GPIO9</text>
+  <text x="768" y="318" text-anchor="end" font-size="14" fill="#222">ESC · GPIO10</text>
+  <text x="768" y="428" text-anchor="end" font-size="14" fill="#222">RGB LED · GPIO48</text>
   <text x="768" y="568" text-anchor="end" font-size="14" fill="#222">5V (z buck)</text>
   <text x="768" y="628" text-anchor="end" font-size="14" fill="#222">GND</text>
 
@@ -210,25 +210,25 @@
   <!-- 1 RC CH1 -->
   <line x1="80" y1="962" x2="150" y2="962" stroke="#E8B500" stroke-width="7"/>
   <text x="165" y="966" font-size="13" fill="#222">RC CH1 sterowanie · odbiornik CH1</text>
-  <text x="588" y="966" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO4</text>
+  <text x="588" y="966" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO16</text>
   <!-- 2 RC CH2 -->
   <line x1="80" y1="990" x2="150" y2="990" stroke="#D7263D" stroke-width="7"/>
   <text x="165" y="994" font-size="13" fill="#222">RC CH2 gaz · odbiornik CH2</text>
-  <text x="588" y="994" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO5</text>
+  <text x="588" y="994" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO17</text>
   <!-- 3 RC CH4 -->
   <line x1="80" y1="1018" x2="150" y2="1018" stroke="#888888" stroke-width="7"/>
   <text x="165" y="1022" font-size="13" fill="#222">RC CH4 diagnostyka · odbiornik CH4</text>
-  <text x="588" y="1022" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO6</text>
+  <text x="588" y="1022" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO18</text>
   <!-- 4 RC CH3 -->
   <line x1="80" y1="1046" x2="150" y2="1046" stroke="#888888" stroke-width="7"/>
   <line x1="80" y1="1046" x2="150" y2="1046" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
   <text x="165" y="1050" font-size="13" fill="#222">RC CH3 diagnostyka · odbiornik CH3</text>
-  <text x="588" y="1050" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO7</text>
+  <text x="588" y="1050" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO8</text>
   <!-- 5 GPS data -->
   <line x1="80" y1="1074" x2="150" y2="1074" stroke="#E8740C" stroke-width="7"/>
   <line x1="80" y1="1074" x2="150" y2="1074" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
   <text x="165" y="1078" font-size="13" fill="#222">GPS dane (UART RX) · GPS TXD</text>
-  <text x="588" y="1078" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO16</text>
+  <text x="588" y="1078" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO15</text>
   <!-- 6 compass VCC -->
   <line x1="80" y1="1102" x2="150" y2="1102" stroke="#2E9E3F" stroke-width="7"/>
   <text x="165" y="1106" font-size="13" fill="#222">Kompas zasilanie 3,3 V · BNO085 VCC</text>
@@ -237,35 +237,35 @@
   <line x1="80" y1="1130" x2="150" y2="1130" stroke="#2E9E3F" stroke-width="7"/>
   <line x1="80" y1="1130" x2="150" y2="1130" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
   <text x="165" y="1134" font-size="13" fill="#222">I2C zegar · BNO085 SCL</text>
-  <text x="588" y="1134" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO47</text>
+  <text x="588" y="1134" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO5</text>
   <!-- 8 SDA -->
   <line x1="80" y1="1158" x2="150" y2="1158" stroke="#1F6FD6" stroke-width="7"/>
   <text x="165" y="1162" font-size="13" fill="#222">I2C dane · BNO085 SDA</text>
-  <text x="588" y="1162" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO21</text>
+  <text x="588" y="1162" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO4</text>
   <!-- 9 INT -->
   <line x1="80" y1="1186" x2="150" y2="1186" stroke="#6B4A2F" stroke-width="7"/>
   <line x1="80" y1="1186" x2="150" y2="1186" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
   <text x="165" y="1190" font-size="13" fill="#222">Przerwanie data-ready · BNO085 INT</text>
-  <text x="588" y="1190" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO14</text>
+  <text x="588" y="1190" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO6</text>
   <!-- 10 RST -->
   <line x1="80" y1="1214" x2="150" y2="1214" stroke="#6B4A2F" stroke-width="7"/>
   <text x="165" y="1218" font-size="13" fill="#222">Reset · BNO085 RST</text>
-  <text x="588" y="1218" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO13</text>
+  <text x="588" y="1218" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO7</text>
 
   <!-- RIGHT COLUMN: outputs + power -->
   <!-- servo -->
   <line x1="640" y1="962" x2="710" y2="962" stroke="#7B2FBE" stroke-width="7"/>
   <text x="725" y="966" font-size="13" fill="#222">Serwo sygnał (LEDC PWM)</text>
-  <text x="1198" y="966" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO18</text>
+  <text x="1198" y="966" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO9</text>
   <!-- ESC -->
   <line x1="640" y1="990" x2="710" y2="990" stroke="#7B2FBE" stroke-width="7"/>
   <line x1="640" y1="990" x2="710" y2="990" stroke="#ffffff" stroke-width="7" stroke-dasharray="9 9"/>
   <text x="725" y="994" font-size="13" fill="#222">ESC sygnał (LEDC PWM)</text>
-  <text x="1198" y="994" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO8</text>
+  <text x="1198" y="994" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO10</text>
   <!-- LED -->
   <line x1="640" y1="1018" x2="710" y2="1018" stroke="#E91E63" stroke-width="7"/>
-  <text x="725" y="1022" font-size="13" fill="#222">Status LED (anoda + R 330 Ω)</text>
-  <text x="1198" y="1022" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO2</text>
+  <text x="725" y="1022" font-size="13" fill="#222">Status LED RGB WS2812 (wbudowana)</text>
+  <text x="1198" y="1022" text-anchor="end" font-size="13" font-weight="bold" fill="#10468f">GPIO48</text>
   <!-- 5V rail -->
   <line x1="640" y1="1046" x2="710" y2="1046" stroke="#E8740C" stroke-width="7"/>
   <text x="725" y="1050" font-size="13" fill="#222">Szyna 5 V · buck OUT, RC +, GPS VDL, serwo +</text>
@@ -283,7 +283,7 @@
   <!-- safety note -->
   <line x1="640" y1="1126" x2="1200" y2="1126" stroke="#ddd" stroke-width="1"/>
   <text x="640" y="1150" font-size="12" font-weight="bold" fill="#a23">Bezpieczeństwo (z BOM):</text>
-  <text x="640" y="1170" font-size="12" fill="#444">• Rezystory pull-down ~10 kΩ z GPIO18 (serwo) i GPIO8 (ESC) do GND —</text>
+  <text x="640" y="1170" font-size="12" fill="#444">• Rezystory pull-down ~10 kΩ z GPIO9 (serwo) i GPIO10 (ESC) do GND —</text>
   <text x="652" y="1186" font-size="12" fill="#444">trzymają wyjścia nisko w oknie boot/reset/brownout (Hi-Z).</text>
   <text x="640" y="1208" font-size="12" fill="#444">• E-stop / kill-switch przerywa napęd, zostawia ESP zasilony (R13).</text>
   <text x="640" y="1230" font-size="12" fill="#444">• Kondensatory odsprzęgające (bulk + 100 nF) przy ESP / wyjściu buck.</text>

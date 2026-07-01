@@ -14,7 +14,7 @@ ESP32 outputs are Hi-Z (no internal pull) during the boot/reset/brownout dead
 window, and on a brownout sag the core may emit a garbage pulse before reset.
 The real safety guarantee in that window is hardware:
 
-- **Pull-down resistors ~10 kΩ on GPIO18 (servo) and GPIO8 (ESC)** so the
+- **Pull-down resistors ~10 kΩ on GPIO9 (servo) and GPIO10 (ESC)** so the
   output lines cannot float during reset/boot/brownout.
 - **ESC's own failsafe** on loss of signal (WP880 must drive to neutral when
   PWM disappears — to be verified by measurement).
@@ -29,22 +29,33 @@ The real safety guarantee in that window is hardware:
 | RC receiver | configurable failsafe — must output **no PWM** on RF loss | RC input source |
 | LiFePO4 12V 100Ah | main pack | supply |
 | Buck converter | 12V -> 5V | ESP32 / receiver supply |
-| Pull-down R (x2) | ~10 kΩ, GPIO18 and GPIO8 to GND | hold outputs low in dead window |
+| Pull-down R (x2) | ~10 kΩ, GPIO9 and GPIO10 to GND | hold outputs low in dead window |
 | Decoupling caps | bulk + local 100 nF near ESP32 / buck output | brownout-sag margin, noise |
 | 12V tap | **before the kill-switch** | keeps controller alive for FAILSAFE reporting while drive is cut |
 | E-stop / kill-switch | cuts motor drive, leaves ESP32 powered | R13 emergency stop |
 
-## Pin map (fixed — ESP32-S3 N16R8)
+## Pin map (fixed — ESP32-S3 N16R8, grouped per device)
 
-GPIO4 <- CH1 (steering) · GPIO5 <- CH2 (throttle) · GPIO6 <- CH4 (diag) ·
-GPIO7 <- CH3 (diag) · GPIO16 <- GPS TXD (UART RX) · GPIO21/47 <- IMU SDA/SCL ·
-GPIO14/13 <- IMU INT/RST · GPIO18 -> servo · GPIO8 -> ESC · GPIO2 -> status LED ·
-common ground across ESP32-S3 / receiver / ESC.
+Pins are grouped so each device's wire bundle plugs into one contiguous header
+block (left rail, top to bottom):
+
+- **Compass BNO085** (by the 3V3 pins): GPIO4 SDA · GPIO5 SCL · GPIO6 INT ·
+  GPIO7 RST · VCC from 3V3.
+- **GPS NEO-M9N**: GPIO15 <- GPS TXD (UART1 RX, receive-only; ESP TX unused).
+- **RC receiver**: GPIO16 CH1 · GPIO17 CH2 · GPIO8 CH3 · GPIO18 CH4 (MCPWM cap).
+- **Outputs**: GPIO9 -> servo · GPIO10 -> ESC (LEDC PWM).
+- **Status**: GPIO48 on-board WS2812 RGB.
+
+Power/ground: common ground across ESP32-S3 / receiver / ESC / buck (one shared
+bus). 5 V for GPS / RC / servo comes from the buck distribution, NOT the single
+ESP 5V pin (a servo must never draw through the board). 3.3 V for the compass
+comes from the ESP 3V3 pin.
 
 Reserved/unusable on N16R8: GPIO33-37 (octal PSRAM), GPIO26-32 (SPI flash),
 GPIO22-25 (do not exist), GPIO19/20 (native USB), GPIO43/44 (UART0 console),
-GPIO0/3/45/46 (strapping), GPIO48 (on-board RGB). Full I/O diagram:
-`docs/hardware/esp32s3-io-wiring.svg`.
+GPIO0/3/45/46 (strapping). Diagrams:
+`docs/hardware/esp32s3-pin-assignment.svg` (grouped header layout) and
+`docs/hardware/esp32s3-io-wiring.svg` (full I/O wiring).
 
 ## Measurement checklist
 

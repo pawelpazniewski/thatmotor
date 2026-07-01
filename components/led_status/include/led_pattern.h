@@ -12,9 +12,10 @@ extern "C" {
 /**
  * Status LED blink patterns (Unit 11), pure logic.
  *
- * A single pure function maps (control state, calibrated flag, time) to the
- * instantaneous on/off level of the on-board LED (GPIO2). No I/O, no globals,
- * no IDF dependencies: fully host-testable and deterministic in t_ms.
+ * Pure functions map (control state, calibrated flag, time) to the
+ * instantaneous on/off level and the RGB colour of the on-board WS2812 LED
+ * (GPIO48). No I/O, no globals, no IDF dependencies: fully host-testable and
+ * deterministic in t_ms.
  *
  * Patterns (rozwiazanie otwartego pytania R8):
  *  - DISARMED:        slow blink @ LED_PATTERN_DISARMED_HZ (0.5 Hz, 50% duty).
@@ -49,6 +50,18 @@ extern "C" {
  * blinks in a 2 s window unambiguously reads "motor raised". */
 #define LED_PATTERN_DEPLOY_PERIOD_MS 2000U
 
+/* On-board WS2812 brightness as a percentage of full output. Keeps the
+ * indicator comfortable (full white is blinding) and saves power. */
+#define LED_PATTERN_BRIGHTNESS_PERCENT 25U
+
+/* A 24-bit RGB colour for the on-board WS2812 status LED. Channels are the
+ * final values to emit (brightness already applied), 0..255 each. */
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} LedColor;
+
 /**
  * Compute the instantaneous LED level for the current state at time t_ms (pure).
  *
@@ -59,6 +72,26 @@ extern "C" {
  * @return true when the LED should be on this instant, false when off.
  */
 bool led_pattern_on(sm_state state, bool calibrated, uint32_t t_ms);
+
+/**
+ * Compute the instantaneous RGB colour for the current state at t_ms (pure).
+ *
+ * Combines the per-state blink phase (led_pattern_on) with a per-state colour:
+ * the LED shows the state colour during the on-phase and {0,0,0} during the
+ * off-phase, so the existing blink semantics carry over unchanged and colour
+ * adds a second, redundant channel of meaning. Brightness is scaled to
+ * LED_PATTERN_BRIGHTNESS_PERCENT. No I/O: host-testable and deterministic.
+ *
+ * Colours: DISARMED amber · ARMED green · FAILSAFE red ·
+ * ESC_CALIBRATION blue · DEPLOY cyan.
+ *
+ * @param state       Current control state.
+ * @param calibrated  Whether the active params are a real stored calibration
+ *                    (only affects the DISARMED blink overlay, not the colour).
+ * @param t_ms        Monotonic milliseconds (phase reference for the blink).
+ * @return The RGB colour to emit this instant ({0,0,0} on the off-phase).
+ */
+LedColor led_pattern_color(sm_state state, bool calibrated, uint32_t t_ms);
 
 #ifdef __cplusplus
 }

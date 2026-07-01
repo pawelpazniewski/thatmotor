@@ -117,6 +117,24 @@ static void validate_fields(settings_params *p, const settings_params *def,
     p->click_window_ms =
         field_or_default(p->click_window_ms, CLICK_WINDOW_MS_MIN,
                          CLICK_WINDOW_MS_MAX, def->click_window_ms, repaired);
+
+    /* Spot-lock regulator: metre radius, percent cap (reuses the throttle-cap
+     * percent band), and normalized command gains. */
+    p->spot_lock_deadband_m =
+        field_or_default(p->spot_lock_deadband_m, SPOT_LOCK_DEADBAND_M_MIN,
+                         SPOT_LOCK_DEADBAND_M_MAX, def->spot_lock_deadband_m,
+                         repaired);
+    p->spot_lock_max_throttle_pct =
+        field_or_default(p->spot_lock_max_throttle_pct, MAX_THROTTLE_PCT_MIN,
+                         MAX_THROTTLE_PCT_MAX, def->spot_lock_max_throttle_pct,
+                         repaired);
+    p->spot_lock_throttle_gain =
+        field_or_default(p->spot_lock_throttle_gain, SPOT_LOCK_GAIN_MIN,
+                         SPOT_LOCK_GAIN_MAX, def->spot_lock_throttle_gain,
+                         repaired);
+    p->spot_lock_servo_gain =
+        field_or_default(p->spot_lock_servo_gain, SPOT_LOCK_GAIN_MIN,
+                         SPOT_LOCK_GAIN_MAX, def->spot_lock_servo_gain, repaired);
 }
 
 /* The ESC map (map_normalized_to_us in the throttle chain) treats

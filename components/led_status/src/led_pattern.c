@@ -75,3 +75,41 @@ bool led_pattern_on(sm_state state, bool calibrated, uint32_t t_ms)
         return disarmed_on(calibrated, t_ms);
     }
 }
+
+/* Scale one 0..255 channel down to LED_PATTERN_BRIGHTNESS_PERCENT of full. */
+static uint8_t scale_brightness(uint8_t channel)
+{
+    return (uint8_t)((uint16_t)channel * LED_PATTERN_BRIGHTNESS_PERCENT / 100U);
+}
+
+/* Full-brightness colour per state; brightness is applied by led_pattern_color.
+ * Mirrors the led_pattern_on switch so colour and blink phase stay in sync. */
+static LedColor base_color_for_state(sm_state state)
+{
+    switch (state) {
+    case SM_STATE_ARMED:
+        return (LedColor){.r = 0U, .g = 255U, .b = 0U}; /* green */
+    case SM_STATE_FAILSAFE:
+        return (LedColor){.r = 255U, .g = 0U, .b = 0U}; /* red */
+    case SM_STATE_ESC_CALIBRATION:
+        return (LedColor){.r = 0U, .g = 0U, .b = 255U}; /* blue */
+    case SM_STATE_DEPLOY:
+        return (LedColor){.r = 0U, .g = 255U, .b = 255U}; /* cyan */
+    case SM_STATE_DISARMED:
+    default:
+        return (LedColor){.r = 255U, .g = 160U, .b = 0U}; /* amber */
+    }
+}
+
+LedColor led_pattern_color(sm_state state, bool calibrated, uint32_t t_ms)
+{
+    if (!led_pattern_on(state, calibrated, t_ms)) {
+        return (LedColor){.r = 0U, .g = 0U, .b = 0U};
+    }
+    LedColor base = base_color_for_state(state);
+    return (LedColor){
+        .r = scale_brightness(base.r),
+        .g = scale_brightness(base.g),
+        .b = scale_brightness(base.b),
+    };
+}

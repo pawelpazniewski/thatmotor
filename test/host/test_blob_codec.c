@@ -47,6 +47,10 @@ static settings_params make_sample(void)
     p.deploy_servo_us = 2100;
     p.click_window_ms = 600;
     p.servo_trim_us = -150; /* SIGNED: exercise a negative trim round-trip */
+    p.spot_lock_deadband_m = 5;
+    p.spot_lock_max_throttle_pct = 40;
+    p.spot_lock_throttle_gain = 25;
+    p.spot_lock_servo_gain = 15;
     return p;
 }
 
@@ -99,6 +103,12 @@ static void test_round_trip_preserves_every_field(void)
     TEST_ASSERT_EQUAL_UINT16(in.deploy_servo_us, out.deploy_servo_us);
     TEST_ASSERT_EQUAL_UINT16(in.click_window_ms, out.click_window_ms);
     TEST_ASSERT_EQUAL_INT16(in.servo_trim_us, out.servo_trim_us);
+    TEST_ASSERT_EQUAL_UINT16(in.spot_lock_deadband_m, out.spot_lock_deadband_m);
+    TEST_ASSERT_EQUAL_UINT16(in.spot_lock_max_throttle_pct,
+                             out.spot_lock_max_throttle_pct);
+    TEST_ASSERT_EQUAL_UINT16(in.spot_lock_throttle_gain,
+                             out.spot_lock_throttle_gain);
+    TEST_ASSERT_EQUAL_UINT16(in.spot_lock_servo_gain, out.spot_lock_servo_gain);
 }
 
 static void test_negative_servo_trim_round_trips(void)
@@ -118,14 +128,14 @@ static void test_negative_servo_trim_round_trips(void)
     TEST_ASSERT_EQUAL_INT16(-300, out.servo_trim_us);
 }
 
-static void test_blob_size_matches_v5_layout(void)
+static void test_blob_size_matches_v6_layout(void)
 {
-    /* Anchor the schema-v5 wire size: the schema_version + every field (LE) + 4
-     * CRC bytes. v5 added servo_trim_us (i16, +2 over v4's 51 field bytes -> 53;
-     * total 57). A struct/layout change that forgets to update the codec size
-     * trips this. */
-    TEST_ASSERT_EQUAL_UINT(53U, BLOB_CODEC_FIELD_BYTES);
-    TEST_ASSERT_EQUAL_UINT(57U, BLOB_CODEC_SIZE);
+    /* Anchor the schema-v6 wire size: the schema_version + every field (LE) + 4
+     * CRC bytes. v6 added the four spot-lock regulator params (4x u16, +8 over
+     * v5's 53 field bytes -> 61; total 65). A struct/layout change that forgets
+     * to update the codec size trips this. */
+    TEST_ASSERT_EQUAL_UINT(61U, BLOB_CODEC_FIELD_BYTES);
+    TEST_ASSERT_EQUAL_UINT(65U, BLOB_CODEC_SIZE);
 }
 
 static void test_encode_stamps_current_schema_version(void)
@@ -233,15 +243,15 @@ static void test_other_schema_version_is_rejected(void)
     TEST_ASSERT_EQUAL_INT(BLOB_CODEC_ERR_SCHEMA, decoded);
 }
 
-static void test_prior_schema_v4_is_rejected(void)
+static void test_prior_schema_v5_is_rejected(void)
 {
-    /* Arrange: a v5-sized blob carrying the prior schema 4 (the pre-trim layout)
-     * with a valid CRC must be rejected: settings reload defaults rather than
-     * silently mis-read the new servo_trim field from old bytes. */
+    /* Arrange: a v6-sized blob carrying the prior schema 5 (the pre-spot-lock
+     * layout) with a valid CRC must be rejected: settings reload defaults rather
+     * than silently mis-read the new spot-lock fields from old bytes. */
     settings_params in = make_sample();
     uint8_t blob[BLOB_CODEC_SIZE];
     blob_codec_encode(&in, blob, sizeof(blob));
-    blob[0] = 4U; /* schema_version low byte = 4 */
+    blob[0] = 5U; /* schema_version low byte = 5 */
     blob[1] = 0U;
     uint32_t crc = blob_codec_crc32(blob, BLOB_CODEC_FIELD_BYTES);
     blob[BLOB_CODEC_FIELD_BYTES + 0] = (uint8_t)(crc & 0xFFU);
@@ -290,14 +300,14 @@ void run_blob_codec_tests(void)
     RUN_TEST(test_crc32_empty_range_is_zero);
     RUN_TEST(test_round_trip_preserves_every_field);
     RUN_TEST(test_negative_servo_trim_round_trips);
-    RUN_TEST(test_blob_size_matches_v5_layout);
+    RUN_TEST(test_blob_size_matches_v6_layout);
     RUN_TEST(test_encode_stamps_current_schema_version);
     RUN_TEST(test_bad_crc_is_rejected);
     RUN_TEST(test_corrupt_crc_trailer_is_rejected);
     RUN_TEST(test_wrong_length_too_short_is_rejected);
     RUN_TEST(test_wrong_length_too_long_is_rejected);
     RUN_TEST(test_other_schema_version_is_rejected);
-    RUN_TEST(test_prior_schema_v4_is_rejected);
+    RUN_TEST(test_prior_schema_v5_is_rejected);
     RUN_TEST(test_null_args_are_rejected);
     RUN_TEST(test_encode_into_too_small_buffer_is_rejected);
 }

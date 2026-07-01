@@ -44,6 +44,11 @@ void settings_load_defaults(settings_params *out)
 
         .deploy_servo_us = DEPLOY_SERVO_US_DEFAULT,
         .click_window_ms = CLICK_WINDOW_MS_DEFAULT,
+
+        .spot_lock_deadband_m = SPOT_LOCK_DEADBAND_M_DEFAULT,
+        .spot_lock_max_throttle_pct = SPOT_LOCK_MAX_THROTTLE_PCT_DEFAULT,
+        .spot_lock_throttle_gain = SPOT_LOCK_THROTTLE_GAIN_DEFAULT,
+        .spot_lock_servo_gain = SPOT_LOCK_SERVO_GAIN_DEFAULT,
     };
 
     *out = defaults;

@@ -74,6 +74,26 @@ brownout-sag — stan pinów; długość okna martwego boot (liczba); pull-down 
 **Odbiornik:** zachowanie przy utracie RF (twardy wymóg: brak PWM) + konfiguracja failsafe odbiornika;
 zmierzony okres ramki.
 
+## 4b. Spot-lock (CH3 GPS position hold) — luki hardware/E2E `[HW]`/`[E2E]`
+
+Funkcja spot-lock (branch `feature/spot-lock-position-hold`) ma całą logikę decyzyjną pokrytą
+host-testami (geo_math, spot_lock_step, integracja loop_step: wejście/hold/failsafe/abort/pauza/clamp).
+Pozostałe wymagają realnego sprzętu lub żywego panelu i są tu odłożone:
+
+- 🔧 `[HW]` **Akwizycja fixu + realne utrzymanie pozycji** — przy ARMED + świeży fix + drążki na
+  zerze + CH3 ON kajak utrzymuje się w okolicy punktu (rząd kilku metrów) bez interwencji. Nastawy
+  regulatora (deadband 3 m, max gaz 35%, gainy) strojone w terenie — defaults są celowo łagodne.
+- 🔧 `[HW]` **Punkt za rufą** — |błąd kierunku| > 60° → jeden łagodny zawrót, brak „donutów"
+  (efekt bramki ±60°, nie osobnej logiki). Wymaga obserwacji na wodzie.
+- 🔧 `[HW]` **Reakcja na utratę fixu/heading w trakcie hold** — stop (neutral) bez szarpania;
+  powrót danych wznawia tryb z tym samym celem (PAUSED↔ACTIVE). Świeżość GPS ≤1,5 s.
+- 🔧 `[HW]` **Brak zakłócenia kompasu przez silnik** — heading wiarygodny przy pracującym silniku
+  (założenie planu; zweryfikować na sprzęcie, bo decyduje o bramce kierunku).
+- 🖥️ `[E2E]` **Panel spot-lock** — blok „Spot-lock (CH3)" pokazuje off→active po CH3 ON, błąd[m]
+  maleje przy dopływaniu do punktu, paused przy utracie GPS; pola `spot_lock_*` w JSON telemetrii
+  (ints). JSON serializowany przez `snapshot_to_json` (HAL, nie host-testowany) — kontrakt int/bool
+  zweryfikowany przez `idf.py build` + wymaga wizualnej weryfikacji w przeglądarce.
+
 ## 5. Pozostałe nity `[P3]` z review (świadomie nieadresowane — „pomiń P3")
 
 Pełna lista w sekcjach „Do poprawy po review fazy N" w `*-zadania.md` (linie 268–360). Wszystkie są

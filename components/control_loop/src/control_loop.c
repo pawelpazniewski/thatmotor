@@ -1,6 +1,6 @@
 #include "control_loop.h"
 
-#include "ch4_switch.h"
+#include "switch_debounce.h"
 #include "click_counter.h"
 #include "commit_debounce.h"
 #include "esp_log.h"
@@ -38,7 +38,9 @@ static settings_params s_params;
 static loop_state s_loop;
 static loop_validity_cfg s_validity_cfg;
 /* Persistent CH4 mode-button debounce/edge state (one frame's carry-over). */
-static ch4_switch_state s_ch4_switch;
+static switch_debounce_state s_ch4_switch;
+/* Persistent CH3 spot-lock switch debounce/edge state (one frame's carry-over). */
+static switch_debounce_state s_ch3_switch;
 /* Persistent CH4 click-gesture accumulator (1 vs 3 clicks across frames). */
 static click_counter_state s_click;
 static QueueHandle_t s_pending_queue;
@@ -83,15 +85,46 @@ static void rebuild_validity_cfg(const settings_params *params)
 
 /* Build the CH4 button config from the active params. The sanity band reuses
  * the same accepted RC pulse window as the control channels. */
-static ch4_switch_cfg make_ch4_switch_cfg(const settings_params *params)
+static switch_debounce_cfg make_ch4_switch_cfg(const settings_params *params)
 {
-    ch4_switch_cfg cfg = {
+    switch_debounce_cfg cfg = {
         .threshold_us = params->ch4_switch_threshold_us,
         .sanity_min_us = RC_WIDTH_MIN_US,
         .sanity_max_us = RC_WIDTH_MAX_US,
-        .debounce_frames = CH4_SWITCH_DEBOUNCE_FRAMES,
+        .debounce_frames = SWITCH_DEBOUNCE_FRAMES,
     };
     return cfg;
+}
+
+/* CH3 (GPIO8) spot-lock switch threshold. Midpoint of a typical 2-position
+ * switch (~1000/~2000 us): above reads "on" (enter spot-lock), below "off".
+ * A constant for now (no dedicated CH3 setting); the sanity band reuses the
+ * accepted RC pulse window. CH3 is outside RC_valid, like CH4 (R12). */
+#define SPOT_LOCK_CH3_THRESHOLD_US 1500U
+
+static switch_debounce_cfg make_ch3_switch_cfg(void)
+{
+    switch_debounce_cfg cfg = {
+        .threshold_us = SPOT_LOCK_CH3_THRESHOLD_US,
+        .sanity_min_us = RC_WIDTH_MIN_US,
+        .sanity_max_us = RC_WIDTH_MAX_US,
+        .debounce_frames = SWITCH_DEBOUNCE_FRAMES,
+    };
+    return cfg;
+}
+
+/* Debounce CH3 into this cycle's spot-lock switch inputs: the held level
+ * (spot_lock_switch_on) and the rising edge (spot_lock_switch_edge_on, the
+ * "enter spot-lock" intent). CH3 is diagnostic/aux only and never feeds
+ * rc_valid; loop_step consumes these only in the ARMED branch (Unit 6). */
+static void apply_ch3_switch(loop_inputs *in)
+{
+    rc_channel_sample ch3 = {0};
+    rc_capture_read(RC_CAP_CH3, &ch3);
+    switch_debounce_cfg cfg = make_ch3_switch_cfg();
+    switch_debounce_event ev = switch_debounce_update(&s_ch3_switch, &ch3, &cfg);
+    in->spot_lock_switch_on = s_ch3_switch.is_high;
+    in->spot_lock_switch_edge_on = (ev == SWITCH_DEBOUNCE_TO_HIGH);
 }
 
 /* Convert the configured click window (ms) into whole control frames, rounding
@@ -137,8 +170,9 @@ static void apply_ch4_switch(loop_inputs *in)
     }
     rc_channel_sample ch4 = {0};
     rc_capture_read(RC_CAP_CH4, &ch4);
-    ch4_switch_cfg cfg = make_ch4_switch_cfg(&s_params);
-    bool click = ch4_switch_update(&s_ch4_switch, &ch4, &cfg) != CH4_SWITCH_NONE;
+    switch_debounce_cfg cfg = make_ch4_switch_cfg(&s_params);
+    bool click =
+        switch_debounce_update(&s_ch4_switch, &ch4, &cfg) != SWITCH_DEBOUNCE_NONE;
     uint16_t window = click_window_frames(&s_params);
 
     if (s_loop.state == SM_STATE_ARMED) {
@@ -171,7 +205,8 @@ esp_err_t control_loop_init(const settings_params *initial,
     s_load_flags = *load_result;
     rebuild_validity_cfg(&s_params);
     loop_state_init(&s_loop, &s_params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
-    ch4_switch_init(&s_ch4_switch);
+    switch_debounce_init(&s_ch4_switch);
+    switch_debounce_init(&s_ch3_switch);
     click_counter_reset(&s_click);
     commit_debounce_init(&s_commit, COMMIT_DEBOUNCE_DEFAULT_MS);
     s_force_commit = false;
@@ -309,6 +344,24 @@ static void apply_ui_events(loop_inputs *in)
     apply_trim_events(&ev);
 }
 
+/* Read the GPS + IMU shared state into the per-cycle inputs. Spot-lock control
+ * inputs ONLY: they feed spot_lock_step in the ARMED branch and NEVER rc_valid /
+ * channel_valid / sm_inputs / failsafe. Losing them pauses spot-lock, it does
+ * not trip failsafe (same diagnostic-only contract the snapshot uses). */
+static void apply_sensor_inputs(loop_inputs *in)
+{
+    gps_state g;
+    gps_get_state(&g);
+    in->gps_fresh = g.fresh;
+    in->gps_has_fix = g.fix;
+    in->gps_lat_e7 = g.lat_e7;
+    in->gps_lon_e7 = g.lon_e7;
+    imu_state m;
+    imu_get_state(&m);
+    in->imu_ok = m.ok;
+    in->imu_heading_deg10 = m.heading_deg10;
+}
+
 /* Read the two control channels into the per-cycle input snapshot. */
 static loop_inputs read_inputs(void)
 {
@@ -320,6 +373,10 @@ static loop_inputs read_inputs(void)
      * augments (never overrides) an arm/disarm request from the panel. */
     apply_ui_events(&in);
     apply_ch4_switch(&in);
+    /* CH3 spot-lock switch: debounced level + rising edge into the inputs.
+     * Consumed by loop_step only in the ARMED branch (Unit 6); never failsafe. */
+    apply_ch3_switch(&in);
+    apply_sensor_inputs(&in);
     return in;
 }
 
@@ -369,12 +426,16 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     s_snapshot.imu_ok = m.ok;
     s_snapshot.imu_heading_deg10 = m.heading_deg10;
     s_snapshot.imu_calib = m.calib;
+    /* Spot-lock telemetry from this cycle's loop outputs (ints only). */
+    s_snapshot.spot_lock_state = out->telemetry.spot_lock_substate;
+    s_snapshot.spot_lock_err_m = out->telemetry.spot_lock_err_m;
+    s_snapshot.spot_lock_bearing_deg10 = out->telemetry.spot_lock_bearing_deg10;
 }
 
-/* Drive the status LED for this cycle from the pure pattern (Unit 11). */
+/* Drive the RGB status LED for this cycle from the pure pattern (Unit 11). */
 static void drive_led(sm_state state)
 {
-    led_driver_set(led_pattern_on(state, s_load_flags.calibrated, now_ms()));
+    led_driver_show(led_pattern_color(state, s_load_flags.calibrated, now_ms()));
 }
 
 static void run_one_cycle(void)

@@ -44,6 +44,9 @@ void loop_state_init(loop_state *state, const settings_params *params,
     state->throttle_ramp.dwell_remaining = 0;
     state->servo_slew = servo_center_us(params);
     state->calib_step = CALIB_STEP_NEUTRAL;
+    state->spot_lock.substate = SPOT_LOCK_OFF;
+    state->spot_lock.ref_lat_e7 = 0;
+    state->spot_lock.ref_lon_e7 = 0;
 }
 
 /* Debounced RC validity for this cycle: both control channels valid this frame,
@@ -164,16 +167,93 @@ static uint32_t run_calibration(const loop_inputs *in, bool rc_is_valid,
  * abort rules may override the next state. Otherwise the throttle chain runs. */
 static uint32_t resolve_esc(const loop_inputs *in, const settings_params *params,
                             bool rc_is_valid, const sm_outputs *sm,
-                            loop_state *state, sm_state *next_state)
+                            throttle_target_mode throttle_mode,
+                            int32_t spot_lock_throttle, loop_state *state,
+                            sm_state *next_state)
 {
     if (sm->state == SM_STATE_ESC_CALIBRATION) {
         bool entry_frame = is_calib_entry_frame(state, sm);
         reset_calib_on_entry(state, sm);
         return run_calibration(in, rc_is_valid, entry_frame, state, next_state);
     }
-    return throttle_chain_step(in->ch2.width_us, sm->throttle_target, params,
-                               reverse_dwell_frames(params),
+    return throttle_chain_step(in->ch2.width_us, throttle_mode, spot_lock_throttle,
+                               params, reverse_dwell_frames(params),
                                &state->throttle_ramp);
+}
+
+/* Percent thrust cap -> normalized command full-scale (100% == full-scale). */
+#define SPOT_LOCK_PERCENT_FULL 100
+
+/* Both control sticks within their neutral bands this cycle (R3/R4): the shared
+ * neutrality domain for spot-lock entry and abort. */
+static bool sticks_within_neutral(const loop_inputs *in,
+                                  const settings_params *params)
+{
+    return throttle_is_neutral(in->ch2.width_us, params) &&
+           steer_is_neutral(in->ch1.width_us, params);
+}
+
+/* Map the per-cycle loop inputs onto the pure spot_lock inputs. armed is always
+ * true here: this is only built inside the ARMED branch, where failsafe
+ * precedence is already guaranteed by the caller. */
+static spot_lock_inputs build_spot_lock_inputs(const loop_inputs *in,
+                                               const settings_params *params)
+{
+    spot_lock_inputs sli = {
+        .armed = true,
+        .ch3_on = in->spot_lock_switch_on,
+        .ch3_edge_on = in->spot_lock_switch_edge_on,
+        .sticks_neutral = sticks_within_neutral(in, params),
+        .gps_fresh = in->gps_fresh,
+        .gps_has_fix = in->gps_has_fix,
+        .imu_ok = in->imu_ok,
+        .lat_e7 = in->gps_lat_e7,
+        .lon_e7 = in->gps_lon_e7,
+        .heading_deg10 = in->imu_heading_deg10,
+    };
+    return sli;
+}
+
+/* Map the active settings onto the pure regulator params (percent cap -> the
+ * normalized command full-scale the regulator saturates to). */
+static spot_lock_params build_spot_lock_params(const settings_params *params)
+{
+    spot_lock_params slp = {
+        .deadband_m = params->spot_lock_deadband_m,
+        .max_throttle_norm =
+            (uint16_t)((int32_t)SPOT_LOCK_CMD_FULL_SCALE *
+                       (int32_t)params->spot_lock_max_throttle_pct /
+                       SPOT_LOCK_PERCENT_FULL),
+        .throttle_gain_per_m = params->spot_lock_throttle_gain,
+        .servo_gain_per_deg = params->spot_lock_servo_gain,
+    };
+    return slp;
+}
+
+/* Run the spot-lock regulator for one cycle, but ONLY while the resolved control
+ * state is ARMED. Outside ARMED (DISARMED/FAILSAFE/calibration/deploy) spot-lock
+ * is forced OFF and yields unconditionally -- the single mechanism that makes
+ * failsafe always win over spot-lock. */
+static spot_lock_outputs resolve_spot_lock(const loop_inputs *in,
+                                           const settings_params *params,
+                                           sm_state resolved_state,
+                                           spot_lock_state *st)
+{
+    if (resolved_state != SM_STATE_ARMED) {
+        st->substate = SPOT_LOCK_OFF;
+        spot_lock_outputs off = {.substate = SPOT_LOCK_OFF};
+        return off;
+    }
+    spot_lock_inputs sli = build_spot_lock_inputs(in, params);
+    spot_lock_params slp = build_spot_lock_params(params);
+    return spot_lock_step(&sli, &slp, st);
+}
+
+/* Spot-lock drives the actuators only while ACTIVE (holding) or PAUSED (sensor
+ * loss -> neutral+center via the chain). OFF leaves manual stick tracking. */
+static bool spot_lock_drives(spot_lock_substate s)
+{
+    return s == SPOT_LOCK_ACTIVE || s == SPOT_LOCK_PAUSED;
 }
 
 loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
@@ -184,11 +264,21 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
     sm_inputs si = build_sm_inputs(in, params, rc_is_valid, state);
     sm_outputs sm = sm_step(state->state, &si);
 
+    /* Spot-lock override: applied AFTER sm_step and ONLY in ARMED, so a FAILSAFE
+     * (or any non-ARMED) result bypasses it entirely and failsafe always wins. */
+    spot_lock_outputs sl = resolve_spot_lock(in, params, sm.state,
+                                             &state->spot_lock);
+    bool drive_spot_lock = spot_lock_drives(sl.substate);
+    throttle_target_mode throttle_mode =
+        drive_spot_lock ? THROTTLE_TARGET_SPOT_LOCK : sm.throttle_target;
+    servo_target_mode servo_mode =
+        drive_spot_lock ? SERVO_TARGET_SPOT_LOCK : sm.servo_target;
+
     sm_state next_state = sm.state;
-    uint32_t esc_us = resolve_esc(in, params, rc_is_valid, &sm, state,
-                                  &next_state);
-    uint32_t servo_us = servo_chain_step(in->ch1.width_us, sm.servo_target,
-                                         params, &state->servo_slew);
+    uint32_t esc_us = resolve_esc(in, params, rc_is_valid, &sm, throttle_mode,
+                                  sl.throttle_cmd, state, &next_state);
+    uint32_t servo_us = servo_chain_step(in->ch1.width_us, servo_mode,
+                                         sl.servo_cmd, params, &state->servo_slew);
     state->state = next_state;
 
     loop_outputs out = {
@@ -200,6 +290,9 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
             .esc_us = esc_us,
             .servo_us = servo_us,
             .arm_reason = sm_arm_block_reason(&si),
+            .spot_lock_substate = (uint8_t)sl.substate,
+            .spot_lock_err_m = sl.err_m,
+            .spot_lock_bearing_deg10 = sl.bearing_deg10,
         },
     };
     return out;

@@ -3,6 +3,8 @@
 // Control states mirror sm_state in firmware (index == enum value).
 const STATE_NAMES = ["DISARMED", "ARMED", "FAILSAFE", "ESC_CALIBRATION", "DEPLOY"];
 const SOURCE_NAMES = ["DEFAULTS", "NVS", "MIXED_RECOVERED"];
+// Spot-lock sub-state mirrors spot_lock_substate in firmware (index == value).
+const SPOT_LOCK_NAMES = ["off", "active", "paused"];
 
 // Numeric state aliases (mirror sm_state) for readable comparisons.
 const STATE_DISARMED = 0;
@@ -47,6 +49,10 @@ const PARAM_LABELS = {
   ch4_switch_threshold_us: "CH4 switch threshold (µs)",
   deploy_servo_us: "Deploy servo (µs)",
   click_window_ms: "CH4 click window (ms)",
+  spot_lock_deadband_m: "Spot-lock deadband (m)",
+  spot_lock_max_throttle_pct: "Spot-lock max throttle (%)",
+  spot_lock_throttle_gain: "Spot-lock throttle gain (norm/m)",
+  spot_lock_servo_gain: "Spot-lock servo gain (norm/deg)",
 };
 
 let lastState = null;
@@ -93,6 +99,10 @@ function applyTelemetry(t) {
   setText("imu_heading", (t.imu_heading_deg10 / 10).toFixed(1) + "°");
   setText("imu_calib", t.imu_calib);
   setText("imu_ok", t.imu_ok ? "yes" : "NO");
+  setText("spot_lock_state", SPOT_LOCK_NAMES[t.spot_lock_state] || t.spot_lock_state);
+  setText("spot_lock_err", t.spot_lock_err_m + " m");
+  setText("spot_lock_bearing", (t.spot_lock_bearing_deg10 / 10).toFixed(1) + "°");
+  setText("spot_lock_bow", (t.imu_heading_deg10 / 10).toFixed(1) + "°");
   setText("source", SOURCE_NAMES[t.source] || t.source);
   setText("settings_valid", t.settings_valid ? "yes" : "no");
   setText("calibrated", t.calibrated ? "yes" : "NO");
