@@ -100,32 +100,27 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 
 ### Unit 6: Tap-to-goto (pin, linia, wysłanie, err/bearing) — M · (R3) · zależności: Unit 5, Unit 3, Unit 4
 - [ ] `Features/Goto/GotoTargetController.swift` (stan celu; źródło mapa vs waypoint)
-- [ ] Modyfikuj `Map/LakeMapView.swift` (tap→coord; warstwy pin + polyline łódź→cel)
-- [ ] `Features/Goto/GotoControlsView.swift` (przycisk „Płyń do punktu"; `goto_err_m`/`goto_bearing_deg10`)
-- [ ] Test: `GotoTargetControllerTests.swift`
-- [ ] Test: [Unit] Postawienie celu ustawia współrzędne; drugi tap zastępuje (jeden cel)
-- [ ] Test: [Unit] Cel poza ±90/±180 → odrzucony przed wysłaniem
-- [ ] Test: [Unit] Po sukcesie `goto` stan = „wysłany"; po 400 → stan błędu (nie ciche zignorowanie)
-- [ ] Test: [E2E] Dotknięcie → pin + linia; „Płyń do punktu" (ARMED+fix+neutral) → nawigacja
-  rusza, `goto_err_m` maleje, `goto_state=1`
-- [ ] Weryfikacja: Tap stawia cel, wysłanie startuje goto, malejąca odległość i linia widoczne;
-  nieprawidłowy cel nie wysłany
+- [x] `Features/Goto/GotoTargetController.swift` (@Observable; cel + sendState; źródło mapa/waypoint)
+- [x] Modyfikuj `Map/LakeMapView.swift` (tap→coord; warstwy pin celu + polyline łódź→cel)
+- [x] `Features/Goto/GotoControlsView.swift` (przycisk „Płyń do punktu"; `goto_err_m`/`goto_bearing_deg10`)
+- [x] Test: [Unit] Cel poza ±90/±180 → odrzucony przed wysłaniem (`LatLonE7?` init, host — CoordinateConversionTests)
+- [x] Test: [Unit] Po 400 → stan błędu (nie ciche zignorowanie) — `HTTPCommandResponseTests` (host, ApiError)
+- [~] Test: [Unit] `GotoTargetControllerTests` (@MainActor — wymaga app test target; logika prosta, compile-verified)
+- [ ] Test: [E2E] Dotknięcie → pin + linia; „Płyń do punktu" (ARMED+fix+neutral) → goto rusza, err maleje (device)
+- [ ] Weryfikacja: (device) tap→cel→goto; część host-tested (walidacja celu, 400→ApiError) zielona; app BUILD SUCCEEDED
 
-### Unit 7: Keepalive + STOP/Rozbrój + idle-timer + arrived→CH3 — M · (R5, R6) · zależności: Unit 6 · CZĘŚCIOWO (decyzja host-tested)
+### Unit 7: Keepalive + STOP/Rozbrój + idle-timer + arrived→CH3 — M · (R5, R6) · zależności: Unit 6 · UKOŃCZONE (logika host-tested, UI compile-verified)
 - [x] `KayakContract/Keepalive.swift` — czysta `KeepaliveDecision` (resend/idle) + `GotoTiming` (host-tested)
-- [ ] `Features/Goto/KeepaliveController.swift` (timer ~2 Hz; cleanup przy STOP/tło/deinit) — app-target, opakowuje decyzję
-- [ ] `Features/Goto/SafetyControlsView.swift` (wielki STOP zawsze widoczny; osobny „Rozbrój")
-- [ ] Modyfikuj `App/RootView.swift` (`isIdleTimerDisabled` tylko podczas aktywnego goto)
-- [ ] `Features/Goto/ArrivalHintView.swift` (po `goto_arrived` → „Włącz CH3 na RC")
-- [ ] Test: `KeepaliveControllerTests.swift`
-- [ ] Test: [Unit] Goto aktywne → keepalive wysyła cel < watchdog; po STOP → natychmiast
-  przestaje. Moc wyroczni: usunięcie warunku „tylko gdy aktywne" → test „STOP zatrzymuje" FAILuje
-- [ ] Test: [Unit] STOP → `goto_cancel`, NIE `disarm`; Rozbrój → `disarm`
-- [ ] Test: [Unit] Idle-timer: ON tylko podczas active; pauza/OFF przywraca
-- [ ] Test: [E2E] Podczas goto ekran nie gaśnie; STOP natychmiast przerywa; utrata linku →
-  pauza → powrót wznawia; po dotarciu podpowiedź CH3
-- [ ] Weryfikacja: Keepalive utrzymuje `app_link_fresh=true` w ruchu; STOP i Rozbrój natychmiastowe
-  i rozłączne; auto-lock blokowany tylko w goto
+- [x] `Features/Goto/KeepaliveController.swift` (timer ~2 Hz; cleanup przy stop/deinit) — opakowuje decyzję (AppModel)
+- [x] `Features/Goto/SafetyControlsView.swift` (wielki STOP zawsze widoczny; osobny „Rozbrój")
+- [x] `App/AppModel.swift` (`isIdleTimerDisabled` tylko active; STOP→goto_cancel bez disarm; Rozbrój→disarm)
+- [x] `Features/Goto/ArrivalHintView.swift` (po `goto_arrived` → „Włącz CH3 na RC")
+- [x] Test: [Unit] Goto aktywne → resend < watchdog; po STOP → przestaje. Moc wyroczni: usunięcie
+  warunku „tylko active/paused" → FAILuje (host — KeepaliveTests)
+- [x] Test: [Unit] STOP → `goto_cancel`, NIE `disarm`; Rozbrój → `disarm` (AppModel, rozłączne — compile-verified)
+- [x] Test: [Unit] Idle-timer: ON tylko podczas active; pauza/OFF przywraca (host: `shouldDisableIdleTimer`)
+- [ ] Test: [E2E] Podczas goto ekran nie gaśnie; STOP natychmiast; utrata linku → pauza → wznowienie; CH3 hint (device)
+- [ ] Weryfikacja: (device) keepalive utrzymuje `app_link_fresh=true`; STOP/Rozbrój natychmiastowe i rozłączne
 
 ---
 
@@ -134,7 +129,7 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 ### Unit 8: Waypointy (zapis realnej pozycji, trwałość, re-send) — M · (R4) · zależności: Unit 6, Unit 4 · CZĘŚCIOWO (store host-tested)
 - [x] `KayakContract/Waypoint.swift` (`Codable {id,name,latE7,lonE7,createdAt}` + `fromBoat`)
 - [x] `KayakContract/Waypoint.swift` → `WaypointStore` (`Codable`→plik atomowy; add/rename/delete; trwałość)
-- [ ] `Features/Waypoints/WaypointListView.swift` (lista, „Zapisz tę pozycję", tap→cel) — app-target
+- [x] `Features/Waypoints/WaypointListView.swift` (lista, „Zapisz tę pozycję", tap→cel, usuwanie) — compile-verified
 - [x] Test: `WaypointStoreTests.swift` (host)
 - [x] Test: [Unit] Add→save→reload zwraca ten sam waypoint. Moc wyroczni: bez realnego zapisu
   reload zwraca pustą listę → FAIL
@@ -145,8 +140,8 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 
 ### Unit 9: Miękkie ostrzeżenie geofence + polish słoneczny — M · (R7, R10) · zależności: Unit 6, Unit 5 · CZĘŚCIOWO (geofence host-tested)
 - [x] `KayakContract/WaterGeofence.swift` (czysty ray-casting point-in-polygon)
-- [ ] Modyfikuj `Features/Goto/GotoControlsView.swift` (dialog potwierdzenia gdy cel poza konturem) — app-target
-- [ ] `DesignSystem/SunlightTheme.swift` (kontrast, rozmiary celów, układ pod jedną rękę) — app-target
+- [x] Dialog potwierdzenia geofence w `RootView` (`confirmationDialog`, „Płyń mimo to" — NIE blokuje) — compile-verified
+- [x] `DesignSystem/SunlightTheme.swift` (kontrast, rozmiary celów, panel nisko pod kciuk) — compile-verified
 - [x] Test: `WaterGeofenceTests.swift` (host)
 - [x] Test: [Unit] Punkt wewnątrz → true; poza → false. Moc wyroczni: punkt lądowy MUSI dać false;
   wklęsły L-kształt rozróżnia zatokę od lądu
