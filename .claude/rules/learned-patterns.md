@@ -2,7 +2,7 @@
 
 Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane przez /dev-compound i /dev-compound-refresh.
 
-<!-- rule-count: 10 -->
+<!-- rule-count: 12 -->
 
 - **Recency/elapsed w jednej domenie licznika, wrap-safe**: Różnicę czasu/licznika licz przez unsigned modular subtraction (`now - last`) w JEDNEJ domenie zegara; trzymaj raw tick i konwertuj na jednostki fizyczne dopiero przy porównaniu. Nie mieszaj `esp_timer_get_time()` z licznikiem capture — daje cicho błędną recency po wrapie. Dodaj host-test wokół granicy 2^N.
   Source: docs/solutions/runtime-errors/2026-06-17-wrap-safe-recency-counter-domain.md
@@ -33,3 +33,9 @@ Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane 
 
 - **Retencja stanu (cel w PAUSE) = własność czystego rdzenia, nie kontrakt na stabilny upstream**: Gdy stan pauzy ma zachować referencję, rdzeń re-latchuje `ref_*` z wejścia TYLKO na wejściu w stan albo gdy źródło świeże; w pauzie zachowuje ostatnią dobrą wartość i NIE nadpisuje z wejścia. Nie polegaj na tym, że upstream nie wyzeruje wejścia — wyzerowany upstream + bezwarunkowy re-latch = ciche null-island (0,0). Mutacja „bezwarunkowy re-latch" MUSI failować test retencji.
   Source: docs/solutions/runtime-errors/2026-07-01-goto-app-override-validation-retention.md
+
+- **Reset przy operacji sieciowej: ustal reset reason ze sprzętu ZANIM założysz przyczynę**: Nie zgaduj „to WDT/brownout". Złap `rst:0xNN (REASON)` z portu (`0xc`=RTC_SW_CPU_RST/panic, `0x0f`=brownout, `0x07/08`=TG WDT) i zdekoduj `Saved PC`/backtrace przez `xtensa-*-addr2line -e build/*.elf`. Błędna diagnoza „Task WDT" naprawiła zły trop (przeniesienie pętli na CPU1), a crash był w tasku httpd. USB-CDC gubi banner panicu — użyj readera z reopen-on-disconnect albo `esp_reset_reason()` w bootlogu.
+  Source: docs/solutions/runtime-errors/2026-07-01-httpd-task-stack-overflow-panel-reload.md
+
+- **Nie zostawiaj domyślnego 4 KB stosu httpd gdy handlery mają duże bufory na stosie**: `HTTPD_DEFAULT_CONFIG().stack_size`=4096 przepełnia się, gdy handler kładzie na stosie bufory JSON (req+body+nested serialize ~kilka KB) + rekursja cJSON → FreeRTOS canary → panic → `RTC_SW_CPU_RST`. Ustaw `config.stack_size` WYPROWADZONY z rozmiaru buforów (np. `2*BODY_MAX + SERIALIZE_MAX + headroom`), żeby rósł razem z liczbą pól i nie zdryfował po cichu.
+  Source: docs/solutions/runtime-errors/2026-07-01-httpd-task-stack-overflow-panel-reload.md
