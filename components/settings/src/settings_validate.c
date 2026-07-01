@@ -135,6 +135,12 @@ static void validate_fields(settings_params *p, const settings_params *def,
     p->spot_lock_servo_gain =
         field_or_default(p->spot_lock_servo_gain, SPOT_LOCK_GAIN_MIN,
                          SPOT_LOCK_GAIN_MAX, def->spot_lock_servo_gain, repaired);
+
+    /* App-driven goto comms-watchdog timeout (ms). */
+    p->goto_comms_timeout_ms =
+        field_or_default(p->goto_comms_timeout_ms, GOTO_COMMS_TIMEOUT_MS_MIN,
+                         GOTO_COMMS_TIMEOUT_MS_MAX, def->goto_comms_timeout_ms,
+                         repaired);
 }
 
 /* The ESC map (map_normalized_to_us in the throttle chain) treats

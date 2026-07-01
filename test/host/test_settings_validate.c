@@ -440,6 +440,57 @@ static void test_spot_lock_params_in_range_preserved(void)
     TEST_ASSERT_EQUAL_UINT16(40U, out.spot_lock_servo_gain);
 }
 
+static void test_goto_comms_timeout_default_is_sane(void)
+{
+    /* Arrange: fresh/empty NVS -> defaults. The goto comms-watchdog timeout must
+     * load with the gentle 1500 ms default, not zero (which would pause goto
+     * instantly). */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(NULL, false, &out);
+
+    /* Assert */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_DEFAULTS, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_EQUAL_UINT16(1500U, out.goto_comms_timeout_ms);
+}
+
+static void test_goto_comms_timeout_out_of_range_recovers(void)
+{
+    /* Arrange: a 10000 ms timeout is above the [200,5000] ms band. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.goto_comms_timeout_ms = 10000U; /* > 5000, invalid */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: mixed recovery, the bad field falls back to its 1500 ms default. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_MIXED_RECOVERED, result.source);
+    TEST_ASSERT_TRUE(result.defaults_used);
+    TEST_ASSERT_FALSE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(1500U, out.goto_comms_timeout_ms);
+}
+
+static void test_goto_comms_timeout_in_range_preserved(void)
+{
+    /* Arrange: an in-band custom timeout survives a clean NVS load. */
+    settings_params stored;
+    settings_load_defaults(&stored);
+    stored.goto_comms_timeout_ms = 800U; /* in [200,5000] */
+    settings_params out;
+
+    /* Act */
+    settings_validation_result result = settings_validate(&stored, true, &out);
+
+    /* Assert: clean NVS load, timeout preserved verbatim. */
+    TEST_ASSERT_EQUAL_INT(SETTINGS_SOURCE_NVS, result.source);
+    TEST_ASSERT_TRUE(result.settings_valid);
+    TEST_ASSERT_EQUAL_UINT16(800U, out.goto_comms_timeout_ms);
+}
+
 void run_settings_validate_tests(void)
 {
     RUN_TEST(test_empty_nvs_yields_defaults);
@@ -465,4 +516,7 @@ void run_settings_validate_tests(void)
     RUN_TEST(test_spot_lock_max_throttle_out_of_range_recovers);
     RUN_TEST(test_spot_lock_deadband_out_of_range_recovers);
     RUN_TEST(test_spot_lock_params_in_range_preserved);
+    RUN_TEST(test_goto_comms_timeout_default_is_sane);
+    RUN_TEST(test_goto_comms_timeout_out_of_range_recovers);
+    RUN_TEST(test_goto_comms_timeout_in_range_preserved);
 }

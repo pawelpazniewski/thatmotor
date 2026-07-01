@@ -21,8 +21,10 @@ extern "C" {
  * endpoints and deploy all shift uniformly.
  * v6: add the spot-lock (CH3 GPS position hold) regulator parameters
  * (spot_lock_deadband_m, spot_lock_max_throttle_pct, spot_lock_throttle_gain,
- * spot_lock_servo_gain). */
-#define SETTINGS_SCHEMA_VERSION 6U
+ * spot_lock_servo_gain).
+ * v7: add the app-driven goto link comms-watchdog timeout
+ * (goto_comms_timeout_ms): app link staler than this pauses an active goto. */
+#define SETTINGS_SCHEMA_VERSION 7U
 
 /* Signed servo neutral trim bounds/step (public: the control loop drives the
  * panel's live Step Left/Right with these; the validator/defaults reuse them).
@@ -91,6 +93,12 @@ typedef struct {
     uint16_t spot_lock_max_throttle_pct; /* forward thrust cap, percent (R7) */
     uint16_t spot_lock_throttle_gain;    /* normalized throttle per metre error */
     uint16_t spot_lock_servo_gain;       /* normalized servo per degree of bearing */
+
+    /* App-driven goto (R5/R7): the comms-watchdog timeout for the WiFi link that
+     * commands goto. An app link with no goto keepalive fresher than this pauses
+     * an active goto (neutral+center, target retained). Applied DISARMED-only
+     * (SI-6), like every other param. */
+    uint16_t goto_comms_timeout_ms;
 } settings_params;
 
 #ifdef __cplusplus

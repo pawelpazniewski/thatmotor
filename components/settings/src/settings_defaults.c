@@ -49,6 +49,8 @@ void settings_load_defaults(settings_params *out)
         .spot_lock_max_throttle_pct = SPOT_LOCK_MAX_THROTTLE_PCT_DEFAULT,
         .spot_lock_throttle_gain = SPOT_LOCK_THROTTLE_GAIN_DEFAULT,
         .spot_lock_servo_gain = SPOT_LOCK_SERVO_GAIN_DEFAULT,
+
+        .goto_comms_timeout_ms = GOTO_COMMS_TIMEOUT_MS_DEFAULT,
     };
 
     *out = defaults;

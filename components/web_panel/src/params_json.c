@@ -41,6 +41,7 @@ static const u16_field U16_FIELDS[] = {
     U16_FIELD(spot_lock_max_throttle_pct),
     U16_FIELD(spot_lock_throttle_gain),
     U16_FIELD(spot_lock_servo_gain),
+    U16_FIELD(goto_comms_timeout_ms),
 };
 
 #define U16_FIELD_COUNT (sizeof(U16_FIELDS) / sizeof(U16_FIELDS[0]))

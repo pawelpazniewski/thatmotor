@@ -1,7 +1,18 @@
 # Kontekst: Goto — autonomiczna nawigacja do punktu
 
 Branch: `feature/goto-waypoint-navigation`
-Ostatnia aktualizacja: 2026-07-01 (Faza 2 / Unit 3 ukończona — rdzeń decyzyjny)
+Ostatnia aktualizacja: 2026-07-01 (Faza 3 / Unit 4 ukończona — integracja + comms-watchdog)
+
+## Faza 3 — Integracja + comms-watchdog (Unit 4) — ukończona 2026-07-01
+Podłączenie rdzenia goto do pętli sterującej z watchdogiem linku i cyklem życia latcha. Zero nowego toru failsafe — goto wciąż liczone WYŁĄCZNIE w gałęzi ARMED (`resolve_spot_lock`).
+- **`loop_step.h`:** `loop_inputs` +`goto_engage`,`goto_lat_e7`,`goto_lon_e7`,`comms_fresh` (kontrakt: spot-lock control inputs only, NIGDY rc_valid/sm_inputs/failsafe); `loop_outputs` +`goto_latch_clear` (sygnał decyzyjny do warstwy loop). Nagłówek nadal grep-clean.
+- **`loop_step.c`:** `build_spot_lock_inputs` przekazuje nowe pola do `spot_lock_step` (dotąd designated-init zerował je → gałąź goto była uśpiona). `goto_latch_should_clear(in,params,resolved_state)` = `resolved_state==ARMED && goto_engage && (!sticks_neutral || ch3_on)` → `out.goto_latch_clear`. Pauza (link/GPS/IMU) NIE kasuje latcha (zwraca false). `loop_state_init` inicjalizuje `target_source=SRC_NONE` (kompletność stanu).
+- **`control_loop.c`:** `apply_goto_inputs` liczy `comms_fresh = sensor_is_fresh(now_ms(), s_last_goto_ms, s_params.goto_comms_timeout_ms)` KAŻDY cykl (fresh≠valid, wrap-safe w domenie now_ms()) + wstrzykuje staged `s_goto_engage/lat/lon`. `run_one_cycle`: po `loop_step`, `if (out.goto_latch_clear) s_goto_engage = false` (override/CH3-preempt). `goto_cancel` kasuje latch w `apply_goto_events`; utrata linku latcha NIE dotyka.
+- **Cykl życia latcha (3 drogi kasowania):** (a) `goto_cancel` → `apply_goto_events` czyści `s_goto_engage` (nie zeruje celu); (b) override drążkiem / (c) CH3-preempt → `goto_latch_clear` z `loop_step`. Pauza od linku/GPS = przejściowa, latch przetrwa (auto-resume tego samego celu).
+- **Bezpieczeństwo „świeży link ⟹ zwalidowany, niezerowy cel":** jedyny writer staged goto (`apply_goto_events`) zasilany z HTTP `extract_goto_target` (już `goto_target_valid`); żaden tor nie wstrzykuje fresh-link z wyzerowanym celem. Retencja celu w PAUSED domknięta w rdzeniu (Faza 2).
+- **Unit 5 (parametr) przeniesiony do tej fazy:** `goto_comms_timeout_ms` dodany end-to-end w settings (model bump v6→v7, ranges 200/5000/1500 ms, defaults, validate, `params_json` +`PARAMS_JSON_FIELD_COUNT` 31→32, `blob_codec` 63/67 B) — Unit 4 potrzebował realnego timeoutu zamiast magic number. Reszta Unit 5 (test 409-w-ARMED, Weryfikacja) i cała telemetria/panel (Unit 6) zostają w Fazie 4.
+- **Testy:** +8 integracyjnych w `test_loop_step.c` (goto ACTIVE/computed, RC-loss→FAILSAFE-wins, comms-pause+latch-retained+resume, gps-loss-pause, override-clears-latch, CH3-preempt-here-and-now+clears-latch, cancel→OFF, hard-clamp SI-3); +1 goto-fix-loss w `test_spot_lock.c` (rezydualny P3 Fazy 2); +3 settings-validate + blob round-trip/size v7. Moc wyroczni: `goto_latch_clear==false` w pauzie vs `==true` w override/CH3 rozróżnia przejściowość; RC-loss test failowałby gdyby goto działało poza ARMED. **Host: 425/425 PASS (413→425). `idf.py build` (esp32s3): PASS (37% wolne).**
+- **Rezydualne P3 Fazy 2 domknięte:** walidacja celu (potwierdzone strukturalnie), goto-fix-loss test (dodany). Pozostaje nit: komentarz edge-latch CH3.
 
 ## Faza 2 — Rdzeń decyzyjny (Unit 3) — ukończona 2026-07-01
 Rozszerzenie czystej funkcji `spot_lock_step` o arbitraż źródła celu, bez regresji ścieżki CH3.
@@ -11,6 +22,22 @@ Rozszerzenie czystej funkcji `spot_lock_step` o arbitraż źródła celu, bez re
 - **Testy:** 6 nowych w `test_spot_lock.c` (goto-active, CH3-preempt, comms-pause/resume, comms-nie-dotyczy-hold, override, arrived). Wszystkie 16 istniejących asercji spot-lock bez zmian. Host: 411/411 PASS (405→411). `idf.py build` (esp32s3): PASS (37% wolne).
 - **Moc wyroczni zweryfikowana mutacją:** comms-gate→hold FAILuje `test_comms_gate_does_not_pause_ch3_hold`; preempt→`substate==OFF`-only FAILuje `test_ch3_preempts_active_goto`.
 - **Nie podłączone do pętli** — `spot_lock_step` woła się z `loop_step`, ale przekazanie `goto_engage/goto_*/comms_fresh` z `control_loop` + watchdog `comms_fresh` = Unit 4 (Faza 3). Do tego czasu nowe pola wejść pozostają domyślnie 0/false w istniejącym wywołaniu (zachowanie CH3 niezmienione).
+
+## Review Fazy 2 (Unit 3, commit `d3b1d9c`) — ⚠️ ZASTRZEŻENIA
+Raport: `review-faza-2.md`. Metoda: analiza ręczna + 2 subagenty (safety-arbitration, test-oracle-power). Walidacja: host 411/411 PASS, `idf.py build` (esp32s3) PASS, header grep-clean. Severity gate: P1=0, P2=1, P3=4 — kontynuacja z zastrzeżeniami (brak blokerów).
+- **Inwarianty safety wszystkie SZCZELNE (mocą wyroczni):** (A) priorytet CH3 — `target_source==SRC_GOTO` osiągalne tylko przy `ch3_on==false` (krok 2 short-circuituje); CH3 ON zawsze routuje do `run_ch3_hold` (klucz `target_source!=SRC_HOLD`) → SRC_HOLD lub OFF, nigdy SRC_GOTO. (B) bramka linku `comms_gated=false` dla CH3 (`:165`), `true` dla goto (`:187`) — `comms_fresh=false` nie może spauzować SRC_HOLD. (C) `!armed||!sticks_neutral→make_off` pierwsza instrukcja, przed CH3/goto; + bramka ARMED w `resolve_spot_lock` niezmieniona. (D) SRC_GOTO przy stale link → PAUSED neutral+center, `compute_active_output` nieosiągnięte.
+- **Zero test-weakeningu:** diff testów wyłącznie addytywny, 16 oryg. asercji nietknięte; zmiana `make_active_state` (+`target_source=SRC_HOLD`) to KONIECZNA korekta modelu pod nowe keyowanie `run_ch3_hold` (bez niej carry-over testy failują na OFF), nie osłabienie. 6 nowych testów z realną mocą wyroczni (mutacje FAILują).
+- **P2 (jedyne zastrzeżenie):** SRC_GOTO `ref_*` śledzony na żywo z wejścia co cykl (nie snapshot), nadpisywany też w PAUSED przed bramką → „target retained" to niejawny kontrakt na stabilny latch upstream; hazard null-island jeśli Unit 4 zeruje cel na utratę linku. Do domknięcia w Unit 4 (snapshot na przejściu / zapis tylko przy `comms_fresh` / jawny wymóg w nagłówku). Częściowo zmitygowane: Unit 2 waliduje cel na HTTP, pauza nie kasuje latcha.
+- **P3:** edge-latch trap CH3 (komentarz), brak walidacji celu w rdzeniu (zmit. Unit 2), brak goto-specyficznego testu fix-loss, arrived on-target bez asercji throttle==0.
+- **Zgodność z planem:** pliki = dokładnie plan Unit 3; wszystkie scenariusze pokryte. Niepodłączenie do pętli potwierdzone (`build_spot_lock_inputs` w `loop_step.c:199` nie ustawia goto/comms → uśpione, tor CH3 niezmieniony) — zgodne z planem (Unit 4 = Faza 3).
+
+## Re-review Faza 2 (fix cykl 1, commit `28d3c7c`) — ✅ CZYSTE
+Raport: `review-faza-2-rereview.md`. Severity gate: P1=0, P2=0, P3=3 (rezydualne). Host-tests 413/413 PASS, `idf.py build` PASS.
+- **P2 (null-island/retencja w PAUSED) potwierdzony ROZWIĄZANY z mocą wyroczni.** Fix (`spot_lock.c:189-196`): `ref_*` (re)latchowane z `in->goto_*` TYLKO gdy `is_entering_goto || in->comms_fresh`. W PAUSED (SRC_GOTO już aktywne + `comms_fresh=false`) → warunek false → `ref_*` zachowane bez nadpisywania. Retencja przez lukę linku to teraz własność czystego rdzenia, nie niejawny kontrakt latcha Unit 4.
+- **Współistnienie R1 ↔ retencja szczelne:** jeden predykat `is_entering_goto || comms_fresh` — dokładnie jedna gałąź pisze (świeży link / wejście), druga zachowuje (pauza). Brak dziury. Wejście przy stale-comms zapisuje ref, ale `hold_or_pause(...,true)` → PAUSED (zero komend), korekta przy pierwszym świeżym cyklu — benign.
+- **Zero regresji:** zmiana zamknięta w bloku `if (in->goto_engage)` (osiągalnym tylko `!ch3_on`); bramki A–E (failsafe-precedence, arbitraż CH3, comms-gate SRC_HOLD) NIETKNIĘTE, nadal szczelne.
+- **Zero test-weakeningu:** +2 testy z mocą wyroczni (`test_goto_retains_target_during_pause_ignoring_input` — naive overwrite→(0,0) FAIL; `test_goto_fresh_link_tracks_new_target` — entry-only latch FAIL) + 1 asercja WZMACNIAJĄCA (`throttle_cmd==0` on-target). Zero usuniętych/osłabionych.
+- **Rezydualne P3:** fresh-link+zerowany cel = legalny zawężony kontrakt Unit 4 (świeży link ⟹ zwalidowany latch, Unit 2); komentarz edge-latch CH3; symetryczny goto-fix-loss test. Do domknięcia w Fazie 3.
 
 ## Re-review Faza 1 (fix cykl 1, commit `ffbc43a`)
 Severity gate: ✅ CZYSTE (P1=0, P2=0, P3=2 przeniesione/zaakceptowane). Host-tests 405/405 PASS, `idf.py build` PASS.

@@ -31,7 +31,7 @@ extern "C" {
  * count is asserted against the actual tables in params_json.c, so adding a
  * field forces this bound to grow with it.
  */
-#define PARAMS_JSON_FIELD_COUNT 31   /* 27 uint16 + 3 bool + schema_version */
+#define PARAMS_JSON_FIELD_COUNT 32   /* 28 uint16 + 3 bool + schema_version */
 #define PARAMS_JSON_MAX_KEY_LEN 28   /* headroom over the longest current key */
 #define PARAMS_JSON_MAX_VALUE_LEN 5  /* "65535" / "false" */
 #define PARAMS_JSON_SERIALIZE_MAX                                             \

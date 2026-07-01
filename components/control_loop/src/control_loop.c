@@ -60,7 +60,9 @@ static control_loop_snapshot s_snapshot;
 
 /* App-driven goto: staged external target + engage latch (single writer = the
  * loop). s_last_goto_ms stamps each received goto command as the base for the
- * link comms-watchdog (wired into loop_step in Unit 4). The target lives in RAM
+ * link comms-watchdog (read each cycle by apply_goto_inputs -> sensor_is_fresh).
+ * The latch is cleared on goto_cancel (apply_goto_events) and on a manual
+ * override / CH3 preempt (loop_step's goto_latch_clear). The target lives in RAM
  * only (no NVS persistence: goto is a live session). */
 static bool s_goto_engage;
 static int32_t s_goto_lat_e7;
@@ -339,8 +341,8 @@ static void apply_trim_events(const control_loop_ui_events *ev)
 /* Stage an app-driven goto command: latch the engage + external target on a goto
  * request (idempotent keepalive: a repeated goto refreshes the target and the
  * link stamp), clear the latch on goto_cancel. Every received goto stamps
- * s_last_goto_ms so the comms-watchdog (Unit 4) can gate on link freshness.
- * The engage/target are consumed by loop_step in a later unit. */
+ * s_last_goto_ms so the comms-watchdog can gate on link freshness. The
+ * engage/target are read into the loop inputs by apply_goto_inputs each cycle. */
 static void apply_goto_events(const control_loop_ui_events *ev)
 {
     if (ev->goto_request) {
@@ -391,6 +393,21 @@ static void apply_sensor_inputs(loop_inputs *in)
     in->imu_heading_deg10 = m.heading_deg10;
 }
 
+/* Feed the staged app-driven goto state into this cycle's inputs and compute the
+ * link comms-watchdog each cycle (fresh != valid: re-evaluated every cycle, not
+ * just at engage). The freshness lives in the now_ms() domain (esp_timer/1000,
+ * uint32), matching s_last_goto_ms, so sensor_is_fresh stays wrap-safe. These are
+ * spot-lock control inputs ONLY: consumed by spot_lock_step in the ARMED branch,
+ * NEVER rc_valid / channel_valid / sm_inputs / failsafe. */
+static void apply_goto_inputs(loop_inputs *in)
+{
+    in->goto_engage = s_goto_engage;
+    in->goto_lat_e7 = s_goto_lat_e7;
+    in->goto_lon_e7 = s_goto_lon_e7;
+    in->comms_fresh =
+        sensor_is_fresh(now_ms(), s_last_goto_ms, s_params.goto_comms_timeout_ms);
+}
+
 /* Read the two control channels into the per-cycle input snapshot. */
 static loop_inputs read_inputs(void)
 {
@@ -406,6 +423,7 @@ static loop_inputs read_inputs(void)
      * Consumed by loop_step only in the ARMED branch (Unit 6); never failsafe. */
     apply_ch3_switch(&in);
     apply_sensor_inputs(&in);
+    apply_goto_inputs(&in);
     return in;
 }
 
@@ -473,6 +491,13 @@ static void run_one_cycle(void)
 
     loop_inputs in = read_inputs();
     loop_outputs out = loop_step(&in, &s_validity_cfg, &s_params, &s_loop);
+
+    /* Goto latch lifecycle: a manual override or CH3 preempt inside ARMED clears
+     * the engage latch for good (no auto-resume). goto_cancel is handled in
+     * apply_goto_events; a link/GPS pause deliberately leaves the latch set. */
+    if (out.goto_latch_clear) {
+        s_goto_engage = false;
+    }
 
     pwm_out_write_us(PWM_OUT_ESC, out.esc_us);
     pwm_out_write_us(PWM_OUT_SERVO, out.servo_us);

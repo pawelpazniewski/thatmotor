@@ -61,6 +61,16 @@ typedef struct {
     int32_t gps_lon_e7;        /* current longitude, degrees * 1e7 */
     bool imu_ok;               /* heading data fresh (R5) */
     uint16_t imu_heading_deg10;/* current bow heading, degrees * 10, [0, 3599] */
+    /* App-driven goto: source-of-target request + external target + link
+     * freshness. Same contract as GPS/IMU: consumed by spot_lock_step ONLY in the
+     * ARMED branch, NEVER fed to rc_valid / channel_valid / sm_inputs / failsafe.
+     * comms_fresh gates SRC_GOTO only (link loss pauses goto, never trips
+     * failsafe). The target is HTTP-validated upstream (Unit 2); a fresh link
+     * never carries a zeroed target. */
+    bool goto_engage;          /* app goto latch (SRC_GOTO request, R3) */
+    int32_t goto_lat_e7;       /* external goto target latitude, degrees * 1e7 */
+    int32_t goto_lon_e7;       /* external goto target longitude, degrees * 1e7 */
+    bool comms_fresh;          /* app link freshness (R5): gates SRC_GOTO only */
 } loop_inputs;
 
 /** Per-channel validity thresholds (constant across cycles). */
@@ -96,6 +106,12 @@ typedef struct {
     uint32_t esc_us;
     uint32_t servo_us;
     loop_telemetry telemetry;
+    /* Signal to the orchestration layer that the goto engage latch must be
+     * cleared this cycle: a manual stick override or a physical CH3 preempt
+     * permanently ends goto (no auto-resume; a fresh app goto command is
+     * required). A link/GPS pause does NOT set this, so a transient link loss
+     * keeps the latch and resumes. Computed only inside the ARMED branch. */
+    bool goto_latch_clear;
 } loop_outputs;
 
 /**

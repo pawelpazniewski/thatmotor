@@ -479,6 +479,41 @@ void test_goto_pauses_on_comms_loss_then_resumes_same_target(void)
     TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
 }
 
+void test_goto_pauses_on_gps_loss_keeps_target(void)
+{
+    /* Arrange: goto ACTIVE ~10 m from the external target with the bow aligned
+     * (would thrust), then the GPS fix is lost while the app link stays fresh.
+     * SRC_GOTO must pause on sensor loss too (not just link loss), symmetric to
+     * SRC_HOLD, and RETAIN the external goto target. Oracle: dropping the
+     * sensor-loss pause for goto keeps it ACTIVE with thrust -> this fails. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_inputs();
+    in.lat_e7 = REF_LAT_E7 - E7_10M;
+    in.heading_deg10 = 0; /* aligned toward the target */
+    in.gps_has_fix = false; /* fix lost (still fresh window: seed-fresh) */
+    in.comms_fresh = true;  /* link is fine; the loss is the sensor, not comms */
+    spot_lock_state st = make_active_goto_state();
+
+    /* Act: fix lost. */
+    spot_lock_outputs paused = spot_lock_step(&in, &p, &st);
+
+    /* Assert: PAUSED, relaxed, external goto target retained. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_PAUSED, paused.substate);
+    TEST_ASSERT_EQUAL_INT32(0, paused.throttle_cmd);
+    TEST_ASSERT_EQUAL_INT32(0, paused.servo_cmd);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7, st.ref_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
+
+    /* Act: fix returns. */
+    in.gps_has_fix = true;
+    spot_lock_outputs resumed = spot_lock_step(&in, &p, &st);
+
+    /* Assert: back to ACTIVE on the SAME external target. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, resumed.substate);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7, st.ref_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
+}
+
 void test_comms_gate_does_not_pause_ch3_hold(void)
 {
     /* Arrange: SRC_HOLD ACTIVE ~10 m from target, bow aligned, but the app link
@@ -623,6 +658,7 @@ void run_spot_lock_tests(void)
     RUN_TEST(test_goto_engages_active_with_external_target);
     RUN_TEST(test_ch3_preempts_active_goto_and_snapshots_here_and_now);
     RUN_TEST(test_goto_pauses_on_comms_loss_then_resumes_same_target);
+    RUN_TEST(test_goto_pauses_on_gps_loss_keeps_target);
     RUN_TEST(test_comms_gate_does_not_pause_ch3_hold);
     RUN_TEST(test_goto_override_on_stick_deflection);
     RUN_TEST(test_goto_retains_target_during_pause_ignoring_input);

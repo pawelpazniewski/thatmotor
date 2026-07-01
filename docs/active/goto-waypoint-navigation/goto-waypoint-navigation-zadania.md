@@ -1,7 +1,7 @@
 # Zadania: Goto — autonomiczna nawigacja do punktu
 
 Branch: `feature/goto-waypoint-navigation`
-Ostatnia aktualizacja: 2026-07-01
+Ostatnia aktualizacja: 2026-07-01 (Faza 3 / Unit 4 ukończona)
 
 Legenda: `Test:` = scenariusz testowy (host/E2E), `Weryfikacja:` = kryterium ukończenia Unitu.
 
@@ -78,10 +78,12 @@ Weryfikacja:
 
 Severity gate: ⚠️ ZASTRZEŻENIA (P1=0, P2=1, P3=4). Raport: `review-faza-2.md`. Host-tests 411/411 PASS, `idf.py build` (esp32s3) PASS. Inwarianty safety (priorytet CH3, izolacja bramki linku, failsafe-precedence) strukturalnie szczelne z pełną mocą wyroczni; zero test-weakeningu.
 
+**Re-review (cykl fix 1, commit `28d3c7c`): ✅ CZYSTE (P1=0, P2=0, P3=3 rezydualne).** Raport: `review-faza-2-rereview.md`. Host-tests 413/413 PASS, `idf.py build` PASS. P2 (null-island/retencja w PAUSED) potwierdzony ROZWIĄZANY z mocą wyroczni; zero regresji torów CH3/SRC_HOLD/failsafe (inwarianty A–E nadal szczelne); zero test-weakeningu (+1 asercja wzmacniająca). Faza 2 gotowa do kontynuacji (Unit 4).
+
 - [x] 🟠 [important] **spot_lock.c:184-185** — cel `SRC_GOTO` śledzony na żywo z wejścia co cykl (nie snapshot), `st->ref_*` nadpisywane z `in->goto_*` także podczas PAUSED, PRZED bramką świeżości. Kontrakt „target retained" (nagłówek + `hold_or_pause` doc) zależy niejawnie od stabilności latcha upstream → hazard null-island jeśli Unit 4 wyzeruje cel na utratę linku. NAPRAWIONE (cykl 1): `ref_*` (re)latchowane z `in->goto_*` TYLKO przy wejściu w `SRC_GOTO` (`is_entering_goto`) LUB gdy `in->comms_fresh` — w PAUSED (comms_fresh=false) rdzeń zachowuje dotychczasowy `ref_*` bez nadpisywania. Retencja celu w PAUSED to własność czystego rdzenia, niezależna od latcha Unit 4. R1 „nowy goto zastępuje poprzedni" zachowane (śledzenie przy świeżym linku). Nagłówek `spot_lock.h` zaktualizowany o jawny kontrakt. Host-test `test_goto_retains_target_during_pause_ignoring_input` (moc wyroczni: naive overwrite → ref=(0,0) FAILuje) + `test_goto_fresh_link_tracks_new_target` (moc wyroczni R1: entry-only latch FAILuje).
 - [ ] 🟡 [nit] **spot_lock.c:158-159** — komentarz o edge-latch trap: preempt CH3 bez edge/fix → `make_off`; CH3-hold nie zaskoczy do przetoglowania CH3 (pre-existing, poprawne fail-safe). Jednolinijkowy komentarz.
-- [ ] 🟡 [nit] **spot_lock.c (goto target)** — rdzeń nie waliduje współrzędnych CELU goto (zmitygowane Unit 2 `goto_target_valid`). Potwierdzić przy Unit 4, że żaden inny tor nie wstrzyknie niezwalidowanego celu.
-- [ ] 🟡 [nit] **test_spot_lock.c** — brak dedykowanego testu pauzy `SRC_GOTO` na utratę GPS/IMU/fix (pokryty pośrednio przez wspólny `hold_or_pause`); symetryczny test goto-fix-loss byłby czystszy.
+- [x] 🟡 [nit] **spot_lock.c (goto target)** — rdzeń nie waliduje współrzędnych CELU goto (zmitygowane Unit 2 `goto_target_valid`). POTWIERDZONE (Unit 4): jedyny writer staged goto to `apply_goto_events` w `control_loop.c`, zasilany wyłącznie z UI events wychodzących z HTTP `extract_goto_target` (już `goto_target_valid`). `goto_cancel` kasuje TYLKO `s_goto_engage`, nigdy nie zeruje `s_goto_lat/lon_e7`; utrata linku nie dotyka celu. „Świeży link ⟹ zwalidowany, niezerowy cel" — żaden tor nie wstrzykuje fresh-link z wyzerowanym celem; retencja w PAUSED domknięta w rdzeniu (Faza 2).
+- [x] 🟡 [nit] **test_spot_lock.c** — brak dedykowanego testu pauzy `SRC_GOTO` na utratę GPS/IMU/fix. DODANE: `test_goto_pauses_on_gps_loss_keeps_target` (SRC_GOTO, fix lost, link fresh → PAUSED + cel zewnętrzny zachowany, moc wyroczni) w `test_spot_lock.c`, plus `test_goto_pauses_on_gps_loss_latch_retained` na poziomie integracji `test_loop_step.c`.
 - [x] 🟡 [nit] **test_goto_arrived_flag_tracks_deadband** — gałąź on-target nie asertuje `throttle_cmd==0` w deadbandzie dla źródła goto (pokryte dla SRC_HOLD przez `test_deadband_inside`). NAPRAWIONE (cykl 1): dodano `TEST_ASSERT_EQUAL_INT32(0, on_target.throttle_cmd)` w gałęzi on-target.
 
 ---
@@ -92,19 +94,19 @@ Severity gate: ⚠️ ZASTRZEŻENIA (P1=0, P2=1, P3=4). Raport: `review-faza-2.m
 Zależności: Unit 2, Unit 3
 
 Implementacja:
-- [ ] Modyfikuj `components/control_loop/include/loop_step.h` — `loop_inputs`: `goto_engage`, `goto_lat_e7/lon_e7`, `comms_fresh`
-- [ ] Modyfikuj `components/control_loop/src/loop_step.c` — `resolve_spot_lock`: przekaż nowe wejścia; sygnalizuj wyczyszczenie latcha przy override/cancel/CH3-preempt (bramka `state==ARMED` bez zmian)
-- [ ] Modyfikuj `components/control_loop/src/control_loop.c` — `s_last_goto_ms`, `s_goto_engage`, `s_goto_lat/lon_e7`; `read_inputs`: `comms_fresh = sensor_is_fresh(now_ms(), s_last_goto_ms, s_params.goto_comms_timeout_ms)`; kasowanie latcha po override/cancel/preempt
-- [ ] Rozszerz `test/host/test_loop_step.c`
+- [x] Modyfikuj `components/control_loop/include/loop_step.h` — `loop_inputs`: `goto_engage`, `goto_lat_e7/lon_e7`, `comms_fresh`; `loop_outputs`: `goto_latch_clear` (sygnał do warstwy loop)
+- [x] Modyfikuj `components/control_loop/src/loop_step.c` — `build_spot_lock_inputs`: przekaż nowe wejścia do `spot_lock_step`; `goto_latch_should_clear` (ARMED && goto_engage && (!sticks_neutral || ch3_on)) → `out.goto_latch_clear`; bramka `state==ARMED` bez zmian. Także `loop_state_init` inicjalizuje `target_source=SRC_NONE`
+- [x] Modyfikuj `components/control_loop/src/control_loop.c` — `apply_goto_inputs`: `comms_fresh = sensor_is_fresh(now_ms(), s_last_goto_ms, s_params.goto_comms_timeout_ms)` + staged engage/cel do `loop_inputs`; `run_one_cycle` kasuje `s_goto_engage` po `out.goto_latch_clear` (override/CH3-preempt); `goto_cancel` kasuje latch w `apply_goto_events`
+- [x] Rozszerz `test/host/test_loop_step.c`
 
 Testy (test-first: failing test integracyjny pełnej ścieżki, potem implementacja):
-- [ ] Test: komenda goto w ARMED+neutral+fresh, CH3 OFF → servo/ESC computed (≠ tor stickowy), SRC_GOTO ACTIVE
-- [ ] Test: w trakcie goto utrata RC → `sm_step`=FAILSAFE → ESC neutral+servo center (override się NIE wykonuje; FAILuje gdyby goto działało poza ARMED)
-- [ ] Test: w trakcie goto `comms_fresh=false` → PAUSED (neutral+center), latch zachowany; powrót → ACTIVE ten sam cel
-- [ ] Test: w trakcie goto `!sticks_neutral` → OFF **i** latch skasowany (powrót drążka NIE wznawia; FAILuje gdy latch przetrwa)
-- [ ] Test: w trakcie goto CH3 ON → SRC_HOLD (hold „tu i teraz"), latch goto skasowany
-- [ ] Test: `goto_cancel` → OFF, latch skasowany
-- [ ] Test: każde wyjście goto przechodzi przez hard clamp SI-3
+- [x] Test: komenda goto w ARMED+neutral+fresh, CH3 OFF → servo/ESC computed (≠ tor stickowy), SRC_GOTO ACTIVE (`test_goto_engages_and_computes_throttle` — ref==cel zewnętrzny, ESC>neutral)
+- [x] Test: w trakcie goto utrata RC → `sm_step`=FAILSAFE → ESC neutral+servo center (override się NIE wykonuje; FAILuje gdyby goto działało poza ARMED) (`test_goto_rc_loss_failsafe_wins`)
+- [x] Test: w trakcie goto `comms_fresh=false` → PAUSED (neutral+center), latch zachowany; powrót → ACTIVE ten sam cel (`test_goto_pauses_on_comms_loss_latch_retained_then_resumes` — asercja `goto_latch_clear==false`)
+- [x] Test: w trakcie goto `!sticks_neutral` → OFF **i** latch skasowany (powrót drążka NIE wznawia; FAILuje gdy latch przetrwa) (`test_goto_stick_override_clears_latch` — asercja `goto_latch_clear==true`)
+- [x] Test: w trakcie goto CH3 ON → SRC_HOLD (hold „tu i teraz"), latch goto skasowany (`test_goto_ch3_preempt_holds_here_and_clears_latch` — ref==pozycja bieżąca, `goto_latch_clear==true`)
+- [x] Test: `goto_cancel` → OFF, latch skasowany (`test_goto_cancel_returns_off`)
+- [x] Test: każde wyjście goto przechodzi przez hard clamp SI-3 (`test_goto_output_passes_hard_clamp` — out-of-window → 2000 us)
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone; `idf.py build` zielony; zero regresji `loop_step`/state_machine/spot_lock/chain; grep braku nowych `esp_*`/`driver/*` w czystych nagłówkach
@@ -116,15 +118,17 @@ Weryfikacja:
 ### Unit 5: Parametr `goto_comms_timeout_ms` (SI-6) (R7) — S
 Zależności: brak (potrzebny przez Unit 4)
 
+> **PRZENIESIONE DO FAZY 3 (Unit 4):** plumbing parametru dostarczony wcześniej, bo Unit 4 potrzebuje realnego timeoutu zamiast magic number. Zrobione: model+bump v6→v7, ranges (MIN 200 / MAX 5000 / DEFAULT 1500 ms), defaults, validate, `params_json.c` (`U16_FIELDS`, `PARAMS_JSON_FIELD_COUNT` 31→32), `blob_codec.{c,h}` (63 field bytes / 67 total), testy walidacji + round-trip/size. Pozostaje do Fazy 4: dedykowany test 409-w-ARMED (obecnie pokryty generycznym gate'em SI-6 `params_decide`) + Weryfikacja.
+
 Implementacja:
-- [ ] Modyfikuj `components/settings/include/settings_model.h` — `uint16_t goto_comms_timeout_ms`; **bump `SETTINGS_SCHEMA_VERSION`**
-- [ ] Modyfikuj `settings_ranges.h` (MIN/MAX/DEFAULT ~1500 ms), `settings_defaults.c`, `settings_validate.c`, `components/web_panel/src/params_json.c` (`U16_FIELDS`)
-- [ ] Rozszerz `test/host/test_settings_validate.c`; `test/host/test_blob_codec.c` (round-trip nowej wersji)
+- [x] Modyfikuj `components/settings/include/settings_model.h` — `uint16_t goto_comms_timeout_ms`; **bump `SETTINGS_SCHEMA_VERSION`** (6→7)
+- [x] Modyfikuj `settings_ranges.h` (MIN 200 / MAX 5000 / DEFAULT 1500 ms), `settings_defaults.c`, `settings_validate.c`, `components/web_panel/src/params_json.c` (`U16_FIELDS` + `PARAMS_JSON_FIELD_COUNT`), `components/settings/src/blob_codec.{c,h}` (serializacja + rozmiar)
+- [x] Rozszerz `test/host/test_settings_validate.c`; `test/host/test_blob_codec.c` (round-trip nowej wersji + anchor rozmiaru v7)
 
 Testy:
-- [ ] Test: wartość poza zakresem odrzucona/clampowana; w zakresie akceptowana
-- [ ] Test: defaults ładują się przy świeżej/skorrumpowanej NVS z sensownym timeoutem
-- [ ] Test: POST `goto_comms_timeout_ms` w ARMED → 409 (SI-6 niezmienione)
+- [x] Test: wartość poza zakresem odrzucona/clampowana; w zakresie akceptowana (`test_goto_comms_timeout_out_of_range_recovers`, `_in_range_preserved`)
+- [x] Test: defaults ładują się przy świeżej/skorrumpowanej NVS z sensownym timeoutem (`test_goto_comms_timeout_default_is_sane`)
+- [ ] Test: POST `goto_comms_timeout_ms` w ARMED → 409 (SI-6 niezmienione) — ODROCZONE do Fazy 4 (pokryte generycznym gate'em SI-6; dedykowany test przy telemetrii/panelu)
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone; pole serializuje się w `/api/params`; `idf.py build` zielony

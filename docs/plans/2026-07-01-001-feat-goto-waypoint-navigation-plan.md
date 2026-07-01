@@ -365,7 +365,7 @@ zostać w goto). Zachowaj **wszystkie** istniejące asercje `test_spot_lock` (ś
 
 ### Faza 3 — Integracja + comms-watchdog (włączenie sterowania)
 
-- [ ] **Unit 4: Integracja goto w `loop_step`/`control_loop` + watchdog linku + cykl życia latcha**
+- [x] **Unit 4: Integracja goto w `loop_step`/`control_loop` + watchdog linku + cykl życia latcha**
 
 **Cel:** Podłączenie staged goto target + `goto_engage` + `comms_fresh` do `spot_lock_step` przez
 `loop_step`, z watchdogiem linku (`sensor_is_fresh`) i poprawnym cyklem życia latcha (kasowanie przy
