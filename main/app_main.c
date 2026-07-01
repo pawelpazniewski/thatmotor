@@ -10,6 +10,7 @@
 #include "rc_capture.h"
 #include "settings_model.h"
 #include "settings_validate.h"
+#include "usb_console.h"
 #include "wifi_ap.h"
 
 static const char *TAG = "app_main";
@@ -107,6 +108,16 @@ void app_main(void)
     if (blackbox_err != ESP_OK) {
         ESP_LOGW(TAG, "blackbox recorder start failed (0x%x); continuing without logging",
                  blackbox_err);
+    }
+
+    /* USB Serial/JTAG console: a diagnostic REPL (prio 2) for ground-side
+     * calibration (spotlog dump / params get / params set). OPTIONAL and
+     * entirely OUTSIDE failsafe: a start error is logged but never aborts the
+     * boot, and the console has no effect on arming/steering/failsafe. */
+    esp_err_t console_err = usb_console_start();
+    if (console_err != ESP_OK) {
+        ESP_LOGW(TAG, "USB console start failed (0x%x); continuing without console",
+                 console_err);
     }
 
     ESP_LOGI(TAG, "control loop initialised; entering 50 Hz loop (DISARMED)");

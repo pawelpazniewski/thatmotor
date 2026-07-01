@@ -74,17 +74,17 @@ Weryfikacja:
 ### Unit 4: Konsola USB (esp_console REPL) + `spotlog dump` (CSV) (R6)
 
 Implementacja:
-- [ ] Stwórz `components/usb_console/include/usb_console.h` + `src/usb_console.c` — init `esp_console` REPL na USB Serial/JTAG, rejestracja komend
-- [ ] Stwórz `components/blackbox/include/blackbox_csv.h` + `src/blackbox_csv.c` — czysta: dekodowany rekord+nagłówek → wiersz CSV w buforze
-- [ ] Stwórz `components/usb_console/CMakeLists.txt` — REQUIRES (console, blackbox)
-- [ ] Modyfikuj `main/app_main.c` — init konsoli; ustal koegzystencję z `ESP_LOG`
-- [ ] Komenda `spotlog dump` — read-all regionu (HAL) → dekod (rdzeń) → zdenormalizowany CSV po REPL (nagłówek + wiersz/próbkę, każdy wiersz z session_id + aktywne nastawy sesji)
-- [ ] Stwórz `test/host/test_blackbox_csv.c`; zarejestruj w CMake + `test_main.c`
+- [x] Stwórz `components/usb_console/include/usb_console.h` + `src/usb_console.c` — init `esp_console` REPL na USB Serial/JTAG, rejestracja komend
+- [x] Stwórz `components/blackbox/include/blackbox_csv.h` + `src/blackbox_csv.c` — czysta: dekodowany rekord+nagłówek → wiersz CSV w buforze
+- [x] Stwórz `components/usb_console/CMakeLists.txt` — REQUIRES (console, blackbox)
+- [x] Modyfikuj `main/app_main.c` — init konsoli; ustal koegzystencję z `ESP_LOG`
+- [x] Komenda `spotlog dump` — read-all regionu (HAL) → dekod (rdzeń) → zdenormalizowany CSV po REPL (nagłówek + wiersz/próbkę, każdy wiersz z session_id + aktywne nastawy sesji)
+- [x] Stwórz `test/host/test_blackbox_csv.c`; zarejestruj w CMake + `test_main.c`
 
 Testy:
-- [ ] Test: dekodowany rekord → wiersz CSV: poprawna kolejność i wartości kolumn
-- [ ] Test: nagłówek CSV zgodny z kolejnością pól (kontrakt dla parsera Claude)
-- [ ] Test: sesja z nagłówkiem + N próbek → N wierszy z tym samym session_id i nastawami sesji
+- [x] Test: dekodowany rekord → wiersz CSV: poprawna kolejność i wartości kolumn
+- [x] Test: nagłówek CSV zgodny z kolejnością pól (kontrakt dla parsera Claude)
+- [x] Test: sesja z nagłówkiem + N próbek → N wierszy z tym samym session_id i nastawami sesji
 
 Weryfikacja:
 - [ ] Weryfikacja: `test/host/run.sh` zielony

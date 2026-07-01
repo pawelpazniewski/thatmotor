@@ -9,6 +9,7 @@ idf_component_register(
          "src/blackbox_resume.c"
          "src/blackbox.c"
          "src/blackbox_recorder.c"
+         "src/blackbox_csv.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_partition spi_flash control_loop freertos esp_timer
 )

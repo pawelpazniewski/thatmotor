@@ -48,6 +48,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/blackbox/src/blackbox_ring.c
     ${REPO_ROOT}/components/blackbox/src/blackbox_sampler.c
     ${REPO_ROOT}/components/blackbox/src/blackbox_resume.c
+    ${REPO_ROOT}/components/blackbox/src/blackbox_csv.c
 )
 
 set(PURE_INCLUDE_DIRS
@@ -102,6 +103,7 @@ set(TEST_SOURCES
     test_blackbox_ring.c
     test_blackbox_sampler.c
     test_blackbox_resume.c
+    test_blackbox_csv.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})
