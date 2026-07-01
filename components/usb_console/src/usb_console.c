@@ -6,8 +6,11 @@
 #include "blackbox.h"
 #include "blackbox_csv.h"
 #include "blackbox_record.h"
+#include "control_loop.h"
 #include "esp_console.h"
 #include "esp_log.h"
+#include "params_cmd.h"
+#include "settings_model.h"
 
 static const char *TAG = "usb_console";
 
@@ -90,6 +93,95 @@ static esp_err_t register_spotlog(void)
     return esp_console_cmd_register(&cmd);
 }
 
+/* `params get`: print the active spot-lock regulator settings, one per line. */
+static int params_get(void)
+{
+    settings_params params;
+    control_loop_get_active_params(&params);
+
+    char buf[PARAMS_CMD_GET_MAX];
+    if (params_cmd_format_get(&params, buf, sizeof(buf)) == 0U) {
+        printf("params get: format failed\n");
+        return 1;
+    }
+    printf("%s", buf);
+    return 0;
+}
+
+/* Report a rejected `params set` and return the console error code. */
+static int params_set_reject(params_cmd_set_outcome outcome, const char *field,
+                             const char *value)
+{
+    switch (outcome) {
+    case PARAMS_CMD_SET_ERR_UNKNOWN_FIELD:
+        printf("params set: unknown field '%s'\n", field);
+        break;
+    case PARAMS_CMD_SET_ERR_BAD_VALUE:
+        printf("params set: bad value '%s' (expect a 0..65535 integer)\n", value);
+        break;
+    case PARAMS_CMD_SET_ERR_OUT_OF_RANGE:
+        printf("params set: '%s' out of range for %s\n", value, field);
+        break;
+    default:
+        printf("params set: invalid arguments\n");
+        break;
+    }
+    return 1;
+}
+
+/* `params set <field> <value>`: validate via the SI-6 path and stage. The loop
+ * applies the staged params only while DISARMED (single-writer); we report
+ * whether the change is live now or waits for disarm. */
+static int params_set(const char *field, const char *value)
+{
+    settings_params current;
+    control_loop_get_active_params(&current);
+
+    settings_params staged;
+    params_cmd_set_outcome outcome =
+        params_cmd_decide_set(&current, field, value, &staged);
+    if (outcome != PARAMS_CMD_SET_ACCEPT) {
+        return params_set_reject(outcome, field, value);
+    }
+
+    if (control_loop_post_pending(&staged) != ESP_OK) {
+        printf("params set: staging failed\n");
+        return 1;
+    }
+
+    control_loop_snapshot snap;
+    control_loop_get_snapshot(&snap);
+    const char *when = (params_cmd_apply_when(snap.state) == PARAMS_CMD_APPLIED)
+                           ? "applied (DISARMED)"
+                           : "staged (applies on disarm)";
+    printf("params set: %s=%s %s\n", field, value, when);
+    return 0;
+}
+
+static int cmd_params(int argc, char **argv)
+{
+    if (argc >= 2 && strcmp(argv[1], "get") == 0) {
+        return params_get();
+    }
+    if (argc >= 4 && strcmp(argv[1], "set") == 0) {
+        return params_set(argv[2], argv[3]);
+    }
+    printf("usage: params get | params set <field> <value>\n");
+    printf("  fields: deadband_m max_throttle_pct throttle_gain servo_gain\n");
+    return 1;
+}
+
+static esp_err_t register_params(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "params",
+        .help = "Read/tune spot-lock settings: params get | params set <field> <value>",
+        .hint = NULL,
+        .func = &cmd_params,
+    };
+    return esp_console_cmd_register(&cmd);
+}
+
 esp_err_t usb_console_start(void)
 {
     esp_console_repl_t *repl = NULL;
@@ -111,7 +203,12 @@ esp_err_t usb_console_start(void)
     if (err != ESP_OK) {
         return err;
     }
+    err = register_params();
+    if (err != ESP_OK) {
+        return err;
+    }
 
-    ESP_LOGI(TAG, "USB console up (prio %d): spotlog dump", USB_CONSOLE_TASK_PRIO);
+    ESP_LOGI(TAG, "USB console up (prio %d): spotlog dump, params get/set",
+             USB_CONSOLE_TASK_PRIO);
     return esp_console_start_repl(repl);
 }

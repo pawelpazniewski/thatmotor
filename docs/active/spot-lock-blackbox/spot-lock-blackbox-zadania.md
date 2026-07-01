@@ -94,16 +94,16 @@ Weryfikacja:
 ### Unit 5: `params get` / `params set` — auto-zapis przez SI-6 (R7)
 
 Implementacja:
-- [ ] Modyfikuj `components/usb_console/src/usb_console.c` — rejestracja `params get`, `params set`
-- [ ] Stwórz `components/blackbox/include/params_cmd.h` + `src/params_cmd.c` — czysta decyzja parsowania/walidacji argumentów (mapowanie na pola spot_lock_*); HAL woła `settings_validate` + `control_loop_post_pending`
-- [ ] Modyfikuj (jeśli brak gettera) — ekspozycja bieżących `settings_params` do druku (`params get`)
-- [ ] Stwórz `test/host/test_params_cmd.c`; zarejestruj w CMake + `test_main.c`
+- [x] Modyfikuj `components/usb_console/src/usb_console.c` — rejestracja `params get`, `params set`
+- [x] Stwórz `components/blackbox/include/params_cmd.h` + `src/params_cmd.c` — czysta decyzja parsowania/walidacji argumentów (mapowanie na pola spot_lock_*); HAL woła `settings_validate` + `control_loop_post_pending`
+- [x] Modyfikuj (jeśli brak gettera) — ekspozycja bieżących `settings_params` do druku (`params get`) — istniejący `control_loop_get_active_params` wystarcza, nowy getter niepotrzebny
+- [x] Stwórz `test/host/test_params_cmd.c`; zarejestruj w CMake + `test_main.c`
 
 Testy (test-first; happy path + poza zakresem):
-- [ ] Test: `params set` z wartością w zakresie → staged, zwraca przyjęte pola
-- [ ] Test: `params set` z wartością poza zakresem (np. max_throttle_pct 200) → odrzucone, brak stage'owania (FAILuje gdyby walidacja była pominięta)
-- [ ] Test: `params get` zwraca bieżące spot_lock_* zgodne z aktywnymi nastawami
-- [ ] Test: (kontrakt SI-6) stage w ARMED nie aplikuje się dopóki nie DISARMED (reużycie istniejącej bramki)
+- [x] Test: `params set` z wartością w zakresie → staged, zwraca przyjęte pola
+- [x] Test: `params set` z wartością poza zakresem (np. max_throttle_pct 200) → odrzucone, brak stage'owania (FAILuje gdyby walidacja była pominięta)
+- [x] Test: `params get` zwraca bieżące spot_lock_* zgodne z aktywnymi nastawami
+- [x] Test: (kontrakt SI-6) stage w ARMED nie aplikuje się dopóki nie DISARMED (reużycie istniejącej bramki)
 
 Weryfikacja:
 - [ ] Weryfikacja: `test/host/run.sh` zielony

@@ -37,6 +37,7 @@ void run_blackbox_ring_tests(void);
 void run_blackbox_sampler_tests(void);
 void run_blackbox_resume_tests(void);
 void run_blackbox_csv_tests(void);
+void run_params_cmd_tests(void);
 
 int main(void)
 {
@@ -73,5 +74,6 @@ int main(void)
     run_blackbox_sampler_tests();
     run_blackbox_resume_tests();
     run_blackbox_csv_tests();
+    run_params_cmd_tests();
     return UNITY_END();
 }
