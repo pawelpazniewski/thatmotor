@@ -477,6 +477,17 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     s_snapshot.spot_lock_state = out->telemetry.spot_lock_substate;
     s_snapshot.spot_lock_err_m = out->telemetry.spot_lock_err_m;
     s_snapshot.spot_lock_bearing_deg10 = out->telemetry.spot_lock_bearing_deg10;
+    /* App-driven goto telemetry: substate/err/bearing/arrived from this cycle's
+     * loop outputs (non-zero only while SRC_GOTO owns the target); the target is
+     * the staged external point; app_link_fresh mirrors the comms watchdog
+     * evaluated this cycle (in->comms_fresh). Ints/bools only. */
+    s_snapshot.goto_state = out->telemetry.goto_substate;
+    s_snapshot.goto_target_lat_e7 = s_goto_lat_e7;
+    s_snapshot.goto_target_lon_e7 = s_goto_lon_e7;
+    s_snapshot.goto_err_m = out->telemetry.goto_err_m;
+    s_snapshot.goto_bearing_deg10 = out->telemetry.goto_bearing_deg10;
+    s_snapshot.goto_arrived = out->telemetry.goto_arrived;
+    s_snapshot.app_link_fresh = in->comms_fresh;
 }
 
 /* Drive the RGB status LED for this cycle from the pure pattern (Unit 11). */

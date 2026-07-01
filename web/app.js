@@ -5,6 +5,9 @@ const STATE_NAMES = ["DISARMED", "ARMED", "FAILSAFE", "ESC_CALIBRATION", "DEPLOY
 const SOURCE_NAMES = ["DEFAULTS", "NVS", "MIXED_RECOVERED"];
 // Spot-lock sub-state mirrors spot_lock_substate in firmware (index == value).
 const SPOT_LOCK_NAMES = ["off", "active", "paused"];
+// Goto sub-state mirrors goto_substate in firmware (index == value); shares the
+// spot_lock sub-state enum (off/active/paused).
+const GOTO_STATE_NAMES = ["off", "active", "paused"];
 
 // Numeric state aliases (mirror sm_state) for readable comparisons.
 const STATE_DISARMED = 0;
@@ -103,6 +106,14 @@ function applyTelemetry(t) {
   setText("spot_lock_err", t.spot_lock_err_m + " m");
   setText("spot_lock_bearing", (t.spot_lock_bearing_deg10 / 10).toFixed(1) + "°");
   setText("spot_lock_bow", (t.imu_heading_deg10 / 10).toFixed(1) + "°");
+  setText("goto_state", GOTO_STATE_NAMES[t.goto_state] || t.goto_state);
+  setText("goto_target_lat", (t.goto_target_lat_e7 / 1e7).toFixed(6));
+  setText("goto_target_lon", (t.goto_target_lon_e7 / 1e7).toFixed(6));
+  setText("goto_err", t.goto_err_m + " m");
+  setText("goto_bearing", (t.goto_bearing_deg10 / 10).toFixed(1) + "°");
+  setText("goto_bow", (t.imu_heading_deg10 / 10).toFixed(1) + "°");
+  setText("goto_arrived", t.goto_arrived ? "yes" : "no");
+  setText("app_link_fresh", t.app_link_fresh ? "yes" : "NO");
   setText("source", SOURCE_NAMES[t.source] || t.source);
   setText("settings_valid", t.settings_valid ? "yes" : "no");
   setText("calibrated", t.calibrated ? "yes" : "NO");

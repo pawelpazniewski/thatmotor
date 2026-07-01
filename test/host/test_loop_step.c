@@ -923,6 +923,76 @@ static void test_goto_output_passes_hard_clamp(void)
     TEST_ASSERT_EQUAL_UINT32(2000U, out.esc_us);
 }
 
+static void test_goto_telemetry_populates_while_active(void)
+{
+    /* Telemetry contract for the app (R8): while SRC_GOTO ACTIVE the goto view
+     * mirrors the spot-lock outputs -- goto_substate=active, err/bearing non-zero
+     * and equal to the spot_lock_* fields, arrived=false outside the deadband. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    loop_inputs hold =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    loop_outputs out = loop_step(&hold, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.goto_substate);
+    TEST_ASSERT_TRUE(out.telemetry.goto_err_m > 0U);
+    TEST_ASSERT_EQUAL_UINT16(out.telemetry.spot_lock_err_m,
+                             out.telemetry.goto_err_m);
+    TEST_ASSERT_EQUAL_UINT16(out.telemetry.spot_lock_bearing_deg10,
+                             out.telemetry.goto_bearing_deg10);
+    TEST_ASSERT_FALSE(out.telemetry.goto_arrived);
+}
+
+static void test_goto_telemetry_arrived_within_deadband(void)
+{
+    /* Boat sitting on the goto target (0,0): err <= deadband -> arrived=true while
+     * still ACTIVE (dojście = hold). Oracle: a drifted boat reads arrived=false. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, 0, HEADING_SOUTH_DEG10);
+
+    loop_inputs on_target = goto_inputs_at(0, 0, HEADING_SOUTH_DEG10, 0, 0);
+    loop_outputs out = loop_step(&on_target, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.goto_substate);
+    TEST_ASSERT_TRUE(out.telemetry.goto_arrived);
+}
+
+static void test_goto_telemetry_reads_off_under_ch3_hold(void)
+{
+    /* Oracle power: a CH3 hold (SRC_HOLD) drives the SAME spot-lock engine, but the
+     * goto view MUST read off/zero so the app cannot mistake a physical hold for
+     * goto. spot_lock_substate is ACTIVE, goto_substate is OFF and goto_err_m 0. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    loop_inputs ch3 =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    ch3.spot_lock_switch_on = true;
+    ch3.spot_lock_switch_edge_on = true;
+    loop_outputs out = loop_step(&ch3, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_HOLD, state.spot_lock.target_source);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.goto_substate);
+    TEST_ASSERT_EQUAL_UINT16(0U, out.telemetry.goto_err_m);
+    TEST_ASSERT_FALSE(out.telemetry.goto_arrived);
+}
+
 void run_loop_step_tests(void)
 {
     RUN_TEST(test_disarmed_full_throttle_outputs_neutral_esc);
@@ -953,4 +1023,7 @@ void run_loop_step_tests(void)
     RUN_TEST(test_goto_ch3_preempt_holds_here_and_clears_latch);
     RUN_TEST(test_goto_cancel_returns_off);
     RUN_TEST(test_goto_output_passes_hard_clamp);
+    RUN_TEST(test_goto_telemetry_populates_while_active);
+    RUN_TEST(test_goto_telemetry_arrived_within_deadband);
+    RUN_TEST(test_goto_telemetry_reads_off_under_ch3_hold);
 }

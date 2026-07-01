@@ -32,7 +32,10 @@ static int snapshot_to_json(const control_loop_snapshot *s, char *buf, size_t n)
         "\"gps_speed_cms\":%u,"
         "\"imu_ok\":%s,\"imu_heading_deg10\":%u,\"imu_calib\":%u,"
         "\"spot_lock_state\":%u,\"spot_lock_err_m\":%u,"
-        "\"spot_lock_bearing_deg10\":%u}",
+        "\"spot_lock_bearing_deg10\":%u,"
+        "\"goto_state\":%u,\"goto_target_lat_e7\":%d,\"goto_target_lon_e7\":%d,"
+        "\"goto_err_m\":%u,\"goto_bearing_deg10\":%u,\"goto_arrived\":%s,"
+        "\"app_link_fresh\":%s}",
         (int)s->state, (unsigned)s->arm_reason, s->rc_valid ? "true" : "false",
         (unsigned)s->ch1_us, (unsigned)s->ch2_us, (unsigned)s->ch4_us,
         (unsigned)s->ch3_us,
@@ -49,7 +52,11 @@ static int snapshot_to_json(const control_loop_snapshot *s, char *buf, size_t n)
         s->imu_ok ? "true" : "false", (unsigned)s->imu_heading_deg10,
         (unsigned)s->imu_calib,
         (unsigned)s->spot_lock_state, (unsigned)s->spot_lock_err_m,
-        (unsigned)s->spot_lock_bearing_deg10);
+        (unsigned)s->spot_lock_bearing_deg10,
+        (unsigned)s->goto_state, (int)s->goto_target_lat_e7,
+        (int)s->goto_target_lon_e7, (unsigned)s->goto_err_m,
+        (unsigned)s->goto_bearing_deg10, s->goto_arrived ? "true" : "false",
+        s->app_link_fresh ? "true" : "false");
 }
 
 /* httpd work callback: runs in the server task. Sends the latest snapshot to
@@ -64,7 +71,7 @@ static void push_work(void *arg)
     control_loop_snapshot snap;
     control_loop_get_snapshot(&snap);
 
-    char json[512];
+    char json[640];
     int len = snapshot_to_json(&snap, json, sizeof(json));
     if (len <= 0 || (size_t)len >= sizeof(json)) {
         atomic_store(&s_push_in_flight, false);

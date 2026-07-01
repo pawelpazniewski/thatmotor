@@ -421,7 +421,7 @@ spot_lock/chain. Grep: brak nowych `esp_*`/`driver/*` w czystych nagłówkach.
 
 ### Faza 4 — Parametry + telemetria + panel
 
-- [ ] **Unit 5: Parametr `goto_comms_timeout_ms` (SI-6)**
+- [x] **Unit 5: Parametr `goto_comms_timeout_ms` (SI-6)**
 
 **Cel:** Timeout watchdoga linku jako konfigurowalny parametr z regułą SI-6 (apply tylko w DISARMED).
 
@@ -455,7 +455,7 @@ validate→params_json), `test/host/test_settings_validate.c`.
 
 **Weryfikacja:** Host-tests zielone; pole serializuje się w `/api/params`; `idf.py build` zielony.
 
-- [ ] **Unit 6: Telemetria goto + panel**
+- [x] **Unit 6: Telemetria goto + panel**
 
 **Cel:** Sub-stan goto, cel, błąd, bearing, `arrived` i świeżość linku w WS/panelu — diagnostyka,
 strojenie i kontrakt dla aplikacji iOS.

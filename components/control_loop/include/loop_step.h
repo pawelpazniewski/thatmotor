@@ -99,6 +99,14 @@ typedef struct {
     uint8_t spot_lock_substate;      /* spot_lock_substate this cycle (0/1/2) */
     uint16_t spot_lock_err_m;        /* position error to target, metres */
     uint16_t spot_lock_bearing_deg10;/* bearing to target, degrees * 10 */
+    /* App-driven goto telemetry (R8). Distinct from the shared spot_lock_* view:
+     * these are non-zero ONLY while SRC_GOTO owns the target this cycle (a CH3
+     * hold reads goto_substate = off), so the app sees goto activity specifically.
+     * The field names are the stable telemetry contract for the iOS app. */
+    uint8_t goto_substate;           /* goto sub-state this cycle (0/1/2) */
+    uint16_t goto_err_m;             /* position error to goto target, metres */
+    uint16_t goto_bearing_deg10;     /* bearing to goto target, degrees * 10 */
+    bool goto_arrived;               /* err <= deadband while goto ACTIVE */
 } loop_telemetry;
 
 /** Actuator commands plus telemetry for one cycle. */

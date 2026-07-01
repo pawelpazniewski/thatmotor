@@ -71,6 +71,21 @@
   </section>
 
   <section class="card">
+    <h2>Goto (app nav)</h2>
+    <div class="grid">
+      <div class="metric"><span class="label">State</span><span id="goto_state" class="value">--</span></div>
+      <div class="metric"><span class="label">Target lat</span><span id="goto_target_lat" class="value">--</span></div>
+      <div class="metric"><span class="label">Target lon</span><span id="goto_target_lon" class="value">--</span></div>
+      <div class="metric"><span class="label">Error (m)</span><span id="goto_err" class="value">--</span></div>
+      <div class="metric"><span class="label">Bearing to point (deg)</span><span id="goto_bearing" class="value">--</span></div>
+      <div class="metric"><span class="label">Bow heading (deg)</span><span id="goto_bow" class="value">--</span></div>
+      <div class="metric"><span class="label">Arrived</span><span id="goto_arrived" class="value">--</span></div>
+      <div class="metric"><span class="label">App link fresh</span><span id="app_link_fresh" class="value">--</span></div>
+    </div>
+    <p class="hint">App-driven navigation to a point, ARMED only. Losing the app link pauses it (neutral) and resumes on return; any stick movement or CH3 cancels goto for good.</p>
+  </section>
+
+  <section class="card">
     <h2>Status flags (R16)</h2>
     <div class="grid">
       <div class="metric"><span class="label">Source</span><span id="source" class="value">--</span></div>

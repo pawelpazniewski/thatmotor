@@ -304,6 +304,13 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
                                          sl.servo_cmd, params, &state->servo_slew);
     state->state = next_state;
 
+    /* Goto-specific telemetry: report the spot-lock outputs under the goto view
+     * ONLY when SRC_GOTO owns the target this cycle. A CH3 hold (SRC_HOLD) or OFF
+     * reads goto as off/zero, so the app cannot mistake a physical hold for goto.
+     * spot_lock_step keeps target_source current in state->spot_lock. */
+    bool goto_owns_target =
+        state->spot_lock.target_source == SPOT_LOCK_SRC_GOTO;
+
     loop_outputs out = {
         .esc_us = esc_us,
         .servo_us = servo_us,
@@ -316,6 +323,11 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
             .spot_lock_substate = (uint8_t)sl.substate,
             .spot_lock_err_m = sl.err_m,
             .spot_lock_bearing_deg10 = sl.bearing_deg10,
+            .goto_substate =
+                goto_owns_target ? (uint8_t)sl.substate : (uint8_t)SPOT_LOCK_OFF,
+            .goto_err_m = goto_owns_target ? sl.err_m : 0U,
+            .goto_bearing_deg10 = goto_owns_target ? sl.bearing_deg10 : 0U,
+            .goto_arrived = goto_owns_target && sl.arrived,
         },
         .goto_latch_clear = goto_latch_clear,
     };

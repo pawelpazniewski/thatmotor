@@ -1,7 +1,7 @@
 # Zadania: Goto — autonomiczna nawigacja do punktu
 
 Branch: `feature/goto-waypoint-navigation`
-Ostatnia aktualizacja: 2026-07-01 (Faza 3 / Unit 4 ukończona)
+Ostatnia aktualizacja: 2026-07-01 (Faza 4 / Unit 5 domknięty + Unit 6 ukończony)
 
 Legenda: `Test:` = scenariusz testowy (host/E2E), `Weryfikacja:` = kryterium ukończenia Unitu.
 
@@ -109,7 +109,13 @@ Testy (test-first: failing test integracyjny pełnej ścieżki, potem implementa
 - [x] Test: każde wyjście goto przechodzi przez hard clamp SI-3 (`test_goto_output_passes_hard_clamp` — out-of-window → 2000 us)
 
 Weryfikacja:
-- [ ] Weryfikacja: host-tests zielone; `idf.py build` zielony; zero regresji `loop_step`/state_machine/spot_lock/chain; grep braku nowych `esp_*`/`driver/*` w czystych nagłówkach
+- [x] Weryfikacja: host-tests zielone (425/425); `idf.py build` zielony; zero regresji `loop_step`/state_machine/spot_lock/chain; grep braku nowych `esp_*`/`driver/*` w czystych nagłówkach
+
+## Do poprawy po review fazy 3
+
+Severity gate: ✅ **CZYSTE** (P1=0, P2=0, P3=1). Raport: `review-faza-3.md`. Host-tests **425/425 PASS**, `idf.py build` (esp32s3) PASS. Wszystkie 9 inwariantów safety (failsafe-precedence, cykl życia latcha pauza-vs-abort, domena zegara watchdoga, comms_fresh co cykl, hard clamp SI-3, bump schematu 6→7, zero test-weakeningu, Pure ⊥ HAL, single-writer) **strukturalnie szczelne z realną mocą wyroczni**. Brak findingów blokujących ani ważnych — Faza 3 gotowa do kontynuacji.
+
+- [ ] 🟡 [nit] **loop_step.c:271-279** — `goto_latch_should_clear` re-derywuje warunki priorytetu (`!sticks_neutral || ch3_on`), które `spot_lock_step` egzekwuje wewnętrznie; dwa miejsca muszą pozostać w synchronizacji. Dopuszczalna świadoma duplikacja (coding-rules §11); warto jednolinijkowy komentarz „utrzymuj spójne z priorytetem spot_lock_step". Bez akcji blokującej.
 
 ---
 
@@ -128,7 +134,7 @@ Implementacja:
 Testy:
 - [x] Test: wartość poza zakresem odrzucona/clampowana; w zakresie akceptowana (`test_goto_comms_timeout_out_of_range_recovers`, `_in_range_preserved`)
 - [x] Test: defaults ładują się przy świeżej/skorrumpowanej NVS z sensownym timeoutem (`test_goto_comms_timeout_default_is_sane`)
-- [ ] Test: POST `goto_comms_timeout_ms` w ARMED → 409 (SI-6 niezmienione) — ODROCZONE do Fazy 4 (pokryte generycznym gate'em SI-6; dedykowany test przy telemetrii/panelu)
+- [x] Test: POST `goto_comms_timeout_ms` w ARMED → 409 (SI-6 niezmienione) — DODANE (Faza 4): dedykowany `test_armed_rejects_goto_comms_timeout_write` w `test_params_decide.c` (moc wyroczni: `fields_valid=true` izoluje bramkę stanu → 409/API_ERR_NOT_DISARMED; zmiana timeoutu nie może zaburzyć aktywnego goto, bo ARMED blokuje apply)
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone; pole serializuje się w `/api/params`; `idf.py build` zielony
@@ -137,14 +143,14 @@ Weryfikacja:
 Zależności: Unit 4
 
 Implementacja:
-- [ ] Modyfikuj `components/control_loop/include/control_loop.h` — `control_loop_snapshot`: `goto_state`, `goto_target_lat_e7/lon_e7`, `goto_err_m`, `goto_bearing_deg10`, `goto_arrived`, `app_link_fresh`
-- [ ] Modyfikuj `components/control_loop/src/control_loop.c::publish_snapshot` — populacja z `loop_outputs`/watchdog
-- [ ] Modyfikuj `components/web_panel/src/ws_telemetry.c::snapshot_to_json` — nowe pola (ints/bools only)
-- [ ] Modyfikuj front-end panelu ESP (HTML/JS `web_panel`) — blok „Goto: off/active/paused, cel, błąd, bearing/dziób, arrived, link"
+- [x] Modyfikuj `components/control_loop/include/control_loop.h` — `control_loop_snapshot`: `goto_state`, `goto_target_lat_e7/lon_e7`, `goto_err_m`, `goto_bearing_deg10`, `goto_arrived`, `app_link_fresh` (kontrakt WS dla iOS; goto_state ≠ 0 tylko gdy SRC_GOTO — CH3 hold czyta off)
+- [x] Modyfikuj `components/control_loop/src/control_loop.c::publish_snapshot` — populacja: goto_state/err/bearing/arrived z `out->telemetry.goto_*`, cel z `s_goto_lat/lon_e7`, `app_link_fresh` z `in->comms_fresh`. Dołożono goto-specyficzne pola do `loop_telemetry` (`loop_step.h`/`loop_step.c`), populowane z `sl` tylko gdy `target_source==SRC_GOTO`
+- [x] Modyfikuj `components/web_panel/src/ws_telemetry.c::snapshot_to_json` — nowe pola (ints/bools only, `%u/%d/%s`); bufor json 512→640
+- [x] Modyfikuj front-end panelu ESP (`web/index.html` + `web/app.js`) — karta „Goto (app nav)": state, cel lat/lon, błąd[m], bearing/dziób, arrived, app link fresh
 
 Testy:
-- [ ] Test: (jeśli host-testowalne) snapshot z goto ACTIVE serializuje `goto_state=1`, cel, `err_m`, `bearing_deg10`, `app_link_fresh` jako int/bool
-- [ ] Test: [E2E] (known-issues/na wodzie) panel/app pokazuje off→active po komendzie, błąd maleje przy dopływaniu, paused przy utracie linku, hold po dojściu
+- [x] Test: (jeśli host-testowalne) snapshot z goto ACTIVE serializuje `goto_state=1`, cel, `err_m`, `bearing_deg10`, `app_link_fresh` jako int/bool — host-testowana warstwa populacji (`loop_telemetry.goto_*`) w `test_loop_step.c`: `test_goto_telemetry_populates_while_active` (mirror spot_lock_*), `_arrived_within_deadband` (arrived w deadbandzie), `_reads_off_under_ch3_hold` (moc wyroczni: CH3 hold ⟹ goto off/0 mimo spot_lock ACTIVE). Sam `snapshot_to_json` = HAL (IDF-dep, static) → weryfikowany `idf.py build`
+- [ ] Test: [E2E] (known-issues/na wodzie) panel/app pokazuje off→active po komendzie, błąd maleje przy dopływaniu, paused przy utracie linku, hold po dojściu — ODŁOŻONE do `known-issues.md §4d` (brak przeglądarki/hardware/aplikacji iOS)
 
 Weryfikacja:
 - [ ] Weryfikacja: `idf.py build` zielony; panel renderuje nowe pola; JSON zawiera `goto_*`; hardware/E2E odłożone do `known-issues`
@@ -152,6 +158,6 @@ Weryfikacja:
 ---
 
 ## Domknięcie
-- [ ] Dopisz luki hardware/na wodzie do `docs/completed/kayak-motor-firmware-v1/known-issues.md`
+- [x] Dopisz luki hardware/na wodzie do `docs/completed/kayak-motor-firmware-v1/known-issues.md` (sekcja §4d Goto: realna nawigacja, pauza/wznowienie na link, CH3-preempt, dryf, panel E2E)
 - [ ] Udokumentuj kontrakt API dla aplikacji iOS (goto/goto_cancel, keepalive, pola `goto_*`)
 - [ ] Rozważ `/dev-compound` dla wzorca „app-driven override z comms-watchdogiem bez naruszenia failsafe RC"

@@ -94,6 +94,31 @@ Pozostałe wymagają realnego sprzętu lub żywego panelu i są tu odłożone:
   (ints). JSON serializowany przez `snapshot_to_json` (HAL, nie host-testowany) — kontrakt int/bool
   zweryfikowany przez `idf.py build` + wymaga wizualnej weryfikacji w przeglądarce.
 
+## 4d. Goto (app-driven waypoint navigation) — luki hardware/E2E `[HW]`/`[E2E]`
+
+Funkcja goto (branch `feature/goto-waypoint-navigation`) reużywa silnik spot-lock; cała logika
+decyzyjna (walidacja celu, arbitraż źródła CH3/goto, bramka linku, cykl życia latcha, watchdog,
+telemetria goto) jest pokryta host-testami (`test_goto_target`, `test_spot_lock`, `test_loop_step`,
+`test_sensor_freshness`, `test_params_decide`). Pozostałe wymagają realnego sprzętu lub żywego
+panelu i są tu odłożone:
+
+- 🔧 `[HW]` **Realna nawigacja do celu z aplikacji** — ARMED + świeży fix + drążki na zerze +
+  komenda `goto` → kajak dopływa do zewnętrznego punktu i utrzymuje go (jazda po linii prostej,
+  point-and-shoot). Nastawy ruchu współdzielone ze spot-lockiem, strojone w terenie.
+- 🔧 `[HW]` **Pauza/wznowienie na utratę linku aplikacji** — utrata świeżości linku >
+  `goto_comms_timeout_ms` (~1,5 s) → PAUSED (neutral+center, cel zapamiętany), powrót linku →
+  wznowienie tego samego celu. Dobór `goto_comms_timeout_ms` i realny keepalive (~2 Hz) terenowo.
+- 🔧 `[HW]` **CH3-preempt w terenie** — CH3 ON w trakcie goto → hold „tu i teraz" (SRC_HOLD),
+  latch goto skasowany; brak auto-resume. Weryfikacja fizycznym przełącznikiem na wodzie.
+- 🔧 `[HW]` **Dryf w pauzie / jazda na ślepo** — brak omijania przeszkód (odpowiedzialność
+  operatora); watchdog ogranicza jazdę na ślepo do timeoutu. Obserwacja realnego dryfu.
+- 🖥️ `[E2E]` **Panel goto** — blok „Goto (app nav)" pokazuje off→active po komendzie `goto`,
+  błąd[m] maleje przy dopływaniu, paused przy utracie linku (`app_link_fresh`=NO), arrived po
+  dojściu; pola `goto_*`/`app_link_fresh` w JSON telemetrii (ints/bools). JSON serializowany przez
+  `snapshot_to_json` (HAL, nie host-testowany) — kontrakt int/bool zweryfikowany przez `idf.py
+  build` + host-test populacji `loop_telemetry.goto_*` w `test_loop_step`; sam render w przeglądarce
+  wymaga wizualnej weryfikacji (i aplikacji iOS jako drugiego konsumenta tego kontraktu WS).
+
 ## 4b. Blackbox — resztkowa luka wznowienia po zawinięciu ringu `[HW]`
 
 Po review fazy 2 (P2, cykl 1) `blackbox_init` skanuje region i wznawia kursor zapisu oraz licznik
