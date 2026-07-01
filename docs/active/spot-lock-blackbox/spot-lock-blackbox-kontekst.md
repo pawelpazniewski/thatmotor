@@ -1,7 +1,22 @@
 # Kontekst: Spot-lock blackbox
 
 **Branch:** `feature/spot-lock-blackbox`
-**Ostatnia aktualizacja:** 2026-06-30
+**Ostatnia aktualizacja:** 2026-07-01
+
+## Postęp
+
+- **Faza 1 ukończona (Unit 1 + Unit 2).** Partycja `spotlog` (0x196000, 1 MiB,
+  subtype 0x40) dopisana na końcu `partitions.csv` — offsety nvs/phy_init/factory/
+  appcfg niezmienione (partition-table potwierdza). Geometria jako named constants
+  w `blackbox_region.h` (sektor 4 KB, rekord 64 B, pojemność 16384). Czysty rdzeń:
+  `blackbox_record.*` (kodek próbki/nagłówka, magic+schema+CRC32, taksonomia
+  empty/magic/crc/schema/type) i `blackbox_ring.*` (seq→slot modulo, offset, decyzja
+  erase, wrap-safe `seq_after` signed-modular, `oldest_seq`). 23 nowe host-testy
+  (366 łącznie, zielone); `idf.py build` zielony. Rekord 64 B dzieli 4 KB sektor
+  równo (64/sektor) — rekord nie przechodzi przez granicę sektora.
+- **Uwaga wdrożeniowa:** `components/blackbox/` nie ma jeszcze `CMakeLists.txt`, więc
+  IDF ignoruje katalog (pliki .c walidowane tylko host-testami w Fazie 1). Rejestracja
+  komponentu do buildu IDF następuje w Unit 3.
 
 ## Źródła
 - Requirements doc: `docs/dev-brainstorms/2026-06-29-spot-lock-blackbox-requirements.md`

@@ -16,8 +16,8 @@ Legenda: `Test:` = scenariusz testowy (host/Unity), `Weryfikacja:` = kryterium u
 ### Unit 1: Partycja `spotlog` + stałe geometrii regionu (R1, R5)
 
 Implementacja:
-- [ ] Modyfikuj `partitions.csv` — dopisz NA KOŃCU partycję `spotlog` (data, własny subtype, ~1 MB), bez zmiany offsetów nvs/phy_init/factory/appcfg
-- [ ] Stwórz `components/blackbox/include/blackbox_region.h` — czyste named constants: rozmiar sektora 4 KB, rozmiar rekordu, pojemność w rekordach, nazwa partycji (bez `esp_*`)
+- [x] Modyfikuj `partitions.csv` — dopisz NA KOŃCU partycję `spotlog` (data, własny subtype, ~1 MB), bez zmiany offsetów nvs/phy_init/factory/appcfg
+- [x] Stwórz `components/blackbox/include/blackbox_region.h` — czyste named constants: rozmiar sektora 4 KB, rozmiar rekordu, pojemność w rekordach, nazwa partycji (bez `esp_*`)
 
 Weryfikacja:
 - [ ] Weryfikacja: `idf.py build` zielony
@@ -26,17 +26,17 @@ Weryfikacja:
 ### Unit 2: Czysty rdzeń — kodek rekordu + indeks ringu (wrap-safe) (R3, R5)
 
 Implementacja:
-- [ ] Stwórz `components/blackbox/include/blackbox_record.h` + `src/blackbox_record.c` — encode/decode rekordu próbki (t_ms, substate, err_m, bearing_deg10, heading_deg10, servo_us, esc_us, ch1_us, ch2_us, lat_e7, lon_e7, sats, speed_cms, flagi gps_fix/imu_ok) i nagłówka sesji (session_seq, target_lat/lon_e7, deadband_m, max_throttle_pct, throttle_gain, servo_gain, czas); magic/schema + CRC; bez `esp_*`
-- [ ] Stwórz `components/blackbox/include/blackbox_ring.h` + `src/blackbox_ring.c` — z `seq`+pojemności: offset slotu, czy potrzebny erase sektora, kolejność odczytu (unsigned modular arithmetic)
-- [ ] Stwórz `test/host/test_blackbox_record.c`, `test/host/test_blackbox_ring.c`; zarejestruj w `test/host/CMakeLists.txt` (PURE_SOURCES + include) i `test/host/test_main.c`
+- [x] Stwórz `components/blackbox/include/blackbox_record.h` + `src/blackbox_record.c` — encode/decode rekordu próbki (t_ms, substate, err_m, bearing_deg10, heading_deg10, servo_us, esc_us, ch1_us, ch2_us, lat_e7, lon_e7, sats, speed_cms, flagi gps_fix/imu_ok) i nagłówka sesji (session_seq, target_lat/lon_e7, deadband_m, max_throttle_pct, throttle_gain, servo_gain, czas); magic/schema + CRC; bez `esp_*`
+- [x] Stwórz `components/blackbox/include/blackbox_ring.h` + `src/blackbox_ring.c` — z `seq`+pojemności: offset slotu, czy potrzebny erase sektora, kolejność odczytu (unsigned modular arithmetic)
+- [x] Stwórz `test/host/test_blackbox_record.c`, `test/host/test_blackbox_ring.c`; zarejestruj w `test/host/CMakeLists.txt` (PURE_SOURCES + include) i `test/host/test_main.c`
 
 Testy (test-first; overflow/wrap wejściem POZA granicą — oracle power):
-- [ ] Test: round-trip encode→decode rekordu i nagłówka — wszystkie pola wierne
-- [ ] Test: decode pustego sektora (0xFF) → rekord nieważny (nie mylony z danymi)
-- [ ] Test: decode rekordu z zepsutym CRC → nieważny
-- [ ] Test: `slot` poprawny tuż przed i po zawinięciu pojemności
-- [ ] Test: granica wrapu `seq` u32 (tuż przed `UINT32_MAX`, kolejny po przewinięciu) → poprawne uporządkowanie; FAILuje przy naiwnym porównaniu
-- [ ] Test: overflow — zapis ponad pojemność nadpisuje najstarszy (wejście POZA pojemnością; FAILuje bez logiki nadpisania)
+- [x] Test: round-trip encode→decode rekordu i nagłówka — wszystkie pola wierne
+- [x] Test: decode pustego sektora (0xFF) → rekord nieważny (nie mylony z danymi)
+- [x] Test: decode rekordu z zepsutym CRC → nieważny
+- [x] Test: `slot` poprawny tuż przed i po zawinięciu pojemności
+- [x] Test: granica wrapu `seq` u32 (tuż przed `UINT32_MAX`, kolejny po przewinięciu) → poprawne uporządkowanie; FAILuje przy naiwnym porównaniu
+- [x] Test: overflow — zapis ponad pojemność nadpisuje najstarszy (wejście POZA pojemnością; FAILuje bez logiki nadpisania)
 
 Weryfikacja:
 - [ ] Weryfikacja: `test/host/run.sh` zielony z nowymi testami
