@@ -74,16 +74,16 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 - [ ] Test: [E2E] Połącz łączy z `kayak-motor`, WS zaczyna publikować telemetrię
 - [ ] Weryfikacja: Testy zielone; na urządzeniu status linku odzwierciedla realny stan; `goto_cancel` → 200
 
-### Unit 4: Store telemetrii + świeżość + status/HUD — M · (R2, R8, R9) · zależności: Unit 3
-- [ ] `Features/Telemetry/TelemetryStore.swift` (`@Observable`; ostatnia ramka + `isStale`)
-- [ ] `Features/Telemetry/GotoReadiness.swift` (czysta `(Telemetry)->GotoBlockReason?`)
-- [ ] `Features/Telemetry/StatusHUDView.swift` (stan, gps_fix/sats, prędkość, `app_link_fresh`, powód)
-- [ ] Testy: `GotoReadinessTests.swift`, `TelemetryStaleTests.swift`
-- [ ] Test: [Unit] ARMED+fix+link+neutral → `nil` (gotowe)
-- [ ] Test: [Unit] DISARMED → „Uzbrój na RC"; fix=false → „Brak fixu"; link=false → „Brak
-  linku" (priorytet). Moc wyroczni: telemetria, która bez bramki by „przeciekła" → zwraca powód, nie `nil`
-- [ ] Test: [Unit] Brak ramki > próg → `isStale==true`
-- [ ] Weryfikacja: HUD pokazuje stan i powód; po zerwaniu WS dane wygasają; testy zielone
+### Unit 4: Store telemetrii + świeżość + status/HUD — M · (R2, R8, R9) · zależności: Unit 3 · CZĘŚCIOWO (logika host-tested)
+- [ ] `Features/Telemetry/TelemetryStore.swift` (`@Observable`; ostatnia ramka + `isStale`) — app-target, po Unit 1/3
+- [x] `KayakContract/GotoReadiness.swift` (czysta `(Telemetry)->GotoBlockReason?`)
+- [ ] `Features/Telemetry/StatusHUDView.swift` (stan, gps_fix/sats, prędkość, `app_link_fresh`, powód) — app-target
+- [x] Test: `GotoReadinessTests.swift` (host)
+- [x] Test: [Unit] ARMED+fix → `nil` (gotowe)
+- [x] Test: [Unit] DISARMED → powód; fix=false → „Brak fixu"; arm_reason→powód. Moc wyroczni:
+  DISARMED mimo fixu → zwraca powód, nie `nil`. (Uwaga: „brak linku" = LinkState/transport, nie readiness)
+- [ ] Test: [Unit] Brak ramki > próg → `isStale==true` — w TelemetryStore (app-target)
+- [ ] Weryfikacja: HUD pokazuje stan i powód; po zerwaniu WS dane wygasają (część host-tested: readiness zielone)
 
 ---
 
@@ -114,8 +114,9 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 - [ ] Weryfikacja: Tap stawia cel, wysłanie startuje goto, malejąca odległość i linia widoczne;
   nieprawidłowy cel nie wysłany
 
-### Unit 7: Keepalive + STOP/Rozbrój + idle-timer + arrived→CH3 — M · (R5, R6) · zależności: Unit 6
-- [ ] `Features/Goto/KeepaliveController.swift` (timer ~2 Hz; cleanup przy STOP/tło/deinit)
+### Unit 7: Keepalive + STOP/Rozbrój + idle-timer + arrived→CH3 — M · (R5, R6) · zależności: Unit 6 · CZĘŚCIOWO (decyzja host-tested)
+- [x] `KayakContract/Keepalive.swift` — czysta `KeepaliveDecision` (resend/idle) + `GotoTiming` (host-tested)
+- [ ] `Features/Goto/KeepaliveController.swift` (timer ~2 Hz; cleanup przy STOP/tło/deinit) — app-target, opakowuje decyzję
 - [ ] `Features/Goto/SafetyControlsView.swift` (wielki STOP zawsze widoczny; osobny „Rozbrój")
 - [ ] Modyfikuj `App/RootView.swift` (`isIdleTimerDisabled` tylko podczas aktywnego goto)
 - [ ] `Features/Goto/ArrivalHintView.swift` (po `goto_arrived` → „Włącz CH3 na RC")
@@ -133,25 +134,25 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 
 ## Faza 3 — Waypointy i barierki
 
-### Unit 8: Waypointy (zapis realnej pozycji, trwałość, re-send) — M · (R4) · zależności: Unit 6, Unit 4
-- [ ] `Persistence/Waypoint.swift` (`Codable {id,name,lat_e7,lon_e7,createdAt}`)
-- [ ] `Persistence/WaypointStore.swift` (`Codable`→plik Application Support; add/rename/delete; trwałość)
-- [ ] `Features/Waypoints/WaypointListView.swift` (lista, „Zapisz tę pozycję", tap→cel)
-- [ ] Test: `WaypointStoreTests.swift`
-- [ ] Test: [Unit] Add→save→reload zwraca ten sam waypoint. Moc wyroczni: bez realnego zapisu
+### Unit 8: Waypointy (zapis realnej pozycji, trwałość, re-send) — M · (R4) · zależności: Unit 6, Unit 4 · CZĘŚCIOWO (store host-tested)
+- [x] `KayakContract/Waypoint.swift` (`Codable {id,name,latE7,lonE7,createdAt}` + `fromBoat`)
+- [x] `KayakContract/Waypoint.swift` → `WaypointStore` (`Codable`→plik atomowy; add/rename/delete; trwałość)
+- [ ] `Features/Waypoints/WaypointListView.swift` (lista, „Zapisz tę pozycję", tap→cel) — app-target
+- [x] Test: `WaypointStoreTests.swift` (host)
+- [x] Test: [Unit] Add→save→reload zwraca ten sam waypoint. Moc wyroczni: bez realnego zapisu
   reload zwraca pustą listę → FAIL
-- [ ] Test: [Unit] Rename/delete mutują i utrwalają
-- [ ] Test: [Unit] „Zapisz tę pozycję" przy braku fixu → odrzucone (nie zapisuje 0,0)
+- [x] Test: [Unit] Rename/delete mutują i utrwalają
+- [x] Test: [Unit] „Zapisz tę pozycję" (`fromBoat`) przy braku fixu → `nil` (nie zapisuje 0,0)
 - [ ] Test: [E2E] Zapis pozycji → restart apki → waypoint nadal na liście → tap wysyła goto
-- [ ] Weryfikacja: Waypointy przeżywają restart; tap re-wysyła cel; brak zapisu bez fixu
+- [ ] Weryfikacja: Waypointy przeżywają restart; tap re-wysyła cel (część host-tested: trwałość zielona)
 
-### Unit 9: Miękkie ostrzeżenie geofence + polish słoneczny — M · (R7, R10) · zależności: Unit 6, Unit 5
-- [ ] `Features/Goto/WaterGeofence.swift` (czysty ray-casting point-in-polygon)
-- [ ] Modyfikuj `Features/Goto/GotoControlsView.swift` (dialog potwierdzenia gdy cel poza konturem)
-- [ ] `DesignSystem/SunlightTheme.swift` (kontrast, rozmiary celów, układ pod jedną rękę)
-- [ ] Test: `WaterGeofenceTests.swift`
-- [ ] Test: [Unit] Punkt wewnątrz → brak ostrzeżenia; poza → ostrzeżenie. Moc wyroczni: punkt
-  lądowy MUSI zwrócić „poza"; uwzględnić punkt na krawędzi
-- [ ] Test: [Unit] Ostrzeżenie NIE blokuje — po potwierdzeniu cel jest wysłany
+### Unit 9: Miękkie ostrzeżenie geofence + polish słoneczny — M · (R7, R10) · zależności: Unit 6, Unit 5 · CZĘŚCIOWO (geofence host-tested)
+- [x] `KayakContract/WaterGeofence.swift` (czysty ray-casting point-in-polygon)
+- [ ] Modyfikuj `Features/Goto/GotoControlsView.swift` (dialog potwierdzenia gdy cel poza konturem) — app-target
+- [ ] `DesignSystem/SunlightTheme.swift` (kontrast, rozmiary celów, układ pod jedną rękę) — app-target
+- [x] Test: `WaterGeofenceTests.swift` (host)
+- [x] Test: [Unit] Punkt wewnątrz → true; poza → false. Moc wyroczni: punkt lądowy MUSI dać false;
+  wklęsły L-kształt rozróżnia zatokę od lądu
+- [ ] Test: [Unit] Ostrzeżenie NIE blokuje — po potwierdzeniu cel jest wysłany (UI, app-target)
 - [ ] Test: [E2E] Dotknięcie lądu → dialog; potwierdzenie → goto rusza mimo to
-- [ ] Weryfikacja: Cel na lądzie wyzwala potwierdzenie, ale nie blokuje; UI czytelne przy słońcu, jedną ręką
+- [ ] Weryfikacja: Cel na lądzie wyzwala potwierdzenie, ale nie blokuje (część host-tested: geofence zielone)
