@@ -6,18 +6,25 @@
 Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia ·
 `[E2E]` = manualna weryfikacja on-device (agent-browser nie steruje iPhonem).
 
+> **Uwaga o strukturze (refinement planu):** czysta logika kontraktu żyje w Swift
+> Package `ios/KayakKit/` (host-testowalna przez `swift test` bez Simulatora, reużywalna
+> nawet przy Plan B/BLE — wzorzec „Pure ⊥ HAL"). Projekt Xcode generowany z
+> `ios/project.yml` (XcodeGen). Środowisko: Xcode 26.6, sim iOS 26.2. Build target przez
+> `xcodebuild -target ... -sdk iphonesimulator` (scheme-destination gubi się na SDK 26.5).
+
 ---
 
 ## Faza 0 — Bramka de-risk
 
 ### Unit 0: Bramka łączności (throwaway app) — S/M · (R1) · zależności: brak
-- [ ] Stwórz `ios/DeRiskProbe/` (osobny minimalny target SwiftUI, throwaway)
-- [ ] `ProbeApp.swift`, `ContentView.swift`, `ProbeNetworking.swift`
-- [ ] Info.plist `NSLocalNetworkUsageDescription` + capability Hotspot Configuration
-- [ ] `NEHotspotConfiguration(joinOnce:false)` join + pomiar czasu join (10×)
-- [ ] HTTP `URLSession` POST + fallback `NWConnection`/`.wifi` gdy flaky
-- [ ] WS Network.framework `NWProtocolWebSocket` pinowany `.wifi` do `ws://192.168.4.1/ws`
-- [ ] Zapisz wynik do `docs/dev-brainstorms/2026-07-01-ios-derisk-gate-results.md`
+- [x] Stwórz `ios/DeRiskProbe/` (osobny minimalny target SwiftUI, throwaway)
+- [x] `DeRiskProbeApp.swift`, `ContentView.swift`, `ProbeModel.swift`
+- [x] Info.plist `NSLocalNetworkUsageDescription` + capability Hotspot Configuration (entitlements)
+- [x] `NEHotspotConfiguration(joinOnce:false)` join + pomiar czasu join
+- [x] HTTP `URLSession` POST (fallback `NWConnection`/`.wifi` — do włączenia po teście)
+- [x] WS Network.framework `NWProtocolWebSocket` pinowany `.wifi` do `ws://192.168.4.1/ws`
+- [x] Stub wyniku: `docs/dev-brainstorms/2026-07-01-ios-derisk-gate-results.md` (do wypełnienia on-device)
+- [x] Build Simulator: `BUILD SUCCEEDED` (kompilacja OK; działanie sieci wymaga urządzenia)
 - [ ] Test: [E2E] LTE aktywne: Połącz → prompt Local Network → POST zwraca 200
   `{"data":null,"error":null}`; równolegle request do internetu przez LTE działa
 - [ ] Test: [E2E] WS strumień ramek ~10 Hz płynie ≥60 s bez rozłączeń w foreground
@@ -42,18 +49,17 @@ Legenda: `Test:` = scenariusz testowy · `Weryfikacja:` = kryterium ukończenia 
 - [ ] Weryfikacja: Projekt buduje się na urządzeniu; `import MapLibre` linkuje; capability
   i klucz Local Network obecne; target Swift Testing zielony
 
-### Unit 2: Modele kontraktu + konwersja współrzędnych — M · (R2, R3, R8) · zależności: Unit 1
-- [ ] `Contract/Telemetry.swift` (`Decodable` + enumy `SystemState`,`ArmReason`,`GotoState`,`SpotLockState`)
-- [ ] `Contract/Command.swift` (`Command`, `CommandEnvelope`, `ApiError{code,message}`)
-- [ ] `Contract/Coordinate.swift` (`toE7`,`fromE7`,`isValidE7` ±90/±180)
-- [ ] Testy: `TelemetryDecodingTests.swift`, `CoordinateConversionTests.swift`, `CommandEnvelopeTests.swift`
-- [ ] Fixtures: `telemetry_frame.json`, `command_ok.json`, `command_error_400.json`
-- [ ] Test: [Unit] Dekoduje ramkę WS: skalowania (heading deg10→deg, speed cms→m/s) OK;
+### Unit 2: Modele kontraktu + konwersja współrzędnych — M · (R2, R3, R8) · zależności: Unit 1 ✅ UKOŃCZONE (host-tested)
+- [x] `KayakKit/Sources/KayakContract/Telemetry.swift` (`Decodable` + enumy `SystemState`,`ArmReason`,`HoldState`)
+- [x] `KayakKit/Sources/KayakContract/Command.swift` (`Command`, `CommandEnvelope`, `ApiError{code,message}`)
+- [x] `KayakKit/Sources/KayakContract/Coordinate.swift` (`toE7`,`fromE7`,`LatLonE7` init? ±90/±180)
+- [x] Testy: `TelemetryDecodingTests.swift`, `CoordinateConversionTests.swift`, `CommandEnvelopeTests.swift` (fixtures inline w testach)
+- [x] Test: [Unit] Dekoduje ramkę WS: skalowania (heading deg10→deg, speed cms→m/s) OK;
   nieznany `state`=9 → `.unknown` bez crashu
-- [ ] Test: [Unit] `toE7(52.2297)`==`522297000`; `fromE7` round-trip stabilny
-- [ ] Test: [Unit] Moc wyroczni: `toE7(91.0)` → `isValidE7==false` (FAIL bez walidacji; wejście POZA zakresem)
-- [ ] Test: [Unit] Dekoduje kopertę błędu 400 → `ApiError`; sukces `{"data":null,"error":null}` → brak błędu
-- [ ] Weryfikacja: Testy Contract zielone; usunięcie walidacji zakresu/skalowania heading → FAIL (moc wyroczni)
+- [x] Test: [Unit] `toE7(52.2297)`==`522297000`; `fromE7` round-trip stabilny
+- [x] Test: [Unit] Moc wyroczni: `toE7(91.0)` → `nil` (FAIL bez walidacji double-domain; wejście POZA zakresem)
+- [x] Test: [Unit] Dekoduje kopertę błędu 400 → `ApiError`; sukces `{"data":null,"error":null}` → `isSuccess`
+- [x] Weryfikacja: **13/13 testów Contract zielonych** (`swift test`); walidacja w domenie double przed castem (moc wyroczni)
 
 ### Unit 3: Warstwa sieciowa — join, wymuszenie Wi‑Fi, HTTP, WS — L · (R1, R9) · zależności: Unit 0, Unit 2
 - [ ] `Networking/HotspotJoiner.swift` (`NEHotspotConfiguration` + fallback manual)

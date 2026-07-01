@@ -1,0 +1,12 @@
+# Generowany przez XcodeGen z project.yml — regenerowalny, nie commitujemy
+KayakMotor.xcodeproj/
+
+# Artefakty budowania
+build/
+DerivedData/
+*.xcuserstate
+
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
