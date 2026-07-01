@@ -157,6 +157,13 @@ Weryfikacja:
 
 ---
 
+## Do poprawy po review fazy 4
+
+Severity gate: ✅ **CZYSTE** (P1=0, P2=0, P3=2). Raport: `review-faza-4.md`. Host-tests **429/429 PASS** (+4), `idf.py build` (esp32s3) PASS. Werdykt pkt 1–6 pozytywny: goto telemetria gated na SRC_GOTO z mocą wyroczni (CH3-hold czyta off/0), serializacja ints/bools only, nazwy pól = stabilny kontrakt iOS, 409-w-ARMED izoluje bramkę SI-6, zero test-weakeningu, panel bez XSS (`textContent`). Findingi P3 opcjonalne — nie blokują domknięcia.
+
+- [ ] 🟡 [nit] **ws_telemetry.c:snapshot_to_json** — bufor 640 dobrany pod typowe wartości; hipotetyczne maksimum wszystkich pól uint jednocześnie przekracza 640, ale nieosiągalne w praktyce i guard `(size_t)len >= sizeof(json)` przechwytuje truncation bez przepełnienia (snprintf bounded). Opcjonalnie bump do ~768 lub komentarz o zależności rozmiaru od fizycznych granic pól. Bez akcji blokującej.
+- [ ] 🟡 [nit] **test_params_decide.c:test_armed_rejects_goto_comms_timeout_write** — near-duplikat `test_armed_rejects_new_spot_lock_param_write` (`params_decide_write` field-agnostyczny); wartość dokumentacyjna, nie pokrywa nowej gałęzi. Dopuszczalne per coding-rules §11. Bez akcji.
+
 ## Domknięcie
 - [x] Dopisz luki hardware/na wodzie do `docs/completed/kayak-motor-firmware-v1/known-issues.md` (sekcja §4d Goto: realna nawigacja, pauza/wznowienie na link, CH3-preempt, dryf, panel E2E)
 - [ ] Udokumentuj kontrakt API dla aplikacji iOS (goto/goto_cancel, keepalive, pola `goto_*`)
