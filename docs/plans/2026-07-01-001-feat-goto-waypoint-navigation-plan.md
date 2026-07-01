@@ -227,7 +227,7 @@ aktuatorów w istniejących ścieżkach; Faza 3 włącza sterowanie; Faza 4 wyst
 
 ### Faza 1 — Kanał celu z aplikacji (komenda + walidacja + transport)
 
-- [ ] **Unit 1: Walidacja celu + rozszerzenie `command_parse` o goto/goto_cancel**
+- [x] **Unit 1: Walidacja celu + rozszerzenie `command_parse` o goto/goto_cancel**
 
 **Cel:** Czysta, host-testowana walidacja `lat_e7`/`lon_e7` oraz reprezentacja komend `goto`
 (z payloadem) i `goto_cancel` w warstwie parsowania.
@@ -269,7 +269,7 @@ nie tożsamość na granicy; przetestuj dokładne granice ±90/±180.
 **Weryfikacja:** Host-tests zielone; grep braku `esp_*`/`driver/*` w `goto_target.h`. Zero regresji
 istniejących testów `command_parse`.
 
-- [ ] **Unit 2: HTTP handler goto (payload lat/lon) + transport przez mailbox UI events**
+- [x] **Unit 2: HTTP handler goto (payload lat/lon) + transport przez mailbox UI events**
 
 **Cel:** `POST /api/command` obsługuje `goto` (wyjmuje i waliduje lat/lon, błąd → 400) oraz
 `goto_cancel`; komenda propaguje do pętli przez rozszerzone `control_loop_ui_events`.

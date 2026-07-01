@@ -1,7 +1,7 @@
 # Kontekst: Goto — autonomiczna nawigacja do punktu
 
 Branch: `feature/goto-waypoint-navigation`
-Ostatnia aktualizacja: 2026-07-01
+Ostatnia aktualizacja: 2026-07-01 (Faza 1 ukończona)
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-06-29-spot-lock-requirements.md
@@ -66,6 +66,15 @@ Silnik ruchu **już istnieje** — `spot_lock_step` robi point-and-shoot (bearin
 - Wrap-safe recency w jednej domenie zegara (`now_ms()`).
 - Pure ⊥ HAL: nowa logika czysta, HAL cienki.
 - Oracle power: bramki/limity/priorytet testuj wejściem poza zakresem / w stanie który bez bramki przecieka.
+
+## Stan realizacji
+
+### Faza 1 — Kanał celu z aplikacji (Unit 1 + Unit 2) — ukończona 2026-07-01
+- **Unit 1:** nowy czysty moduł `components/web_panel/{include/goto_target.h,src/goto_target.c}` — `goto_target_valid(lat_e7, lon_e7)` z named constants `GOTO_LAT/LON_E7_MIN/MAX` (±90°/±180°, inclusive). Brak include `esp_*`/`driver/*` (grep-clean). `command_parse` rozpoznaje keywordy `goto`/`goto_cancel` (keyword-only: flagi ustawione, lat/lon = 0, wstrzykiwane przez HTTP). Zarejestrowane w host-harness (`test_goto_target.c`, rozszerzony `test_command_parse.c`).
+- **Unit 2:** `http_server.c::post_command` dla `goto` wyjmuje `lat_e7`/`lon_e7` (cJSON, `extract_goto_target`), waliduje `goto_target_valid`; malformed/out-of-range → `400 {data:null,error:{code:"VALIDATION_FAILED"}}` bez postu do mailbox. `to_ui_events` kopiuje flagi + cel. `control_loop_ui_events` rozszerzone o pola goto. `control_loop.c::apply_goto_events`: latch `s_goto_engage` + staged `s_goto_lat/lon_e7` + stempel `s_last_goto_ms` przez `sensor_freshness_stamp` (baza watchdoga Unit 4); `goto_cancel` czyści latch.
+- **Decyzja:** kontrakt 400 host-testowany przez czyste bloki (`goto_target_valid` + `api_build_error`), bo `http_server` linkuje `esp_http_server.h` i nie jest host-linkowalny. Mapowanie `to_ui_events`→struct i konsumpcja `apply_goto_events` to cienki HAL, weryfikowany na poziomie pętli w Unit 4 (zgodnie z planem).
+- **Staged goto state** (`s_goto_engage/lat/lon`, `s_last_goto_ms`) jest zapisywany, ale jeszcze niekonsumowany — podłączenie do `loop_step` przez `loop_inputs` + watchdog `comms_fresh` = Unit 4 (Faza 3).
+- Host-tests: 400/400 PASS. `idf.py build` (esp32s3): PASS (37% partycji app wolne).
 
 ## Powiązana pamięć
 - [[ios-app-goto-direction]] — kierunek aplikacji iOS (SwiftUI + MapLibre) korzystającej z tego kontraktu API.

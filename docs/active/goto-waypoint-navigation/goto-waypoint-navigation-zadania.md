@@ -13,14 +13,14 @@ Legenda: `Test:` = scenariusz testowy (host/E2E), `Weryfikacja:` = kryterium uko
 Zależności: brak
 
 Implementacja:
-- [ ] Stwórz `components/web_panel/include/goto_target.h` + `src/goto_target.c` — czyste `bool goto_target_valid(int32_t lat_e7, int32_t lon_e7)` (zakres ±90°/±180° w e7, named constants)
-- [ ] Rozszerz `components/web_panel/include/command_parse.h` — `command_parse_result`: `goto_request`, `goto_cancel_request`, `int32_t goto_lat_e7`, `int32_t goto_lon_e7`
-- [ ] Rozszerz `components/web_panel/src/command_parse.c` — keyword `goto`/`goto_cancel` (payload wstrzykuje HTTP w Unit 2)
-- [ ] Zarejestruj w `test/host/CMakeLists.txt` (`goto_target.c` → PURE_SOURCES, `test_goto_target.c`) i `test/host/test_main.c`
+- [x] Stwórz `components/web_panel/include/goto_target.h` + `src/goto_target.c` — czyste `bool goto_target_valid(int32_t lat_e7, int32_t lon_e7)` (zakres ±90°/±180° w e7, named constants)
+- [x] Rozszerz `components/web_panel/include/command_parse.h` — `command_parse_result`: `goto_request`, `goto_cancel_request`, `int32_t goto_lat_e7`, `int32_t goto_lon_e7`
+- [x] Rozszerz `components/web_panel/src/command_parse.c` — keyword `goto`/`goto_cancel` (payload wstrzykuje HTTP w Unit 2)
+- [x] Zarejestruj w `test/host/CMakeLists.txt` (`goto_target.c` → PURE_SOURCES, `test_goto_target.c`) i `test/host/test_main.c`
 
 Testy (test-first dla `goto_target_valid` — moc wyroczni, wartości poza zakresem):
-- [ ] Test: `goto_target_valid` cel w zakresie → true; `lat_e7=900000001` → false; `lon_e7=-1800000001` → false; dokładne granice ±90/±180 zdefiniowane i przetestowane
-- [ ] Test: `command_parse("goto")` → `goto_request=true`; `command_parse("goto_cancel")` → `goto_cancel_request=true`; nieznany keyword → `ok=false` (zero regresji istniejących komend)
+- [x] Test: `goto_target_valid` cel w zakresie → true; `lat_e7=900000001` → false; `lon_e7=-1800000001` → false; dokładne granice ±90/±180 zdefiniowane i przetestowane
+- [x] Test: `command_parse("goto")` → `goto_request=true`; `command_parse("goto_cancel")` → `goto_cancel_request=true`; nieznany keyword → `ok=false` (zero regresji istniejących komend)
 
 Weryfikacja:
 - [ ] Weryfikacja: host-tests zielone; grep braku `esp_*`/`driver/*` w `goto_target.h`; zero regresji `test_command_parse`
@@ -29,14 +29,14 @@ Weryfikacja:
 Zależności: Unit 1
 
 Implementacja:
-- [ ] Modyfikuj `components/web_panel/src/http_server.c` — dla `cmd=="goto"` odczytaj `lat_e7`/`lon_e7` (cJSON), `goto_target_valid`; błąd → `400 {data:null,error:{code,message}}`; `to_ui_events` kopiuje flagi + lat/lon
-- [ ] Modyfikuj `components/control_loop/include/control_loop.h` — `control_loop_ui_events`: `goto_request`, `goto_cancel_request`, `goto_lat_e7`, `goto_lon_e7`
-- [ ] Modyfikuj `components/control_loop/src/control_loop.c` — `apply_ui_events`: staged goto target + `goto_engage` latch; `goto_cancel` → wyczyść; stempel `s_last_goto_ms` (`sensor_freshness_stamp`)
+- [x] Modyfikuj `components/web_panel/src/http_server.c` — dla `cmd=="goto"` odczytaj `lat_e7`/`lon_e7` (cJSON), `goto_target_valid`; błąd → `400 {data:null,error:{code,message}}`; `to_ui_events` kopiuje flagi + lat/lon
+- [x] Modyfikuj `components/control_loop/include/control_loop.h` — `control_loop_ui_events`: `goto_request`, `goto_cancel_request`, `goto_lat_e7`, `goto_lon_e7`
+- [x] Modyfikuj `components/control_loop/src/control_loop.c` — `apply_ui_events`: staged goto target + `goto_engage` latch; `goto_cancel` → wyczyść; stempel `s_last_goto_ms` (`sensor_freshness_stamp`)
 
 Testy (test-first: kontrakt request/response dla błędnego lat/lon → 400):
-- [ ] Test: poprawny `goto` z lat/lon w zakresie → UI event z `goto_request` i skopiowanym celem
-- [ ] Test: `goto` z lat/lon poza zakresem → `400 {data:null,error:{code}}` (bez postu do mailbox)
-- [ ] Test: `goto_cancel` → UI event `goto_cancel_request`
+- [x] Test: poprawny `goto` z lat/lon w zakresie → UI event z `goto_request` i skopiowanym celem
+- [x] Test: `goto` z lat/lon poza zakresem → `400 {data:null,error:{code}}` (bez postu do mailbox)
+- [x] Test: `goto_cancel` → UI event `goto_cancel_request`
 
 Weryfikacja:
 - [ ] Weryfikacja: `idf.py build` zielony; host-tests zielone; `POST /api/command` zwraca poprawną kopertę dla obu ścieżek; UI event dociera do `apply_ui_events`

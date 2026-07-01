@@ -18,6 +18,7 @@
 #include "pwm_out.h"
 #include "rc_capture.h"
 #include "rc_validity.h"
+#include "sensor_freshness.h"
 #include "signal_chain.h"
 
 static const char *TAG = "control_loop";
@@ -56,6 +57,15 @@ static settings_validation_result s_load_flags;
 /* Latest telemetry snapshot (lossy single slot, newest wins). The loop is the
  * sole writer; panel readers copy the struct best-effort. */
 static control_loop_snapshot s_snapshot;
+
+/* App-driven goto: staged external target + engage latch (single writer = the
+ * loop). s_last_goto_ms stamps each received goto command as the base for the
+ * link comms-watchdog (wired into loop_step in Unit 4). The target lives in RAM
+ * only (no NVS persistence: goto is a live session). */
+static bool s_goto_engage;
+static int32_t s_goto_lat_e7;
+static int32_t s_goto_lon_e7;
+static uint32_t s_last_goto_ms;
 
 /* Monotonic milliseconds for the commit debounce (esp_timer is monotonic). */
 static uint32_t now_ms(void)
@@ -326,6 +336,24 @@ static void apply_trim_events(const control_loop_ui_events *ev)
     }
 }
 
+/* Stage an app-driven goto command: latch the engage + external target on a goto
+ * request (idempotent keepalive: a repeated goto refreshes the target and the
+ * link stamp), clear the latch on goto_cancel. Every received goto stamps
+ * s_last_goto_ms so the comms-watchdog (Unit 4) can gate on link freshness.
+ * The engage/target are consumed by loop_step in a later unit. */
+static void apply_goto_events(const control_loop_ui_events *ev)
+{
+    if (ev->goto_request) {
+        s_goto_engage = true;
+        s_goto_lat_e7 = ev->goto_lat_e7;
+        s_goto_lon_e7 = ev->goto_lon_e7;
+        s_last_goto_ms = sensor_freshness_stamp(s_last_goto_ms, now_ms(), true);
+    }
+    if (ev->goto_cancel_request) {
+        s_goto_engage = false;
+    }
+}
+
 /* Drain the latest staged UI events into the per-cycle inputs (edge semantics:
  * each posted set is consumed once). Absent any post, all events are inert. */
 static void apply_ui_events(loop_inputs *in)
@@ -342,6 +370,7 @@ static void apply_ui_events(loop_inputs *in)
     in->stow_request = ev.stow_request;
     in->calib_event = ev.calib_event;
     apply_trim_events(&ev);
+    apply_goto_events(&ev);
 }
 
 /* Read the GPS + IMU shared state into the per-cycle inputs. Spot-lock control

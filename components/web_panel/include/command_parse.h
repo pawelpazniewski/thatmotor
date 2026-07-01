@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "esc_calibration.h"
 
@@ -34,6 +35,10 @@ typedef struct {
     bool trim_left;          /* servo neutral trim: step one click left */
     bool trim_right;         /* servo neutral trim: step one click right */
     bool trim_save;          /* persist the current servo trim to NVS */
+    bool goto_request;       /* start/refresh app-driven goto to goto_lat/lon */
+    bool goto_cancel_request;/* end the goto mode */
+    int32_t goto_lat_e7;     /* goto target latitude (deg * 1e7); HTTP-injected */
+    int32_t goto_lon_e7;     /* goto target longitude (deg * 1e7); HTTP-injected */
     calib_event calib_event; /* discriminated calibration operator event */
 } command_parse_result;
 
@@ -41,8 +46,13 @@ typedef struct {
  * Map a command keyword to UI event fields (exact match).
  *
  * Recognised keywords: "arm", "disarm", "deploy", "stow", "calib_start",
- * "calib_next", "calib_cancel", "trim_left", "trim_right", "trim_save". Any
- * other (or NULL) keyword yields ok=false with all event fields inert (zeroed).
+ * "calib_next", "calib_cancel", "trim_left", "trim_right", "trim_save", "goto",
+ * "goto_cancel". Any other (or NULL) keyword yields ok=false with all event
+ * fields inert (zeroed).
+ *
+ * "goto"/"goto_cancel" are keyword-only here: the pure parser sets the flags and
+ * leaves goto_lat_e7/goto_lon_e7 zeroed. The HTTP layer injects and validates the
+ * lat/lon payload (goto_target_valid) before posting to the loop.
  *
  * @param cmd  Command keyword (NUL-terminated), or NULL.
  * @return ok + the mapped fields on a known keyword; ok=false otherwise.

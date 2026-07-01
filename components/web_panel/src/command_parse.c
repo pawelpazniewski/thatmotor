@@ -20,6 +20,8 @@ static const command_row COMMAND_TABLE[] = {
     {"trim_left", {.ok = true, .trim_left = true}},
     {"trim_right", {.ok = true, .trim_right = true}},
     {"trim_save", {.ok = true, .trim_save = true}},
+    {"goto", {.ok = true, .goto_request = true}},
+    {"goto_cancel", {.ok = true, .goto_cancel_request = true}},
 };
 
 #define COMMAND_TABLE_COUNT (sizeof(COMMAND_TABLE) / sizeof(COMMAND_TABLE[0]))

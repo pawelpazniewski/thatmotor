@@ -77,6 +77,10 @@ typedef struct {
     bool trim_left;            /* servo neutral trim: step one click left */
     bool trim_right;           /* servo neutral trim: step one click right */
     bool trim_save;            /* persist the current servo trim to NVS */
+    bool goto_request;         /* app "Goto": start/refresh nav to goto_lat/lon */
+    bool goto_cancel_request;  /* app "Goto cancel": end the goto mode */
+    int32_t goto_lat_e7;       /* goto target latitude (deg * 1e7), HTTP-validated */
+    int32_t goto_lon_e7;       /* goto target longitude (deg * 1e7), HTTP-validated */
     calib_event calib_event;   /* discriminated calibration operator event */
 } control_loop_ui_events;
 

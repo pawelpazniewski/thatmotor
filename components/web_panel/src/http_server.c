@@ -8,6 +8,7 @@
 #include "control_loop.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "goto_target.h"
 #include "params_api.h"
 #include "params_json.h"
 #include "ws_telemetry.h"
@@ -149,6 +150,28 @@ static bool extract_command(const char *body, char *out, size_t out_size)
     return ok;
 }
 
+/* Extract the goto target (lat_e7, lon_e7) from a {"cmd":"goto",...} body via
+ * cJSON. Both fields must be present as numbers; returns true and fills out on
+ * success, false on any shape failure. Values are read via valuedouble (exact
+ * for the |value| <= 1.8e9 integer range) and cast to int32. Range validation is
+ * NOT done here: it is delegated to the pure goto_target_valid at the boundary. */
+static bool extract_goto_target(const char *body, int32_t *lat_e7, int32_t *lon_e7)
+{
+    cJSON *root = cJSON_Parse(body);
+    if (root == NULL) {
+        return false;
+    }
+    const cJSON *lat = cJSON_GetObjectItemCaseSensitive(root, "lat_e7");
+    const cJSON *lon = cJSON_GetObjectItemCaseSensitive(root, "lon_e7");
+    bool ok = cJSON_IsNumber(lat) && cJSON_IsNumber(lon);
+    if (ok) {
+        *lat_e7 = (int32_t)lat->valuedouble;
+        *lon_e7 = (int32_t)lon->valuedouble;
+    }
+    cJSON_Delete(root);
+    return ok;
+}
+
 /* Convert the pure parser's fields into the loop's UI event struct. */
 static control_loop_ui_events to_ui_events(const command_parse_result *parsed)
 {
@@ -162,6 +185,10 @@ static control_loop_ui_events to_ui_events(const command_parse_result *parsed)
         .trim_left = parsed->trim_left,
         .trim_right = parsed->trim_right,
         .trim_save = parsed->trim_save,
+        .goto_request = parsed->goto_request,
+        .goto_cancel_request = parsed->goto_cancel_request,
+        .goto_lat_e7 = parsed->goto_lat_e7,
+        .goto_lon_e7 = parsed->goto_lon_e7,
         .calib_event = parsed->calib_event,
     };
     return ev;
@@ -187,6 +214,14 @@ static esp_err_t post_command(httpd_req_t *req)
     command_parse_result parsed = command_parse(cmd);
     if (!parsed.ok) {
         return send_command_error(req, API_ERR_VALIDATION_FAILED);
+    }
+    /* goto carries a lat/lon payload: extract it and reject an out-of-range or
+     * malformed target at the boundary (400), before it reaches the loop. */
+    if (parsed.goto_request) {
+        if (!extract_goto_target(reqbuf, &parsed.goto_lat_e7, &parsed.goto_lon_e7) ||
+            !goto_target_valid(parsed.goto_lat_e7, parsed.goto_lon_e7)) {
+            return send_command_error(req, API_ERR_VALIDATION_FAILED);
+        }
     }
     control_loop_ui_events ev = to_ui_events(&parsed);
     control_loop_post_ui_events(&ev);
