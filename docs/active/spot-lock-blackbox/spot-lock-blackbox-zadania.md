@@ -113,9 +113,9 @@ Weryfikacja:
 ### Unit 6: Procedura kalibracji + dokumentacja i known-issues (R8)
 
 Implementacja:
-- [ ] Stwórz `docs/blackbox-calibration.md` — procedura: kolumny CSV → metryki polowania/przeregulowania/donuta → kierunek zmiany deadband/gaz/gainów (priorytet stabilności R8); sekwencja `dump → analiza → params set → reflash off`
-- [ ] Modyfikuj `docs/completed/kayak-motor-firmware-v1/known-issues.md` — luki sprzętowe/E2E (realny zapis na flash, parsowalność CSV na żywo, brak jittera 50 Hz przy erase, wpływ nastaw na zachowanie na wodzie)
-- [ ] Modyfikuj README/pinout — sekcja blackbox: komendy USB `spotlog dump`/`params get`/`params set`, partycja `spotlog`
+- [x] Stwórz `docs/blackbox-calibration.md` — procedura: kolumny CSV → metryki polowania/przeregulowania/donuta → kierunek zmiany deadband/gaz/gainów (priorytet stabilności R8); sekwencja `dump → analiza → params set → reflash off`
+- [x] Modyfikuj `docs/completed/kayak-motor-firmware-v1/known-issues.md` — luki sprzętowe/E2E (realny zapis na flash, parsowalność CSV na żywo, brak jittera 50 Hz przy erase, wpływ nastaw na zachowanie na wodzie)
+- [x] Modyfikuj README/pinout — sekcja blackbox: komendy USB `spotlog dump`/`params get`/`params set`, partycja `spotlog`
 
 Testy:
 - [ ] Test: [E2E] (sprzętowe → known-issues) sesja na wodzie → `spotlog dump` po USB → CSV z nagłówkiem sesji + malejący err_m; `params set` zmienia zachowanie w kolejnej sesji

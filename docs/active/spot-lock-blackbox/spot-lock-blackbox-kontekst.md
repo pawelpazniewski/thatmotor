@@ -1,9 +1,40 @@
 # Kontekst: Spot-lock blackbox
 
 **Branch:** `feature/spot-lock-blackbox`
-**Ostatnia aktualizacja:** 2026-07-01 (Faza 2 / Unit 3)
+**Ostatnia aktualizacja:** 2026-07-01 (Faza 3 / Unit 4–6)
 
 ## Postęp
+
+- **Faza 3 ukończona (Unit 4 konsola+dump, Unit 5 params, Unit 6 docs).** Nowy komponent
+  `usb_console` (`esp_console` REPL na USB Serial/JTAG): komendy `spotlog dump`, `params get`,
+  `params set`. `spotlog dump` = `blackbox_read_all` → klasyfikacja/dekod (rdzeń) → zdenormalizowany
+  płaski CSV; formatowanie = czysta `blackbox_csv.*` (nagłówek == kolejność kolumn = kontrakt
+  parsera, host-testowana, +5 testów). `params set` = czysta `params_cmd.*`: parsowanie/walidacja
+  argumentów + mapowanie na `spot_lock_*`, zakres egzekwowany przez ten SAM `settings_validate` co
+  HTTP (jedno źródło prawdy), HAL woła `control_loop_post_pending` (SI-6, apply tylko w DISARMED);
+  `params_cmd_apply_when` raportuje applied/staged (+7 testów). **391 host-testów zielone**;
+  `idf.py build` (esp32s3) zielony, 37% free.
+- **Decyzja (koegzystencja ESP_LOG/REPL):** primary console przełączony na **USB Serial/JTAG**
+  (`sdkconfig.defaults: CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`) — to warunek dostępności
+  `esp_console_new_repl_usb_serial_jtag` (funkcja jest pod `#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG`,
+  nie SECONDARY) i zarazem port, który operator wpina (lewy USB-C, `/dev/ttyACM*`, ten sam co
+  flash/monitor). Logi i REPL dzielą port (standardowy wzorzec esp_console); dump = surowy `printf`
+  bez prefiksu → parser filtruje po schemacie CSV. Alternatywa (UART0=logi, ręczny REPL na USB) —
+  odrzucona: więcej kodu, sięga w internale, a port operatora to i tak USB Serial/JTAG.
+- **Decyzja (params_cmd bez duplikacji progów):** `params_cmd_decide_set` komponuje
+  `settings_validate` zamiast trzymać własną tabelę zakresów (`settings_ranges.h` jest prywatne w
+  `settings/src`, nieeksportowane; duplikacja groziłaby dryfem). Wartość poza zakresem → walidator
+  „naprawia" pole do defaultu i zwraca `!settings_valid` → `PARAMS_CMD_SET_ERR_OUT_OF_RANGE`, HAL nie
+  stage'uje. Test out-of-range ma moc wyroczni (FAILuje gdyby pominąć gate).
+- **Decyzja (`params get`):** istniejący `control_loop_get_active_params` wystarcza — nowy getter
+  niepotrzebny; druk przez czystą `params_cmd_format_get` (host-testowana).
+- **Unit 6 docs:** `docs/blackbox-calibration.md` (pętla dump→analiza→set→reflash off, kolumny CSV →
+  metryki polowania/przeregulowania/donuta → kierunek zmiany, priorytet stabilności R8);
+  known-issues §4c (luki HW/E2E: realny zapis na flash, jitter przy erase, parsowalność CSV na żywo,
+  wpływ nastaw na wodzie, koegzystencja REPL↔log); README sekcja „Blackbox spot-lock".
+- **Odłożone do known-issues (E2E/sprzętowe, NIE wykonane):** sesja na wodzie → dump → CSV z malejącym
+  `err_m` → `params set` zmienia zachowanie (§4c). Weryfikacja: `run.sh`/`idf.py build` pozostają dla
+  review.
 
 - **Faza 2 ukończona (Unit 3 — HAL flash + recorder task).** Komponent `blackbox`
   wchodzi teraz do buildu IDF: `components/blackbox/CMakeLists.txt` rejestruje
@@ -26,6 +57,19 @@
   nadpisane. Wystarczające dla strojenia polowego (dump po każdym wypłynięciu). Odczyt
   z wznowieniem cursora (skan regionu) odłożony — nie w scope Unit 3.
 
+- **Review Fazy 2 (2026-07-01): ⚠️ ZASTRZEŻENIA (P1=0, P2=1, P3=4).** Raport:
+  `review-faza-2.md`. Zweryfikowane empirycznie: `run.sh` 372/372 zielone, `idf.py build`
+  zielony (bin 0xECAD0, 38% free — zgodne z deklaracją). Obserwator/zero-wpływu ✅ (tylko
+  `get_snapshot`/`get_active_params` best-effort, cały I/O flash w tasku prio 2 poza pętlą
+  50 Hz, błąd flash = log, start opcjonalny). HAL cienki ✅ (deleguje do `blackbox_ring`/
+  `blackbox_record`, zero duplikacji, `map_err` poprawny). Sampler ✅ z realną mocą wyroczni
+  (naiwne „record gdy non-OFF" FAILuje `off_to_active`). Pure ⊥ HAL ✅ (esp_ tylko w
+  komentarzach). Rozmiary/SRP ✅ (app_main cienki, task w komponencie). **P2:** cursor
+  `s_seq`/`session_seq` zerowane w RAM na init → reboot/brownout MIĘDZY wypłynięciami bez
+  dumpu = kolizja `session_id` + przeplot danych sprzed/po reboocie przy dumpie (`read_all`
+  fizycznie rosnąco, obchodzi `oldest_seq`). Happy-path (dump w tym samym power-cycle) OK;
+  domknąć w Unit 4 (skan+seed seq lub per-record ring-seq + porządkowanie dumpu) +
+  known-issues. Nie-blokujące (świadomie odłożone).
 - **Faza 1 ukończona (Unit 1 + Unit 2).** Partycja `spotlog` (0x196000, 1 MiB,
   subtype 0x40) dopisana na końcu `partitions.csv` — offsety nvs/phy_init/factory/
   appcfg niezmienione (partition-table potwierdza). Geometria jako named constants
@@ -127,3 +171,13 @@
 ## Luka wiedzy (do `/dev-compound` po wdrożeniu)
 - Brak udokumentowanego wzorca „flush na flash bez jittera pętli RT 50 Hz" —
   udokumentować po implementacji Unit 3.
+
+## Re-review Fazy 2 (cykl 1) — 2026-07-01
+- P2 z cyklu 0 (zerowanie cursora/session_seq na init → kolizja session_id + przeplot
+  po reboocie) **rozwiązany** commitem 746b227: nowy czysty moduł `blackbox_resume.{h,c}`
+  (Pure ⊥ HAL, streaming fold), `blackbox_init` skanuje region i zasiewa `s_seq`/`session_seq`
+  z `blackbox_resume_decide`; recorder kontynuuje id = max+1.
+- Moc wyroczni testu wznowienia potwierdzona **empirycznie**: mutacja `decide→{0,0}` daje
+  5 FAIL, po przywróceniu 379/379 zielone. `idf.py build` zielony.
+- Gate re-review: **CZYSTE** (0×P1, 0×P2, 0 nowych P3). Residual po zawinięciu ringu uczciwie
+  w known-issues §4b. Wolna droga do Fazy 3 (Unit 4 dump/CSV).
