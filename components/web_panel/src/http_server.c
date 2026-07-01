@@ -267,6 +267,15 @@ esp_err_t http_server_start(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 8;
     config.lru_purge_enable = true;
+    /* The default httpd task stack (4096 B) is too small for our handlers: the
+     * POST /api/params path alone puts reqbuf[HTTP_REQ_MAX] + body[HTTP_BODY_MAX]
+     * on the stack and then nests params_api's data[PARAMS_JSON_MAX] (~3.7 KB of
+     * buffers together), on top of the httpd framework frames and cJSON parse/
+     * print recursion. That overflowed the 4 KB stack -> FreeRTOS canary abort ->
+     * RTC_SW_CPU_RST on every panel reload (the motor disarmed on the reboot).
+     * Size the task to hold the worst-case handler buffers plus headroom so the
+     * bound grows automatically as PARAMS_JSON_SERIALIZE_MAX gains fields. */
+    config.stack_size = 2U * HTTP_BODY_MAX + PARAMS_JSON_SERIALIZE_MAX + 4096U;
 
     esp_err_t err = httpd_start(&server, &config);
     if (err != ESP_OK) {
