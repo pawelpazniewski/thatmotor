@@ -107,6 +107,8 @@ static void serialize_fields(const settings_params *p, uint8_t *buf, size_t *pos
     put_u16(buf, pos, p->spot_lock_servo_gain);
 
     put_u16(buf, pos, p->goto_comms_timeout_ms);
+
+    put_u16(buf, pos, p->goto_slowdown_distance_m);
 }
 
 /* Deserialise every settings_params field from buf in declared order. */
@@ -154,6 +156,8 @@ static void deserialize_fields(const uint8_t *buf, size_t *pos, settings_params 
     p->spot_lock_servo_gain = get_u16(buf, pos);
 
     p->goto_comms_timeout_ms = get_u16(buf, pos);
+
+    p->goto_slowdown_distance_m = get_u16(buf, pos);
 }
 
 blob_codec_result blob_codec_encode(const settings_params *params, uint8_t *out,

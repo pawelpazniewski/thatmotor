@@ -36,8 +36,9 @@ extern "C" {
  * the v3 layout (47 -> 51). schema v5 added servo_trim_us (i16): +2 bytes over
  * the v4 layout (51 -> 53). schema v6 added the four spot-lock regulator params
  * (4x u16): +8 bytes over the v5 layout (53 -> 61). schema v7 added
- * goto_comms_timeout_ms (u16): +2 bytes over the v6 layout (61 -> 63). */
-#define BLOB_CODEC_FIELD_BYTES 63U
+ * goto_comms_timeout_ms (u16): +2 bytes over the v6 layout (61 -> 63). schema v8
+ * added goto_slowdown_distance_m (u16): +2 bytes over the v7 layout (63 -> 65). */
+#define BLOB_CODEC_FIELD_BYTES 65U
 #define BLOB_CODEC_CRC_BYTES 4U
 #define BLOB_CODEC_SIZE (BLOB_CODEC_FIELD_BYTES + BLOB_CODEC_CRC_BYTES)
 

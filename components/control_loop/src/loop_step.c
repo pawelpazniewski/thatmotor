@@ -231,6 +231,10 @@ static spot_lock_params build_spot_lock_params(const settings_params *params)
                        SPOT_LOCK_PERCENT_FULL),
         .throttle_gain_per_m = params->spot_lock_throttle_gain,
         .servo_gain_per_deg = params->spot_lock_servo_gain,
+        .goto_slowdown_distance_m = params->goto_slowdown_distance_m,
+        .goto_cruise_norm = (uint16_t)((int32_t)SPOT_LOCK_CMD_FULL_SCALE *
+                            (int32_t)params->max_throttle_fwd_pct /
+                            SPOT_LOCK_PERCENT_FULL),
     };
     return slp;
 }

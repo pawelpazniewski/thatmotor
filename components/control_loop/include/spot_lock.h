@@ -70,6 +70,9 @@ typedef struct {
     uint16_t max_throttle_norm;   /* forward throttle cap, normalized (R7) */
     uint16_t throttle_gain_per_m; /* normalized throttle per metre of error */
     uint16_t servo_gain_per_deg;  /* normalized servo per degree of bearing err */
+    uint16_t goto_slowdown_distance_m; /* goto cruise-decel slowdown distance (m) */
+    uint16_t goto_cruise_norm;    /* goto cruise ceiling, normalized
+                                   * (= max_throttle_fwd_pct % of full scale) */
 } spot_lock_params;
 
 /** Carry-over state owned by the loop, updated in place each cycle. */
@@ -110,8 +113,12 @@ typedef struct {
  *     additionally !comms_fresh for SRC_GOTO only (link loss never pauses the
  *     RC-owned SRC_HOLD, R5); target retained, recovers to ACTIVE on return.
  *   - ACTIVE: within deadband -> neutral+center (R6); outside -> steer toward
- *     target and add forward thrust (capped, R7) only while the bearing error
- *     is within the +/-60 deg gate (R2). arrived = err_m <= deadband_m.
+ *     target and add forward thrust only while the bearing error is within the
+ *     +/-60 deg gate (R2). arrived = err_m <= deadband_m. The thrust profile
+ *     depends on the source: SRC_HOLD uses the P-throttle (gain x distance,
+ *     capped to max_throttle_norm, R7); SRC_GOTO uses a cruise-decel profile
+ *     (full goto_cruise_norm beyond goto_slowdown_distance_m, then linear down to
+ *     the deadband edge) so the boat cruises out and eases into the waypoint.
  *
  * @param in  Per-cycle inputs (must be non-NULL).
  * @param p   Regulator parameters (must be non-NULL).

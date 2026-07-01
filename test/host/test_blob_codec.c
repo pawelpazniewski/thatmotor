@@ -52,6 +52,7 @@ static settings_params make_sample(void)
     p.spot_lock_throttle_gain = 25;
     p.spot_lock_servo_gain = 15;
     p.goto_comms_timeout_ms = 1200; /* non-default to make the round-trip real */
+    p.goto_slowdown_distance_m = 20; /* non-default (default 15) */
     return p;
 }
 
@@ -111,6 +112,8 @@ static void test_round_trip_preserves_every_field(void)
                              out.spot_lock_throttle_gain);
     TEST_ASSERT_EQUAL_UINT16(in.spot_lock_servo_gain, out.spot_lock_servo_gain);
     TEST_ASSERT_EQUAL_UINT16(in.goto_comms_timeout_ms, out.goto_comms_timeout_ms);
+    TEST_ASSERT_EQUAL_UINT16(in.goto_slowdown_distance_m,
+                             out.goto_slowdown_distance_m);
 }
 
 static void test_negative_servo_trim_round_trips(void)
@@ -130,14 +133,14 @@ static void test_negative_servo_trim_round_trips(void)
     TEST_ASSERT_EQUAL_INT16(-300, out.servo_trim_us);
 }
 
-static void test_blob_size_matches_v7_layout(void)
+static void test_blob_size_matches_v8_layout(void)
 {
-    /* Anchor the schema-v7 wire size: the schema_version + every field (LE) + 4
-     * CRC bytes. v7 added goto_comms_timeout_ms (u16, +2 over v6's 61 field
-     * bytes -> 63; total 67). A struct/layout change that forgets
+    /* Anchor the schema-v8 wire size: the schema_version + every field (LE) + 4
+     * CRC bytes. v8 added goto_slowdown_distance_m (u16, +2 over v7's 63 field
+     * bytes -> 65; total 69). A struct/layout change that forgets
      * to update the codec size trips this. */
-    TEST_ASSERT_EQUAL_UINT(63U, BLOB_CODEC_FIELD_BYTES);
-    TEST_ASSERT_EQUAL_UINT(67U, BLOB_CODEC_SIZE);
+    TEST_ASSERT_EQUAL_UINT(65U, BLOB_CODEC_FIELD_BYTES);
+    TEST_ASSERT_EQUAL_UINT(69U, BLOB_CODEC_SIZE);
 }
 
 static void test_encode_stamps_current_schema_version(void)
@@ -302,7 +305,7 @@ void run_blob_codec_tests(void)
     RUN_TEST(test_crc32_empty_range_is_zero);
     RUN_TEST(test_round_trip_preserves_every_field);
     RUN_TEST(test_negative_servo_trim_round_trips);
-    RUN_TEST(test_blob_size_matches_v7_layout);
+    RUN_TEST(test_blob_size_matches_v8_layout);
     RUN_TEST(test_encode_stamps_current_schema_version);
     RUN_TEST(test_bad_crc_is_rejected);
     RUN_TEST(test_corrupt_crc_trailer_is_rejected);

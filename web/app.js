@@ -56,6 +56,8 @@ const PARAM_LABELS = {
   spot_lock_max_throttle_pct: "Spot-lock max throttle (%)",
   spot_lock_throttle_gain: "Spot-lock throttle gain (norm/m)",
   spot_lock_servo_gain: "Spot-lock servo gain (norm/deg)",
+  goto_comms_timeout_ms: "Goto comms timeout (ms)",
+  goto_slowdown_distance_m: "Goto: dystans hamowania [m]",
 };
 
 let lastState = null;

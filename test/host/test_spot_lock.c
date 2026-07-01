@@ -18,6 +18,12 @@
 #define THROTTLE_GAIN_PER_M 50
 #define SERVO_GAIN_PER_DEG 20
 
+/* Goto cruise-decel profile tuning: cruise at 600 (normalized) beyond 20 m, then
+ * ramp linearly down to the deadband edge. Chosen so the mid-zone value differs
+ * from BOTH cruise (removed ramp) and the SRC_HOLD gain x dist profile. */
+#define GOTO_SLOWDOWN_M 20
+#define GOTO_CRUISE_NORM 600
+
 static spot_lock_params make_params(void)
 {
     spot_lock_params p = {
@@ -25,9 +31,14 @@ static spot_lock_params make_params(void)
         .max_throttle_norm = MAX_THROTTLE_NORM,
         .throttle_gain_per_m = THROTTLE_GAIN_PER_M,
         .servo_gain_per_deg = SERVO_GAIN_PER_DEG,
+        .goto_slowdown_distance_m = GOTO_SLOWDOWN_M,
+        .goto_cruise_norm = GOTO_CRUISE_NORM,
     };
     return p;
 }
+
+/* Metre offsets in latitude e7 for the goto-profile tests (~90 e7 per metre). */
+#define E7_5M 450   /* ~5 m  (just above the 3 m deadband, deep in the ramp) */
 
 /* A fully-permissive input: armed, CH3 on with a rising edge, sticks neutral,
  * fresh real fix, heading north, positioned exactly on the reference point. */
@@ -637,6 +648,138 @@ void test_goto_arrived_flag_tracks_deadband(void)
     TEST_ASSERT_FALSE(off_target.arrived);
 }
 
+/* --- Goto cruise-decel throttle profile (SRC_GOTO) --- */
+
+/* An ACTIVE goto whose target is REF (not the east-offset GOTO point), so the
+ * position offsets used below map cleanly onto the ramp distance. The fresh link
+ * re-latches ref_* to goto_lat/lon each cycle, so goto_* is set to REF too. */
+static spot_lock_inputs make_goto_to_ref_inputs(void)
+{
+    spot_lock_inputs in = make_goto_inputs();
+    in.goto_lat_e7 = REF_LAT_E7;
+    in.goto_lon_e7 = REF_LON_E7;
+    in.heading_deg10 = 0; /* bow north, target north -> inside the gate */
+    return in;
+}
+
+static spot_lock_state make_goto_to_ref_state(void)
+{
+    spot_lock_state st = {
+        .substate = SPOT_LOCK_ACTIVE,
+        .target_source = SPOT_LOCK_SRC_GOTO,
+        .ref_lat_e7 = REF_LAT_E7,
+        .ref_lon_e7 = REF_LON_E7,
+    };
+    return st;
+}
+
+void test_goto_cruises_at_full_beyond_slowdown(void)
+{
+    /* Arrange: goto ACTIVE ~100 m from the target (>> the 20 m slowdown), bow
+     * aligned. Beyond the slowdown distance the profile holds full cruise. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_to_ref_inputs();
+    in.lat_e7 = REF_LAT_E7 - E7_100M; /* target north, bow aligned */
+    spot_lock_state st = make_goto_to_ref_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: exactly the cruise ceiling (removing the >= slowdown branch, i.e.
+     * ramping here, would yield less than cruise -> oracle). */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    TEST_ASSERT_EQUAL_INT32(GOTO_CRUISE_NORM, out.throttle_cmd);
+}
+
+void test_goto_ramps_proportionally_in_slowdown_zone(void)
+{
+    /* Arrange: goto ACTIVE ~10 m from the target: inside the 20 m slowdown zone,
+     * well outside the 3 m deadband. The thrust must scale with distance. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_to_ref_inputs();
+    in.lat_e7 = REF_LAT_E7 - E7_10M; /* ~10 m south, target north */
+    spot_lock_state st = make_goto_to_ref_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: proportional to (dist - deadband) / (slowdown - deadband). Computed
+     * from the reported err_m (integer metres) within a rounding margin. This
+     * FAILS if the ramp is removed (would be cruise 600) AND if the SRC_HOLD
+     * profile were used here (would be gain*dist capped = 350) -> oracle. */
+    int32_t span = GOTO_SLOWDOWN_M - DEADBAND_M;
+    int32_t expected =
+        (int32_t)GOTO_CRUISE_NORM * ((int32_t)out.err_m - DEADBAND_M) / span;
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    TEST_ASSERT_TRUE(out.throttle_cmd > 0);
+    TEST_ASSERT_TRUE(out.throttle_cmd < GOTO_CRUISE_NORM);
+    TEST_ASSERT_INT_WITHIN(30, expected, out.throttle_cmd);
+}
+
+void test_goto_throttle_small_just_above_deadband(void)
+{
+    /* Arrange: goto ACTIVE ~5 m from the target: just above the 3 m deadband,
+     * near the bottom of the ramp. Thrust must be small (a gentle final crawl). */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_to_ref_inputs();
+    in.lat_e7 = REF_LAT_E7 - E7_5M; /* ~5 m south, target north */
+    spot_lock_state st = make_goto_to_ref_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: positive but far below cruise (removed ramp -> cruise 600). */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    TEST_ASSERT_TRUE(out.throttle_cmd > 0);
+    TEST_ASSERT_TRUE(out.throttle_cmd < GOTO_CRUISE_NORM / 4);
+}
+
+void test_goto_relaxes_inside_deadband(void)
+{
+    /* Arrange: goto ACTIVE ~1 m from the target (inside the 3 m deadband). The
+     * shared deadband early-return relaxes the throttle to neutral. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_to_ref_inputs();
+    in.lat_e7 = REF_LAT_E7 + E7_1M; /* ~1 m from target, inside deadband */
+    spot_lock_state st = make_goto_to_ref_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: relaxed - neutral throttle, arrived flagged. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    TEST_ASSERT_EQUAL_INT32(0, out.throttle_cmd);
+    TEST_ASSERT_TRUE(out.arrived);
+}
+
+void test_goto_and_hold_differ_at_same_distance(void)
+{
+    /* Arrange: identical geometry (~10 m south of REF, bow aligned) and identical
+     * params, run once as SRC_GOTO and once as SRC_HOLD. The two sources MUST
+     * pick different thrust profiles: cruise-decel (goto) vs gain x dist capped
+     * (hold). If both used one function the values would match -> this fails. */
+    spot_lock_params p = make_params();
+
+    spot_lock_inputs goto_in = make_goto_to_ref_inputs();
+    goto_in.lat_e7 = REF_LAT_E7 - E7_10M;
+    spot_lock_state goto_st = make_goto_to_ref_state();
+    spot_lock_outputs goto_out = spot_lock_step(&goto_in, &p, &goto_st);
+
+    spot_lock_inputs hold_in = make_base_inputs(); /* CH3 on -> SRC_HOLD */
+    hold_in.ch3_edge_on = false;
+    hold_in.lat_e7 = REF_LAT_E7 - E7_10M;
+    hold_in.heading_deg10 = 0;
+    spot_lock_state hold_st = make_active_state(); /* SRC_HOLD, ref = REF */
+    spot_lock_outputs hold_out = spot_lock_step(&hold_in, &p, &hold_st);
+
+    /* Assert: both drive, but with distinct profiles at the same distance. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, goto_st.target_source);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_HOLD, hold_st.target_source);
+    TEST_ASSERT_TRUE(goto_out.throttle_cmd > 0);
+    TEST_ASSERT_TRUE(hold_out.throttle_cmd > 0);
+    TEST_ASSERT_TRUE(goto_out.throttle_cmd != hold_out.throttle_cmd);
+}
+
 void run_spot_lock_tests(void)
 {
     RUN_TEST(test_entry_on_edge_arms_active_and_snapshots_target);
@@ -664,4 +807,9 @@ void run_spot_lock_tests(void)
     RUN_TEST(test_goto_retains_target_during_pause_ignoring_input);
     RUN_TEST(test_goto_fresh_link_tracks_new_target);
     RUN_TEST(test_goto_arrived_flag_tracks_deadband);
+    RUN_TEST(test_goto_cruises_at_full_beyond_slowdown);
+    RUN_TEST(test_goto_ramps_proportionally_in_slowdown_zone);
+    RUN_TEST(test_goto_throttle_small_just_above_deadband);
+    RUN_TEST(test_goto_relaxes_inside_deadband);
+    RUN_TEST(test_goto_and_hold_differ_at_same_distance);
 }

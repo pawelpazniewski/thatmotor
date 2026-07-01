@@ -122,3 +122,11 @@
 #define GOTO_COMMS_TIMEOUT_MS_MIN 200U
 #define GOTO_COMMS_TIMEOUT_MS_MAX 5000U
 #define GOTO_COMMS_TIMEOUT_MS_DEFAULT 1500U
+
+/* Goto cruise-decel slowdown distance (metres). Beyond this the goto cruises at
+ * full forward power; inside it the thrust ramps linearly down to the deadband
+ * edge. Default 15 m gives a gentle, predictable approach without a long crawl;
+ * range 3..200 m keeps it above a tiny deadband yet within useful lake reach. */
+#define GOTO_SLOWDOWN_DISTANCE_M_MIN 3U
+#define GOTO_SLOWDOWN_DISTANCE_M_MAX 200U
+#define GOTO_SLOWDOWN_DISTANCE_M_DEFAULT 15U

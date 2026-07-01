@@ -141,6 +141,11 @@ static void validate_fields(settings_params *p, const settings_params *def,
         field_or_default(p->goto_comms_timeout_ms, GOTO_COMMS_TIMEOUT_MS_MIN,
                          GOTO_COMMS_TIMEOUT_MS_MAX, def->goto_comms_timeout_ms,
                          repaired);
+
+    /* Goto cruise-decel slowdown distance (metres). */
+    p->goto_slowdown_distance_m = field_or_default(
+        p->goto_slowdown_distance_m, GOTO_SLOWDOWN_DISTANCE_M_MIN,
+        GOTO_SLOWDOWN_DISTANCE_M_MAX, def->goto_slowdown_distance_m, repaired);
 }
 
 /* The ESC map (map_normalized_to_us in the throttle chain) treats

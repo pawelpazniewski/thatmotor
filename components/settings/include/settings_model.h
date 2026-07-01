@@ -23,8 +23,11 @@ extern "C" {
  * (spot_lock_deadband_m, spot_lock_max_throttle_pct, spot_lock_throttle_gain,
  * spot_lock_servo_gain).
  * v7: add the app-driven goto link comms-watchdog timeout
- * (goto_comms_timeout_ms): app link staler than this pauses an active goto. */
-#define SETTINGS_SCHEMA_VERSION 7U
+ * (goto_comms_timeout_ms): app link staler than this pauses an active goto.
+ * v8: add the goto cruise-decel slowdown distance (goto_slowdown_distance_m):
+ * beyond it goto cruises at full forward power, inside it thrust ramps linearly
+ * down to the deadband edge. */
+#define SETTINGS_SCHEMA_VERSION 8U
 
 /* Signed servo neutral trim bounds/step (public: the control loop drives the
  * panel's live Step Left/Right with these; the validator/defaults reuse them).
@@ -99,6 +102,11 @@ typedef struct {
      * an active goto (neutral+center, target retained). Applied DISARMED-only
      * (SI-6), like every other param. */
     uint16_t goto_comms_timeout_ms;
+
+    /* App-driven goto cruise-decel profile: beyond goto_slowdown_distance_m the
+     * goto runs at full forward power (100% of max_throttle_fwd_pct); inside it
+     * the thrust ramps linearly down to the deadband edge (then relaxes). */
+    uint16_t goto_slowdown_distance_m;
 } settings_params;
 
 #ifdef __cplusplus

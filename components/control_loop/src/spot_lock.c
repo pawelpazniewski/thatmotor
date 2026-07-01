@@ -77,6 +77,25 @@ static int32_t throttle_command(float dist_m, const spot_lock_params *p)
     return clamp_i32((int32_t)lround(cmd), 0, (int32_t)p->max_throttle_norm);
 }
 
+/* goto cruise-decel: full goto_cruise_norm beyond the slowdown distance, then
+ * linear down to the deadband edge. Chain bypasses its power limit for
+ * spot-lock/goto, so the cap is applied here (goto_cruise_norm = max_throttle_fwd_pct). */
+static int32_t goto_throttle_command(float dist_m, const spot_lock_params *p)
+{
+    int32_t cruise = (int32_t)p->goto_cruise_norm;
+    float deadband = (float)p->deadband_m;
+    float slowdown = (float)p->goto_slowdown_distance_m;
+    if (dist_m >= slowdown) {
+        return cruise;
+    }
+    float span = slowdown - deadband;
+    if (span <= 0.0f) {          /* misconfig: slowdown <= deadband -> no ramp zone */
+        return cruise;
+    }
+    float frac = (dist_m - deadband) / span;   /* 0 at deadband edge, 1 at slowdown */
+    return clamp_i32((int32_t)lround((double)cruise * (double)frac), 0, cruise);
+}
+
 /** Full ACTIVE-state regulator: deadband, +/-60 gate, P servo + P throttle. */
 static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
                                                const spot_lock_params *p,
@@ -108,7 +127,9 @@ static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
      * pure steering and crawls round in one gentle turn. */
     if (err_deg10 >= -SPOT_LOCK_HEADING_GATE_DEG10 &&
         err_deg10 <= SPOT_LOCK_HEADING_GATE_DEG10) {
-        out.throttle_cmd = throttle_command(dist, p);
+        out.throttle_cmd = (st->target_source == SPOT_LOCK_SRC_GOTO)
+                               ? goto_throttle_command(dist, p)
+                               : throttle_command(dist, p);
     }
     return out;
 }

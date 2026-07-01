@@ -51,6 +51,8 @@ void settings_load_defaults(settings_params *out)
         .spot_lock_servo_gain = SPOT_LOCK_SERVO_GAIN_DEFAULT,
 
         .goto_comms_timeout_ms = GOTO_COMMS_TIMEOUT_MS_DEFAULT,
+
+        .goto_slowdown_distance_m = GOTO_SLOWDOWN_DISTANCE_M_DEFAULT,
     };
 
     *out = defaults;
