@@ -2,6 +2,8 @@
 #include "control_loop.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "gps.h"
 #include "http_server.h"
 #include "imu.h"
@@ -14,6 +16,17 @@
 #include "wifi_ap.h"
 
 static const char *TAG = "app_main";
+
+/* The 50 Hz control loop runs in its own task, NOT the main task, so it can be
+ * isolated from the networking stack. CPU1 keeps it off CPU0 where the Wi-Fi
+ * task is pinned, so a web-panel reload's network burst cannot starve the loop
+ * past the 5 s Task WDT and force a reboot (which drops ARMED -> DISARMED and
+ * stops the drive mid-run). The priority sits ABOVE the diagnostic workers
+ * (gps/imu/blackbox/console at prio 2) so they can never preempt a control
+ * cycle, and below the Wi-Fi task (prio ~23, on CPU0). */
+#define CONTROL_TASK_STACK 4096
+#define CONTROL_TASK_PRIO 10
+#define CONTROL_TASK_CORE 1
 
 /* Map a reset reason to a short human-readable label for the boot log. */
 static const char *reset_reason_label(esp_reset_reason_t reason)
@@ -47,6 +60,14 @@ static void enter_safe_outputs(void)
     ESP_ERROR_CHECK(pwm_out_write_us(PWM_OUT_ESC, PWM_OUT_NEUTRAL_US));
     ESP_ERROR_CHECK(pwm_out_write_us(PWM_OUT_SERVO, PWM_OUT_NEUTRAL_US));
     ESP_LOGI(TAG, "outputs in safe state: ESC+servo @ %u us", PWM_OUT_NEUTRAL_US);
+}
+
+/* Control-loop task entry: runs the never-returning 50 Hz loop. Pinned to CPU1
+ * at CONTROL_TASK_PRIO by app_main. */
+static void control_task(void *arg)
+{
+    (void)arg;
+    control_loop_run(); /* never returns */
 }
 
 void app_main(void)
@@ -120,6 +141,17 @@ void app_main(void)
                  console_err);
     }
 
-    ESP_LOGI(TAG, "control loop initialised; entering 50 Hz loop (DISARMED)");
-    control_loop_run();
+    /* Hand the 50 Hz loop to a dedicated CPU1 task (see CONTROL_TASK_* above) so
+     * it is isolated from the Wi-Fi/HTTP stack on CPU0. The main task then
+     * returns and self-deletes; the control task owns the loop from here. */
+    ESP_LOGI(TAG, "control loop initialised; starting 50 Hz task on CPU%d (DISARMED)",
+             CONTROL_TASK_CORE);
+    BaseType_t ok = xTaskCreatePinnedToCore(control_task, "control",
+                                            CONTROL_TASK_STACK, NULL,
+                                            CONTROL_TASK_PRIO, NULL,
+                                            CONTROL_TASK_CORE);
+    if (ok != pdPASS) {
+        ESP_LOGE(TAG, "failed to create control task; rebooting to safe state");
+        esp_restart();
+    }
 }
