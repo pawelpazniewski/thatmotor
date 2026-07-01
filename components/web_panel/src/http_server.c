@@ -152,9 +152,11 @@ static bool extract_command(const char *body, char *out, size_t out_size)
 
 /* Extract the goto target (lat_e7, lon_e7) from a {"cmd":"goto",...} body via
  * cJSON. Both fields must be present as numbers; returns true and fills out on
- * success, false on any shape failure. Values are read via valuedouble (exact
- * for the |value| <= 1.8e9 integer range) and cast to int32. Range validation is
- * NOT done here: it is delegated to the pure goto_target_valid at the boundary. */
+ * success, false on any shape failure OR an out-of-range/non-finite value. This
+ * is a thin cJSON adapter: the accept/reject + narrow-to-int32 decision is the
+ * pure, host-tested goto_target_from_double, which validates in the double
+ * domain BEFORE casting (guards against INF/NaN UB and modulo-2^32 wrap bypass
+ * on values outside int32). */
 static bool extract_goto_target(const char *body, int32_t *lat_e7, int32_t *lon_e7)
 {
     cJSON *root = cJSON_Parse(body);
@@ -163,11 +165,9 @@ static bool extract_goto_target(const char *body, int32_t *lat_e7, int32_t *lon_
     }
     const cJSON *lat = cJSON_GetObjectItemCaseSensitive(root, "lat_e7");
     const cJSON *lon = cJSON_GetObjectItemCaseSensitive(root, "lon_e7");
-    bool ok = cJSON_IsNumber(lat) && cJSON_IsNumber(lon);
-    if (ok) {
-        *lat_e7 = (int32_t)lat->valuedouble;
-        *lon_e7 = (int32_t)lon->valuedouble;
-    }
+    bool ok = cJSON_IsNumber(lat) && cJSON_IsNumber(lon) &&
+              goto_target_from_double(lat->valuedouble, lon->valuedouble, lat_e7,
+                                      lon_e7);
     cJSON_Delete(root);
     return ok;
 }

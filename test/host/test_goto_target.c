@@ -1,3 +1,4 @@
+#include <math.h>
 #include <string.h>
 
 #include "api_contract.h"
@@ -68,6 +69,55 @@ static void test_out_of_range_goto_builds_validation_error_envelope(void)
     TEST_ASSERT_NOT_NULL(strstr(body, "\"error\":{\"code\":\"VALIDATION_FAILED\""));
 }
 
+/* --- goto_target_from_double: double-domain validation before the int32 cast ---
+ *
+ * These close the oracle on inputs the int32 range oracle cannot see: non-finite
+ * values (cast = UB) and magnitudes outside int32 that would wrap modulo 2^32
+ * back into range. Each MUST be rejected; a naive `(int32_t)valuedouble` before
+ * validation would let 4.39e9 through (wraps to ~1e8) -> these tests FAIL. */
+
+static void test_from_double_valid_narrows_to_int32(void)
+{
+    int32_t lat_e7 = 0, lon_e7 = 0;
+    TEST_ASSERT_TRUE(goto_target_from_double(521000000.0, 210000000.0, &lat_e7, &lon_e7));
+    TEST_ASSERT_EQUAL_INT32(521000000, lat_e7);
+    TEST_ASSERT_EQUAL_INT32(210000000, lon_e7);
+}
+
+static void test_from_double_infinity_is_rejected(void)
+{
+    int32_t lat_e7 = 7, lon_e7 = 7;
+    TEST_ASSERT_FALSE(goto_target_from_double(INFINITY, 0.0, &lat_e7, &lon_e7));
+    TEST_ASSERT_FALSE(goto_target_from_double(0.0, -INFINITY, &lat_e7, &lon_e7));
+    /* Outputs untouched on rejection. */
+    TEST_ASSERT_EQUAL_INT32(7, lat_e7);
+    TEST_ASSERT_EQUAL_INT32(7, lon_e7);
+}
+
+static void test_from_double_nan_is_rejected(void)
+{
+    int32_t lat_e7 = 0, lon_e7 = 0;
+    TEST_ASSERT_FALSE(goto_target_from_double(NAN, 0.0, &lat_e7, &lon_e7));
+    TEST_ASSERT_FALSE(goto_target_from_double(0.0, NAN, &lat_e7, &lon_e7));
+}
+
+static void test_from_double_out_of_int32_wrap_is_rejected(void)
+{
+    /* 4.39e9 > INT32_MAX: a bare cast wraps to ~1e8 and would pass the range
+     * oracle. Validated in the double domain, it is rejected. */
+    int32_t lat_e7 = 0, lon_e7 = 0;
+    TEST_ASSERT_FALSE(goto_target_from_double(4.39e9, 0.0, &lat_e7, &lon_e7));
+    TEST_ASSERT_FALSE(goto_target_from_double(-4.39e9, 0.0, &lat_e7, &lon_e7));
+    TEST_ASSERT_FALSE(goto_target_from_double(0.0, 4.39e9, &lat_e7, &lon_e7));
+}
+
+static void test_from_double_just_out_of_range_is_rejected(void)
+{
+    int32_t lat_e7 = 0, lon_e7 = 0;
+    TEST_ASSERT_FALSE(goto_target_from_double(900000001.0, 0.0, &lat_e7, &lon_e7));
+    TEST_ASSERT_FALSE(goto_target_from_double(0.0, -1800000001.0, &lat_e7, &lon_e7));
+}
+
 void run_goto_target_tests(void)
 {
     RUN_TEST(test_target_inside_range_is_valid);
@@ -77,4 +127,9 @@ void run_goto_target_tests(void)
     RUN_TEST(test_lon_just_above_max_is_invalid);
     RUN_TEST(test_exact_boundaries_are_valid);
     RUN_TEST(test_out_of_range_goto_builds_validation_error_envelope);
+    RUN_TEST(test_from_double_valid_narrows_to_int32);
+    RUN_TEST(test_from_double_infinity_is_rejected);
+    RUN_TEST(test_from_double_nan_is_rejected);
+    RUN_TEST(test_from_double_out_of_int32_wrap_is_rejected);
+    RUN_TEST(test_from_double_just_out_of_range_is_rejected);
 }

@@ -34,12 +34,22 @@ Implementacja:
 - [x] Modyfikuj `components/control_loop/src/control_loop.c` — `apply_ui_events`: staged goto target + `goto_engage` latch; `goto_cancel` → wyczyść; stempel `s_last_goto_ms` (`sensor_freshness_stamp`)
 
 Testy (test-first: kontrakt request/response dla błędnego lat/lon → 400):
-- [x] Test: poprawny `goto` z lat/lon w zakresie → UI event z `goto_request` i skopiowanym celem
+- [ ] Test: poprawny `goto` z lat/lon w zakresie → UI event z `goto_request` i skopiowanym celem (ODROCZONE do Unit 4 — `to_ui_events`/`extract_goto_target` static+cJSON, brak cJSON w host-harness; brak asercji na skopiowany cel)
 - [x] Test: `goto` z lat/lon poza zakresem → `400 {data:null,error:{code}}` (bez postu do mailbox)
-- [x] Test: `goto_cancel` → UI event `goto_cancel_request`
+- [x] Test: `goto_cancel` → UI event `goto_cancel_request` (uwaga: pokryte tylko na poziomie flagi parsera, nie mapowania `to_ui_events` — odroczone do Unit 4)
 
 Weryfikacja:
 - [ ] Weryfikacja: `idf.py build` zielony; host-tests zielone; `POST /api/command` zwraca poprawną kopertę dla obu ścieżek; UI event dociera do `apply_ui_events`
+
+## Do poprawy po review fazy 1
+
+Severity gate: ⛔ BLOKUJE (1× P1). Raport: `review-faza-1.md`. Host-tests 400/400 PASS, `idf.py build` PASS.
+
+- [x] 🔴 [blocking] **http_server.c:168-169** (`extract_goto_target`) — cast `(int32_t)valuedouble` PRZED walidacją zakresu = UB (INF/NaN) + wrap-into-range bypass (np. `lat_e7=4394967296` → `1e8` przechodzi walidację). NAPRAWIONE: wyekstrahowano czystą, host-testowalną `goto_target_from_double(lat_d, lon_d, *lat_e7, *lon_e7)` w `goto_target.{h,c}` (`#include <math.h>`, `isfinite` + porównanie z `GOTO_*_E7_MIN/MAX` w domenie double PRZED castem); `extract_goto_target` to cienki adapter cJSON delegujący decyzję.
+- [x] 🟠 [important] **goto-waypoint-navigation-zadania.md:37** — checkbox „poprawny goto → UI event ze skopiowanym celem" był `[x]` bez asercji na skopiowany cel (anty-pattern #7). Poprawiono na `[ ]` + „odroczone do Unit 4". (rozwiązane w tym review; zweryfikowane — stan checkboxów zgodny z rzeczywistością, nie cofnięto)
+- [x] 🟡 [nit] **test_goto_target.c** — dodano host-testy warstwy walidacji `double` na `INFINITY`/`-INFINITY`/`NAN` oraz `4.39e9`/`-4.39e9` (wrap bypass) → każdy odrzucony (moc wyroczni: naive cast przed walidacją FAILuje te testy).
+- [ ] 🟡 [nit] **control_loop.c:350** — `sensor_freshness_stamp(..., true)` z literałem `true` jest tożsamościowe z `= now_ms()` (martwy predykat). Rozważ bezpośrednie przypisanie z komentarzem o domenie zegara.
+- [ ] 🟡 [nit] **http_server.c:211,221** — podwójny `cJSON_Parse` tego samego `reqbuf`. Akceptowalny trade-off (prostota > DRY); nie wymaga zmiany.
 
 ---
 
