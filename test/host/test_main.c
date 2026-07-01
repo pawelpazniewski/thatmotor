@@ -35,6 +35,7 @@ void run_quat_to_yaw_tests(void);
 void run_blackbox_record_tests(void);
 void run_blackbox_ring_tests(void);
 void run_blackbox_sampler_tests(void);
+void run_blackbox_resume_tests(void);
 
 int main(void)
 {
@@ -69,5 +70,6 @@ int main(void)
     run_blackbox_record_tests();
     run_blackbox_ring_tests();
     run_blackbox_sampler_tests();
+    run_blackbox_resume_tests();
     return UNITY_END();
 }

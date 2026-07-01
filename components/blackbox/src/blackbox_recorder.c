@@ -155,6 +155,10 @@ esp_err_t blackbox_recorder_start(void)
         ESP_LOGW(TAG, "blackbox_init failed (status %d)", init);
         return ESP_ERR_NOT_FOUND;
     }
+    /* Continue session ids past whatever survived a reboot/brownout: the init
+     * scan recovered the highest existing id, so the next START yields id + 1
+     * instead of colliding with the previous outing's records. */
+    s_session_seq = blackbox_resume_session_seq();
     BaseType_t ok = xTaskCreate(recorder_task, "blackbox", BLACKBOX_TASK_STACK,
                                 NULL, BLACKBOX_TASK_PRIO, NULL);
     if (ok != pdPASS) {

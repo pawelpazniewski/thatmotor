@@ -94,6 +94,25 @@ Pozostałe wymagają realnego sprzętu lub żywego panelu i są tu odłożone:
   (ints). JSON serializowany przez `snapshot_to_json` (HAL, nie host-testowany) — kontrakt int/bool
   zweryfikowany przez `idf.py build` + wymaga wizualnej weryfikacji w przeglądarce.
 
+## 4b. Blackbox — resztkowa luka wznowienia po zawinięciu ringu `[HW]`
+
+Po review fazy 2 (P2, cykl 1) `blackbox_init` skanuje region i wznawia kursor zapisu oraz licznik
+sesji za ostatnim ważnym rekordem (`blackbox_resume`, host-testowane): reboot/brownout MIĘDZY
+wypłynięciami nie reużywa `session_id` i nie nadpisuje poprzedniego wypłynięcia od slotu 0.
+Programowa część data-integrity (brak kolizji `session_id`, kontynuacja kursora) jest naprawiona
+i pokryta host-testami.
+
+Resztka (czysto sprzętowa, poza zasięgiem programowym bez per-record seq):
+- 🔧 **Wznowienie po ZAWINIĘCIU ringu** — gdy poprzednia sesja zapełniła cały region (>16384
+  rekordów, ring się zawinął), rekord nie niesie per-record monotonicznego seq, więc skan po
+  reboocie nie odróżni fizycznej głowicy zapisu w środku ringu od granicy „najstarszy/najnowszy".
+  Kursor wznawia wtedy za najwyższym fizycznie ważnym slotem (capacity), co kontynuuje nadpisywanie
+  najstarszych — poprawne dla ringu, ale dokładna pozycja głowicy sprzed zawinięcia nie jest
+  odtwarzalna bez bumpu schematu rekordu o per-record seq. Przy założeniu „dump po każdym
+  wypłynięciu" (16384 sloty ≫ jedno wypłynięcie) zawinięcie między wypłynięciami jest nierealne.
+  Procedura polowa: **dump przed odłączeniem/rebootem**. Domknięcie (jeśli kiedyś potrzebne):
+  per-record ring-seq + porządkowanie dumpu przez `oldest_seq`/`seq_after` (Unit 4).
+
 ## 5. Pozostałe nity `[P3]` z review (świadomie nieadresowane — „pomiń P3")
 
 Pełna lista w sekcjach „Do poprawy po review fazy N" w `*-zadania.md` (linie 268–360). Wszystkie są

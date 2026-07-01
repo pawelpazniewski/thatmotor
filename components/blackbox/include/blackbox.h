@@ -17,10 +17,12 @@ extern "C" {
  * Mirrors the nvs_store adapter style: map esp_err_t onto a domain status enum,
  * keep the decision logic out of the HAL.
  *
- * Records are appended with a monotonic sequence number that starts at 0 on
- * blackbox_init and advances per append, wrapping the ring (newest overwrites
- * oldest) via the pure blackbox_ring math. The cursor is in RAM: a reboot
- * restarts the ring at slot 0. Reads of prior data before overwrite still work.
+ * Records are appended with a monotonic sequence number that advances per append,
+ * wrapping the ring (newest overwrites oldest) via the pure blackbox_ring math.
+ * The cursor lives in RAM, so blackbox_init scans the region on start and resumes
+ * it (and the session id counter) past the last valid record (blackbox_resume):
+ * a reboot or brownout between outings keeps recording monotonic, without reusing
+ * a session id or overwriting the previous outing from slot 0.
  */
 
 /** Domain status for blackbox flash operations (maps esp_err_t). */
@@ -44,12 +46,25 @@ typedef enum {
 typedef void (*blackbox_record_cb)(const uint8_t *record, size_t len, void *ctx);
 
 /**
- * Locate the `spotlog` partition and reset the write cursor to slot 0. Must be
- * called once before append/read.
+ * Locate the `spotlog` partition and resume the write cursor past the last valid
+ * record on flash (blackbox_resume), so a reboot continues the ring instead of
+ * restarting it at slot 0. Also recovers the highest existing session id (see
+ * blackbox_resume_session_seq). Must be called once before append/read.
  *
- * @return BLACKBOX_OK, or BLACKBOX_ERR_NOT_FOUND if the partition is missing.
+ * @return BLACKBOX_OK, BLACKBOX_ERR_NOT_FOUND if the partition is missing, or
+ *         BLACKBOX_ERR_IO if the resume scan could not read the region.
  */
 blackbox_status blackbox_init(void);
+
+/**
+ * Highest session id found on flash by the last blackbox_init scan (0 when the
+ * region held no session header). The recorder seeds its session counter from
+ * this so the next session id is highest + 1 — never a reused / colliding id
+ * after a reboot. Valid only after blackbox_init.
+ *
+ * @return Highest existing session_seq, or 0 if none / before init.
+ */
+uint32_t blackbox_resume_session_seq(void);
 
 /**
  * Append one fixed-size record to the ring: erase the sector first if this write

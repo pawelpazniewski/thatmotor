@@ -6,6 +6,7 @@ idf_component_register(
     SRCS "src/blackbox_record.c"
          "src/blackbox_ring.c"
          "src/blackbox_sampler.c"
+         "src/blackbox_resume.c"
          "src/blackbox.c"
          "src/blackbox_recorder.c"
     INCLUDE_DIRS "include"

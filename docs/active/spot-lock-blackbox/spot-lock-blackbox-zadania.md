@@ -134,6 +134,22 @@ Review 2026-07-01 — severity gate ✅ CZYSTE (P1=0, P2=0). Brak blokerów. Rap
 
 ---
 
+## Do poprawy po review fazy 2
+
+Review 2026-07-01 — severity gate ⚠️ ZASTRZEŻENIA (P1=0, P2=1, P3=4). Brak blokerów.
+Raport: `review-faza-2.md`. Werdykt: obserwator/zero-wpływu ✅ OK, HAL cienki ✅ OK,
+sampler oracle power ✅ OK, Pure ⊥ HAL ✅ OK, rozmiary/SRP ✅ OK.
+
+- [x] 🟠 [important] **components/blackbox/src/blackbox.c:33 + blackbox_recorder.c:87 (→ Unit 4)** — cursor `s_seq` i `session_seq` zerowane w RAM na init: po reboocie/brownoucie MIĘDZY wypłynięciami (bez dumpu) sesja post-reboot reużywa `session_id` sprzed reboota i nadpisuje sloty od 0 → dump (`read_all` fizycznie rosnąco, bez `oldest_seq`) daje kolizję `session_id` + przeplot dwóch wypłynięć w złej kolejności → mylący CSV. Happy-path (dump w tym samym power-cycle) OK. Domknąć w Unit 4: skan regionu i zasianie `s_seq`/`session_seq` z najwyższego seq +1 (globalnie unikatowe id + porządkowanie po zapisanym seq), LUB per-record ring-seq + `spotlog dump` porządkuje przez `oldest_seq`/`seq_after`; udokumentować w known-issues + procedurze polowej „dump przed rebootem".
+  **NAPRAWIONE (cykl 1):** `blackbox_init` skanuje region i zasiewa `s_seq`/`session_seq` przez czystą,
+  host-testowaną funkcję `blackbox_resume_decide` (najwyższy `session_seq` → następna sesja +1;
+  kursor za ostatnim ważnym rekordem). Nowy `test_blackbox_resume.c` (moc wyroczni: FAILuje przy
+  zerowaniu kursora). Resztka po zawinięciu ringu (bez per-record seq) → known-issues §4b.
+- [ ] 🟡 [nit] **components/blackbox/src/blackbox.c:69-89 (→ Unit 4)** — `read_all` robi 16384 osobnych `esp_partition_read` po 64 B; przy wpięciu do `spotlog dump` rozważ czytanie sektorami.
+- [ ] 🟡 [nit] **components/blackbox/src/blackbox.c (→ Unit 4)** — `s_part`/`s_seq` bez locka; dump (task konsoli) równoległy do `append` (recorder) może się przeplatać. Rób dump w DISARMED/off-water lub dodaj synchronizację.
+- [ ] 🟡 [nit] **components/blackbox/src/blackbox_recorder.c:82-100** — `write_header` konsumuje `session_seq`/`start_ms` przed encode; przy encode-fail id sesji przepada bez nagłówka na flash (best-effort, kosmetyczne).
+- [ ] 🟡 [nit] **components/blackbox/src/blackbox_recorder.c:61-64** — cast `u32→u16` na pulse-width; glitch >65535 by uciął (RC/clamp ogranicza, dane obserwatora — akceptowalne).
+
 ## Zamknięcie
 
 - [ ] Finalny self-check: `test/host/run.sh` zielony + `idf.py build` zielony
