@@ -1,9 +1,30 @@
 # Kontekst: Spot-lock blackbox
 
 **Branch:** `feature/spot-lock-blackbox`
-**Ostatnia aktualizacja:** 2026-07-01
+**Ostatnia aktualizacja:** 2026-07-01 (Faza 2 / Unit 3)
 
 ## Postęp
+
+- **Faza 2 ukończona (Unit 3 — HAL flash + recorder task).** Komponent `blackbox`
+  wchodzi teraz do buildu IDF: `components/blackbox/CMakeLists.txt` rejestruje
+  wszystkie 5 plików .c (record, ring, sampler, blackbox HAL, recorder), REQUIRES
+  esp_partition/spi_flash/control_loop/freertos/esp_timer. Czysta decyzja sesji/
+  próbki w `blackbox_sampler.*` (OFF→non-OFF=START, non-OFF→non-OFF w tym
+  ACTIVE→PAUSED=SAMPLE, non-OFF→OFF=CLOSE, OFF→OFF=IDLE) — host-testowana (6 testów).
+  HAL `blackbox.*` (adapter esp_partition: init/erase/append/read-all, esp_err_t→
+  `blackbox_status`, cursor `seq` napędza pure ring). Recorder task w
+  `blackbox_recorder.c` (prio 2, stack 3 KB, tick ~500 ms = 2 Hz; wzorzec gps_reader).
+  372 host-testów zielone (+6); `idf.py build` zielony z komponentem w buildzie
+  (bin 0xECAD0, 38% wolne w partycji app).
+- **Decyzja (odchylenie od dosłownego brzmienia zadania):** task recordera NIE jest
+  inline w `app_main.c` — jest w komponencie (`blackbox_recorder_start()`), a app_main
+  tylko go woła (dokładny wzorzec gps_start/imu_start: opcjonalny, log-and-continue,
+  poza failsafe). Trzyma app_main cienki (SRP, reguła „plik komponentu nie zawiera
+  logiki tła"). Kontrakt „start po control_loop_init, prio 2, 2 Hz" zachowany.
+- **Decyzja (cursor seq):** `blackbox_init` zeruje cursor `seq` w RAM — po reboocie
+  ring startuje od slotu 0. Dane sprzed reboota są czytelne przez read-all dopóki nie
+  nadpisane. Wystarczające dla strojenia polowego (dump po każdym wypłynięciu). Odczyt
+  z wznowieniem cursora (skan regionu) odłożony — nie w scope Unit 3.
 
 - **Faza 1 ukończona (Unit 1 + Unit 2).** Partycja `spotlog` (0x196000, 1 MiB,
   subtype 0x40) dopisana na końcu `partitions.csv` — offsety nvs/phy_init/factory/
@@ -17,6 +38,14 @@
 - **Uwaga wdrożeniowa:** `components/blackbox/` nie ma jeszcze `CMakeLists.txt`, więc
   IDF ignoruje katalog (pliki .c walidowane tylko host-testami w Fazie 1). Rejestracja
   komponentu do buildu IDF następuje w Unit 3.
+- **Review Fazy 1 (2026-07-01): ✅ CZYSTE.** P1=0, P2=0, P3=1. Raport:
+  `review-faza-1.md`. Wrap-safety potwierdzona empirycznie (3/3 naiwne impl. łamią
+  asercje → realna moc wyroczni). Integralność kodeka OK (magic 0xB10C ⊥ 0xFF/0x0000,
+  CRC32 known-answer 0xCBF43926, taksonomia empty/magic/crc/schema/type kompletna,
+  round-trip field-by-field, brak straddle 64|4096). Offsety partycji potwierdzone
+  `gen_esp32part.py` (nvs/phy_init/factory/appcfg niezmienione, spotlog @0x196000).
+  Pure ⊥ HAL OK (esp_ tylko w komentarzach). Jedyny nit: `blackbox_record.c` = 302
+  linie (2 ponad próg), kohezyjny — do rozważenia przy dodaniu typów rekordu w Fazie 2.
 
 ## Źródła
 - Requirements doc: `docs/dev-brainstorms/2026-06-29-spot-lock-blackbox-requirements.md`

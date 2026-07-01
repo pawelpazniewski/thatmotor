@@ -49,18 +49,18 @@ Weryfikacja:
 ### Unit 3: Adapter flash (HAL) + recorder task tła (R1, R2, R3, R4, R5)
 
 Implementacja:
-- [ ] Stwórz `components/blackbox/include/blackbox.h` + `src/blackbox.c` — HAL: init partycji, erase sektora, append, read-all; mapuje `esp_err_t`→enum domenowy
-- [ ] Stwórz `components/blackbox/include/blackbox_sampler.h` + `src/blackbox_sampler.c` (lub w rdzeniu) — czysta decyzja „nowa sesja / próbkuj / zamknij" z `(prev_substate, cur_substate)`
-- [ ] Stwórz `components/blackbox/CMakeLists.txt` — REQUIRES (esp_partition/spi_flash, control_loop, freertos, esp_timer)
-- [ ] Modyfikuj `main/app_main.c` — start taska recordera prio 2 (wzorzec gps_reader) po `control_loop_init`; peek `control_loop_get_snapshot()` co ~2 Hz, zapis nagłówka na zboczu OFF→non-OFF, próbki w trakcie, zamknięcie na non-OFF→OFF
-- [ ] Stwórz `test/host/test_blackbox_sampler.c`; zarejestruj w CMake + `test_main.c`
+- [x] Stwórz `components/blackbox/include/blackbox.h` + `src/blackbox.c` — HAL: init partycji, erase sektora, append, read-all; mapuje `esp_err_t`→enum domenowy
+- [x] Stwórz `components/blackbox/include/blackbox_sampler.h` + `src/blackbox_sampler.c` (lub w rdzeniu) — czysta decyzja „nowa sesja / próbkuj / zamknij" z `(prev_substate, cur_substate)`
+- [x] Stwórz `components/blackbox/CMakeLists.txt` — REQUIRES (esp_partition/spi_flash, control_loop, freertos, esp_timer)
+- [x] Modyfikuj `main/app_main.c` — start taska recordera prio 2 (wzorzec gps_reader) po `control_loop_init`; peek `control_loop_get_snapshot()` co ~2 Hz, zapis nagłówka na zboczu OFF→non-OFF, próbki w trakcie, zamknięcie na non-OFF→OFF
+- [x] Stwórz `test/host/test_blackbox_sampler.c`; zarejestruj w CMake + `test_main.c`
 
 Testy (test-first dla czystej decyzji sesji/próbki):
-- [ ] Test: zbocze OFF→ACTIVE → „rozpocznij sesję" (emit nagłówka)
-- [ ] Test: ACTIVE→ACTIVE → „próbkuj", bez nowego nagłówka
-- [ ] Test: ACTIVE→PAUSED → nadal „próbkuj" (ta sama sesja; R2 obejmuje PAUSED)
-- [ ] Test: non-OFF→OFF → „zamknij sesję", brak dalszych próbek
-- [ ] Test: pojemność spójna z rozmiarem regionu/rekordu (geometria z Unit 1)
+- [x] Test: zbocze OFF→ACTIVE → „rozpocznij sesję" (emit nagłówka)
+- [x] Test: ACTIVE→ACTIVE → „próbkuj", bez nowego nagłówka
+- [x] Test: ACTIVE→PAUSED → nadal „próbkuj" (ta sama sesja; R2 obejmuje PAUSED)
+- [x] Test: non-OFF→OFF → „zamknij sesję", brak dalszych próbek
+- [x] Test: pojemność spójna z rozmiarem regionu/rekordu (geometria z Unit 1)
 
 Weryfikacja:
 - [ ] Weryfikacja: `test/host/run.sh` zielony
@@ -123,6 +123,14 @@ Testy:
 Weryfikacja:
 - [ ] Weryfikacja: dokumenty obecne i spójne; known-issues zawiera luki sprzętowe/E2E
 - [ ] Weryfikacja: brak zmian w kodzie wymagających testów host
+
+---
+
+## Do poprawy po review fazy 1
+
+Review 2026-07-01 — severity gate ✅ CZYSTE (P1=0, P2=0). Brak blokerów. Raport: `review-faza-1.md`.
+
+- [ ] 🟡 [nit] **components/blackbox/src/blackbox_record.c:1-302** — 302 linie (2 ponad próg 300); plik kohezyjny, split do rozważenia dopiero przy dodaniu kolejnych typów rekordu w Fazie 2+. Nie blokuje.
 
 ---
 

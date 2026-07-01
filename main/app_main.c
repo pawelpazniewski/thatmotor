@@ -1,3 +1,4 @@
+#include "blackbox_recorder.h"
 #include "control_loop.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -96,6 +97,16 @@ void app_main(void)
     esp_err_t imu_err = imu_start();
     if (imu_err != ESP_OK) {
         ESP_LOGW(TAG, "IMU start failed (0x%x); continuing without compass", imu_err);
+    }
+
+    /* Blackbox recorder: a diagnostic background task (prio 2) that logs
+     * spot-lock sessions to the `spotlog` flash partition. OPTIONAL and entirely
+     * OUTSIDE failsafe: a start error is logged but never aborts the boot, and
+     * losing it has no effect on arming/steering/failsafe or the 50 Hz loop. */
+    esp_err_t blackbox_err = blackbox_recorder_start();
+    if (blackbox_err != ESP_OK) {
+        ESP_LOGW(TAG, "blackbox recorder start failed (0x%x); continuing without logging",
+                 blackbox_err);
     }
 
     ESP_LOGI(TAG, "control loop initialised; entering 50 Hz loop (DISARMED)");

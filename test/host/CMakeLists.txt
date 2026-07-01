@@ -46,6 +46,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/imu/src/quat_to_yaw.c
     ${REPO_ROOT}/components/blackbox/src/blackbox_record.c
     ${REPO_ROOT}/components/blackbox/src/blackbox_ring.c
+    ${REPO_ROOT}/components/blackbox/src/blackbox_sampler.c
 )
 
 set(PURE_INCLUDE_DIRS
@@ -98,6 +99,7 @@ set(TEST_SOURCES
     test_quat_to_yaw.c
     test_blackbox_record.c
     test_blackbox_ring.c
+    test_blackbox_sampler.c
 )
 
 add_executable(host_tests ${TEST_SOURCES} ${PURE_SOURCES})
