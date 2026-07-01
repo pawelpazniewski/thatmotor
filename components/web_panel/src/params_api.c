@@ -7,9 +7,12 @@
 #include "settings_validate.h"
 #include "state_machine.h"
 
-/* Buffer for a serialised params object embedded in a success envelope. The
- * full envelope buffer (body) is larger; this holds just the data fragment. */
-#define PARAMS_JSON_MAX 768
+/* Buffer for a serialised params object embedded in a success envelope. Sized
+ * from the field set (params_json.h), never a hand-picked literal: an undersized
+ * buffer makes params_json_serialize return 0 -> a 500, and the panel then shows
+ * no params at all. The full envelope buffer (body) is larger; this holds just
+ * the data fragment. */
+#define PARAMS_JSON_MAX PARAMS_JSON_SERIALIZE_MAX
 
 static params_api_response make_error(api_error_code code, const char *message,
                                       int http_status, char *body,

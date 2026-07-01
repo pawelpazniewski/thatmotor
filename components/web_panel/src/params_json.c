@@ -59,6 +59,13 @@ static const bool_field BOOL_FIELDS[] = {
 
 #define BOOL_FIELD_COUNT (sizeof(BOOL_FIELDS) / sizeof(BOOL_FIELDS[0]))
 
+/* Keep the serialise-buffer bound (params_json.h) in lockstep with the real
+ * field set: +1 for schema_version. Adding a field without bumping
+ * PARAMS_JSON_FIELD_COUNT (and thus the buffer) breaks the build here instead of
+ * silently overflowing the panel's params response at runtime. */
+_Static_assert(U16_FIELD_COUNT + BOOL_FIELD_COUNT + 1 == PARAMS_JSON_FIELD_COUNT,
+               "PARAMS_JSON_FIELD_COUNT out of sync with the field tables");
+
 static uint16_t *u16_ptr(settings_params *p, size_t offset)
 {
     return (uint16_t *)((char *)p + offset);

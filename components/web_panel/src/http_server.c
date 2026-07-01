@@ -9,6 +9,7 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "params_api.h"
+#include "params_json.h"
 #include "ws_telemetry.h"
 
 static const char *TAG = "http_server";
@@ -28,9 +29,13 @@ extern const uint8_t app_js_end[] asm("_binary_app_js_end");
 extern const uint8_t style_css_start[] asm("_binary_style_css_start");
 extern const uint8_t style_css_end[] asm("_binary_style_css_end");
 
-/* Max request/response sizes. Params envelope fits comfortably under 1 KiB. */
-#define HTTP_BODY_MAX 1024
-#define HTTP_REQ_MAX 1024
+/* Max request/response sizes. The response body wraps the serialised params in
+ * the success envelope ({"data":...,"error":null}), so it must hold the full
+ * params JSON (PARAMS_JSON_SERIALIZE_MAX) plus that ~22-byte wrapper; 64 leaves
+ * slack. The request body carries an incoming params object (no envelope). */
+#define HTTP_ENVELOPE_OVERHEAD 64
+#define HTTP_BODY_MAX (PARAMS_JSON_SERIALIZE_MAX + HTTP_ENVELOPE_OVERHEAD)
+#define HTTP_REQ_MAX (PARAMS_JSON_SERIALIZE_MAX + HTTP_ENVELOPE_OVERHEAD)
 
 static esp_err_t send_asset(httpd_req_t *req, const uint8_t *start,
                             const uint8_t *end, const char *content_type)
