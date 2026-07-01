@@ -517,6 +517,64 @@ void test_goto_override_on_stick_deflection(void)
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_NONE, st.target_source);
 }
 
+void test_goto_retains_target_during_pause_ignoring_input(void)
+{
+    /* Arrange: goto ACTIVE on the external target, then the link goes stale AND
+     * the loop presents a ZEROED goto_* (the null-island hazard: upstream drops
+     * the latch on link loss). The pure core must PAUSE and RETAIN the last good
+     * ref_* - never overwrite it from the input while comms is stale. A naive
+     * "ref_* = goto_* every cycle" writes (0,0) here -> this test fails (oracle). */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_inputs();
+    in.lat_e7 = REF_LAT_E7 - E7_10M;
+    in.comms_fresh = false;
+    in.goto_lat_e7 = 0; /* upstream zeroed the target on link loss */
+    in.goto_lon_e7 = 0;
+    spot_lock_state st = make_active_goto_state();
+
+    /* Act: link lost with a zeroed input target. */
+    spot_lock_outputs paused = spot_lock_step(&in, &p, &st);
+
+    /* Assert: PAUSED and the ORIGINAL target retained (not 0,0, not the input). */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_PAUSED, paused.substate);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7, st.ref_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
+
+    /* Act: link returns and the upstream restores the latched target. */
+    in.comms_fresh = true;
+    in.goto_lat_e7 = GOTO_LAT_E7;
+    in.goto_lon_e7 = GOTO_LON_E7;
+    spot_lock_outputs resumed = spot_lock_step(&in, &p, &st);
+
+    /* Assert: back to ACTIVE on the SAME retained target. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, resumed.substate);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7, st.ref_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
+}
+
+void test_goto_fresh_link_tracks_new_target(void)
+{
+    /* Arrange: goto ACTIVE on the current target; while the link is FRESH a new
+     * goto point arrives. R1: a fresh link must re-latch ref_* to the new target
+     * (live tracking is intended when the link is up). Retaining ONLY on entry
+     * would leave ref at the old point -> this test fails (oracle for R1). */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_inputs();
+    in.comms_fresh = true;
+    in.goto_lat_e7 = GOTO_LAT_E7 + E7_10M; /* new, distinct target */
+    in.goto_lon_e7 = GOTO_LON_E7 + E7_10M;
+    spot_lock_state st = make_active_goto_state(); /* ref = old GOTO point */
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: ref re-latched to the NEW target (fresh link replaces the goto). */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, st.target_source);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7 + E7_10M, st.ref_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7 + E7_10M, st.ref_lon_e7);
+    TEST_ASSERT_NOT_EQUAL(SPOT_LOCK_OFF, out.substate);
+}
+
 void test_goto_arrived_flag_tracks_deadband(void)
 {
     /* Arrange: goto ACTIVE exactly on target -> arrived; then ~10 m off -> not
@@ -530,9 +588,10 @@ void test_goto_arrived_flag_tracks_deadband(void)
     /* Act: on target. */
     spot_lock_outputs on_target = spot_lock_step(&in, &p, &on_st);
 
-    /* Assert: arrived. */
+    /* Assert: arrived and relaxed - inside the deadband throttle is neutral. */
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, on_target.substate);
     TEST_ASSERT_TRUE(on_target.arrived);
+    TEST_ASSERT_EQUAL_INT32(0, on_target.throttle_cmd);
 
     /* Act: ~10 m off target. */
     in.lon_e7 = GOTO_LON_E7 + E7_10M;
@@ -566,5 +625,7 @@ void run_spot_lock_tests(void)
     RUN_TEST(test_goto_pauses_on_comms_loss_then_resumes_same_target);
     RUN_TEST(test_comms_gate_does_not_pause_ch3_hold);
     RUN_TEST(test_goto_override_on_stick_deflection);
+    RUN_TEST(test_goto_retains_target_during_pause_ignoring_input);
+    RUN_TEST(test_goto_fresh_link_tracks_new_target);
     RUN_TEST(test_goto_arrived_flag_tracks_deadband);
 }

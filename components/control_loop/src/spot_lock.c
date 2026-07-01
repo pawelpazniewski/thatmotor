@@ -179,10 +179,19 @@ spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
         return run_ch3_hold(in, p, st);
     }
 
-    /* 3. App-driven goto: external target, link-gated (R3/R5). */
+    /* 3. App-driven goto: external target, link-gated (R3/R5). The reference is
+     * (re)latched from the input ONLY on entry into SRC_GOTO or while the link is
+     * fresh (R1: a fresh link tracks a newly commanded goto point). During a link
+     * pause (comms_fresh == false) the core RETAINS the last good target and does
+     * NOT overwrite ref_* from the input - so retention across a link gap is a
+     * property of this pure core, not an implicit contract on the upstream latch
+     * (guards null-island if the loop zeroes goto_* on link loss). */
     if (in->goto_engage) {
-        st->ref_lat_e7 = in->goto_lat_e7;
-        st->ref_lon_e7 = in->goto_lon_e7;
+        bool is_entering_goto = st->target_source != SPOT_LOCK_SRC_GOTO;
+        if (is_entering_goto || in->comms_fresh) {
+            st->ref_lat_e7 = in->goto_lat_e7;
+            st->ref_lon_e7 = in->goto_lon_e7;
+        }
         st->target_source = SPOT_LOCK_SRC_GOTO;
         return hold_or_pause(in, p, st, true);
     }

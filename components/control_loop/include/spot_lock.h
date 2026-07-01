@@ -97,8 +97,12 @@ typedef struct {
  *   1. ANY -> OFF when !armed || !sticks_neutral (manual override, R4/R6).
  *   2. ch3_on -> SRC_HOLD: on entry (edge + fresh real fix) snapshot the
  *      current position as the target; a running goto is preempted here (R4).
- *   3. goto_engage && !ch3_on -> SRC_GOTO: target is the external goto point
- *      (ref_* = goto_*), gated by comms_fresh in addition to GPS/IMU (R3/R5).
+ *   3. goto_engage && !ch3_on -> SRC_GOTO: target is the external goto point.
+ *      ref_* is (re)latched from goto_* only on entry into SRC_GOTO or while the
+ *      link is fresh (R1: a fresh link tracks a newly commanded point); gated by
+ *      comms_fresh in addition to GPS/IMU (R3/R5). During a link pause the core
+ *      RETAINS the last good ref_* and never overwrites it from the input, so
+ *      target retention across a link gap does not depend on the upstream latch.
  *   4. otherwise -> OFF.
  *
  * Within an engaged source:

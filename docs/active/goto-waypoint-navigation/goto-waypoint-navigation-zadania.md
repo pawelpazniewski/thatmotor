@@ -72,7 +72,17 @@ Testy (test-first, moc wyroczni — wchodź w stan, który bez bramki przecieka)
 - [x] Test: regresja CH3 — wszystkie istniejące scenariusze spot-lock przechodzą bez zmian (16 istniejących asercji `test_spot_lock` bez zmian; `arrived` pokryte `test_goto_arrived_flag_tracks_deadband`)
 
 Weryfikacja:
-- [ ] Weryfikacja: host-tests zielone (nowe + wszystkie istniejące `test_spot_lock`); grep braku `esp_*`/`driver/*` w `spot_lock.h`; funkcja deterministyczna
+- [x] Weryfikacja: host-tests zielone (nowe + wszystkie istniejące `test_spot_lock`); grep braku `esp_*`/`driver/*` w `spot_lock.h`; funkcja deterministyczna
+
+## Do poprawy po review fazy 2
+
+Severity gate: ⚠️ ZASTRZEŻENIA (P1=0, P2=1, P3=4). Raport: `review-faza-2.md`. Host-tests 411/411 PASS, `idf.py build` (esp32s3) PASS. Inwarianty safety (priorytet CH3, izolacja bramki linku, failsafe-precedence) strukturalnie szczelne z pełną mocą wyroczni; zero test-weakeningu.
+
+- [x] 🟠 [important] **spot_lock.c:184-185** — cel `SRC_GOTO` śledzony na żywo z wejścia co cykl (nie snapshot), `st->ref_*` nadpisywane z `in->goto_*` także podczas PAUSED, PRZED bramką świeżości. Kontrakt „target retained" (nagłówek + `hold_or_pause` doc) zależy niejawnie od stabilności latcha upstream → hazard null-island jeśli Unit 4 wyzeruje cel na utratę linku. NAPRAWIONE (cykl 1): `ref_*` (re)latchowane z `in->goto_*` TYLKO przy wejściu w `SRC_GOTO` (`is_entering_goto`) LUB gdy `in->comms_fresh` — w PAUSED (comms_fresh=false) rdzeń zachowuje dotychczasowy `ref_*` bez nadpisywania. Retencja celu w PAUSED to własność czystego rdzenia, niezależna od latcha Unit 4. R1 „nowy goto zastępuje poprzedni" zachowane (śledzenie przy świeżym linku). Nagłówek `spot_lock.h` zaktualizowany o jawny kontrakt. Host-test `test_goto_retains_target_during_pause_ignoring_input` (moc wyroczni: naive overwrite → ref=(0,0) FAILuje) + `test_goto_fresh_link_tracks_new_target` (moc wyroczni R1: entry-only latch FAILuje).
+- [ ] 🟡 [nit] **spot_lock.c:158-159** — komentarz o edge-latch trap: preempt CH3 bez edge/fix → `make_off`; CH3-hold nie zaskoczy do przetoglowania CH3 (pre-existing, poprawne fail-safe). Jednolinijkowy komentarz.
+- [ ] 🟡 [nit] **spot_lock.c (goto target)** — rdzeń nie waliduje współrzędnych CELU goto (zmitygowane Unit 2 `goto_target_valid`). Potwierdzić przy Unit 4, że żaden inny tor nie wstrzyknie niezwalidowanego celu.
+- [ ] 🟡 [nit] **test_spot_lock.c** — brak dedykowanego testu pauzy `SRC_GOTO` na utratę GPS/IMU/fix (pokryty pośrednio przez wspólny `hold_or_pause`); symetryczny test goto-fix-loss byłby czystszy.
+- [x] 🟡 [nit] **test_goto_arrived_flag_tracks_deadband** — gałąź on-target nie asertuje `throttle_cmd==0` w deadbandzie dla źródła goto (pokryte dla SRC_HOLD przez `test_deadband_inside`). NAPRAWIONE (cykl 1): dodano `TEST_ASSERT_EQUAL_INT32(0, on_target.throttle_cmd)` w gałęzi on-target.
 
 ---
 
