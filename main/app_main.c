@@ -1,3 +1,4 @@
+#include "blackbox_recorder.h"
 #include "control_loop.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -9,6 +10,7 @@
 #include "rc_capture.h"
 #include "settings_model.h"
 #include "settings_validate.h"
+#include "usb_console.h"
 #include "wifi_ap.h"
 
 static const char *TAG = "app_main";
@@ -96,6 +98,26 @@ void app_main(void)
     esp_err_t imu_err = imu_start();
     if (imu_err != ESP_OK) {
         ESP_LOGW(TAG, "IMU start failed (0x%x); continuing without compass", imu_err);
+    }
+
+    /* Blackbox recorder: a diagnostic background task (prio 2) that logs
+     * spot-lock sessions to the `spotlog` flash partition. OPTIONAL and entirely
+     * OUTSIDE failsafe: a start error is logged but never aborts the boot, and
+     * losing it has no effect on arming/steering/failsafe or the 50 Hz loop. */
+    esp_err_t blackbox_err = blackbox_recorder_start();
+    if (blackbox_err != ESP_OK) {
+        ESP_LOGW(TAG, "blackbox recorder start failed (0x%x); continuing without logging",
+                 blackbox_err);
+    }
+
+    /* USB Serial/JTAG console: a diagnostic REPL (prio 2) for ground-side
+     * calibration (spotlog dump / params get / params set). OPTIONAL and
+     * entirely OUTSIDE failsafe: a start error is logged but never aborts the
+     * boot, and the console has no effect on arming/steering/failsafe. */
+    esp_err_t console_err = usb_console_start();
+    if (console_err != ESP_OK) {
+        ESP_LOGW(TAG, "USB console start failed (0x%x); continuing without console",
+                 console_err);
     }
 
     ESP_LOGI(TAG, "control loop initialised; entering 50 Hz loop (DISARMED)");

@@ -94,6 +94,53 @@ Pozostałe wymagają realnego sprzętu lub żywego panelu i są tu odłożone:
   (ints). JSON serializowany przez `snapshot_to_json` (HAL, nie host-testowany) — kontrakt int/bool
   zweryfikowany przez `idf.py build` + wymaga wizualnej weryfikacji w przeglądarce.
 
+## 4b. Blackbox — resztkowa luka wznowienia po zawinięciu ringu `[HW]`
+
+Po review fazy 2 (P2, cykl 1) `blackbox_init` skanuje region i wznawia kursor zapisu oraz licznik
+sesji za ostatnim ważnym rekordem (`blackbox_resume`, host-testowane): reboot/brownout MIĘDZY
+wypłynięciami nie reużywa `session_id` i nie nadpisuje poprzedniego wypłynięcia od slotu 0.
+Programowa część data-integrity (brak kolizji `session_id`, kontynuacja kursora) jest naprawiona
+i pokryta host-testami.
+
+Resztka (czysto sprzętowa, poza zasięgiem programowym bez per-record seq):
+- 🔧 **Wznowienie po ZAWINIĘCIU ringu** — gdy poprzednia sesja zapełniła cały region (>16384
+  rekordów, ring się zawinął), rekord nie niesie per-record monotonicznego seq, więc skan po
+  reboocie nie odróżni fizycznej głowicy zapisu w środku ringu od granicy „najstarszy/najnowszy".
+  Kursor wznawia wtedy za najwyższym fizycznie ważnym slotem (capacity), co kontynuuje nadpisywanie
+  najstarszych — poprawne dla ringu, ale dokładna pozycja głowicy sprzed zawinięcia nie jest
+  odtwarzalna bez bumpu schematu rekordu o per-record seq. Przy założeniu „dump po każdym
+  wypłynięciu" (16384 sloty ≫ jedno wypłynięcie) zawinięcie między wypłynięciami jest nierealne.
+  Procedura polowa: **dump przed odłączeniem/rebootem**. Domknięcie (jeśli kiedyś potrzebne):
+  per-record ring-seq + porządkowanie dumpu przez `oldest_seq`/`seq_after` (Unit 4).
+
+## 4c. Blackbox — konsola USB, dump, params (Faza 3) — luki hardware/E2E `[HW]`/`[E2E]`
+
+Faza 3 (konsola `esp_console` na USB Serial/JTAG, `spotlog dump` → CSV, `params get`/`params set`)
+ma całą czystą logikę pokrytą host-testami: formatowanie CSV (kolejność kolumn = kontrakt parsera),
+parsowanie/walidacja argumentów `params set`, bramka SI-6 apply/stage. Reszta wymaga realnego
+sprzętu lub żywej sesji i jest tu odłożona:
+
+- 🔧 `[HW]` **Realny zapis na flash** — nagrywanie sesji do partycji `spotlog` (erase sektora +
+  append) na żywym urządzeniu; `read_all` odczytuje zapisane rekordy; nagłówek sesji + malejący
+  `err_m` w kolejnych próbkach. Host-testy pokrywają kodek/ring/CSV, nie realne I/O NOR.
+- 🔧 `[HW]` **Brak jittera pętli 50 Hz przy erase** — `esp_partition_erase_range` blokuje ms;
+  recorder to task tła prio 2, cały I/O poza pętlą sterującą. Zweryfikować oscyloskopem/licznikiem
+  cyklu, że erase 4 KB nie wydłuża okresu cyklu (założenie „flush bez jittera" — luka wiedzy do
+  `/dev-compound`).
+- 🖥️ `[E2E]` **Parsowalność CSV na żywo** — `spotlog dump` po USB Serial/JTAG wypisuje CSV, który
+  parser (Claude) czyta bez uszkodzeń mimo przeplotu z `ESP_LOG` na tym samym porcie. Dump = surowy
+  `printf` bez prefiksu; parser filtruje wiersze pasujące do schematu. Zweryfikować na realnym
+  strumieniu (ilość/rozmiar linii, brak ucięć, filtr linii logu).
+- 🖥️ `[E2E]` **`params set` na żywym torze** — w DISARMED zmienia aktywne nastawy (widoczne w
+  `params get` i telemetrii); w ARMED → staged, aplikuje się po rozbrojeniu (SI-6, nie obchodzone).
+  Wartość poza zakresem odrzucona bez zapisu. Auto-zapis do NVS przetrwa reboot/reflash.
+- 🔧 `[HW]` **Wpływ nastaw na zachowanie na wodzie** — sprzężenie strojenia (`params set`) z realnym
+  holdem: zmiana deadband/gaz/gainów zmienia polowanie/przeregulowanie/donuta w kolejnej sesji
+  (pętla dump→analiza→set→reflash off, `docs/blackbox-calibration.md`). Wyłącznie terenowo.
+- 🔧 `[HW]` **Koegzystencja REPL ↔ `ESP_LOG`** — primary console przełączony na USB Serial/JTAG:
+  logi i REPL dzielą port. Zweryfikować, że prompt jest używalny mimo logów i że monitor/flash
+  (`idf.py -p /dev/ttyACM* flash monitor`) działa bez regresji.
+
 ## 5. Pozostałe nity `[P3]` z review (świadomie nieadresowane — „pomiń P3")
 
 Pełna lista w sekcjach „Do poprawy po review fazy N" w `*-zadania.md` (linie 268–360). Wszystkie są

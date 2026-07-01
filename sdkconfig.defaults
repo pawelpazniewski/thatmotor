@@ -22,3 +22,10 @@ CONFIG_ESP_BROWNOUT_DET_LVL_SEL_7=y
 
 # --- HTTP server WebSocket support for live telemetry panel (Unit 10) ---
 CONFIG_HTTPD_WS_SUPPORT=y
+
+# --- Console on USB Serial/JTAG (native USB-C the operator plugs into): makes
+# the esp_console REPL (spotlog dump / params get / params set) and its CSV dump
+# reach the operator's port, and enables esp_console_new_repl_usb_serial_jtag.
+# ESP_LOG shares this port (standard esp_console pattern); the CSV dump is raw
+# printf, so a parser filters lines matching the blackbox CSV schema. ---
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

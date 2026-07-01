@@ -133,6 +133,31 @@ Połącz się i wejdź na **`http://192.168.4.1`**:
 
 ---
 
+## Blackbox spot-lock (nagrywanie + kalibracja USB)
+
+ESP samo nagrywa na wodzie przebieg każdej sesji spot-locka do dedykowanej partycji flash
+**`spotlog`** (dopisana na końcu `partitions.csv`, 1 MiB, ring rekordów 64 B — offsety
+`nvs`/`phy_init`/`factory`/`appcfg` niezmienione). Recorder to task tła prio 2, ~2 Hz, **poza pętlą
+50 Hz i failsafe** (czysty obserwator). Po podłączeniu lewym USB-C (USB Serial/JTAG, `/dev/ttyACM*`)
+konsola `esp_console` zrzuca logi jako CSV; Claude analizuje je offline i jedną komendą zapisuje
+dostrojone nastawy do NVS (przez tor SI-6: apply tylko w DISARMED).
+
+```
+spotlog dump                      # zrzut regionu jako zdenormalizowany, płaski CSV
+params get                        # aktywne nastawy spot_lock_*
+params set <field> <value>        # strojenie w DISARMED (live) / ARMED (staged do rozbrojenia)
+  fields: deadband_m max_throttle_pct throttle_gain servo_gain
+```
+
+- **Koegzystencja z logami:** primary console = USB Serial/JTAG (ten sam port co `flash monitor`).
+  REPL i CSV docierają na port operatora; `ESP_LOG` dzieli port (prompt odrysowywany po linii logu).
+  Dump = surowy `printf` bez prefiksu → parser filtruje wiersze pasujące do schematu. **Dumpuj, gdy
+  pętla cicha** (DISARMED / off-water) i **przed rebootem** (patrz known-issues §4b).
+- **Procedura strojenia** (kolumny CSV → metryki polowania/przeregulowania/donuta → kierunek zmiany,
+  priorytet stabilności): `docs/blackbox-calibration.md`.
+
+---
+
 ## Sterowanie i sygnalizacja
 
 ### Gesty CH4 (przycisk monostabilny)

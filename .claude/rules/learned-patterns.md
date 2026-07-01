@@ -2,7 +2,7 @@
 
 Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane przez /dev-compound i /dev-compound-refresh.
 
-<!-- rule-count: 5 -->
+<!-- rule-count: 7 -->
 
 - **Recency/elapsed w jednej domenie licznika, wrap-safe**: Różnicę czasu/licznika licz przez unsigned modular subtraction (`now - last`) w JEDNEJ domenie zegara; trzymaj raw tick i konwertuj na jednostki fizyczne dopiero przy porównaniu. Nie mieszaj `esp_timer_get_time()` z licznikiem capture — daje cicho błędną recency po wrapie. Dodaj host-test wokół granicy 2^N.
   Source: docs/solutions/runtime-errors/2026-06-17-wrap-safe-recency-counter-domain.md
@@ -18,3 +18,9 @@ Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane 
 
 - **fresh ≠ valid: jakość re-waliduj co cykl, nie tylko przy wejściu**: Okno świeżości (timestamp ostatniego dobrego odczytu) bywa wciąż "fresh" gdy realny sygnał właśnie zniknął (seed-fresh). Bramkuj sterowanie na realnym warunku jakości (np. gps_has_fix) KAŻDY cykl podczas hold, nie tylko przy wejściu — sam predykat świeżości nie świadczy o ważnym odczycie.
   Source: docs/solutions/runtime-errors/2026-06-29-failsafe-precedence-sensor-override-in-control-loop.md
+
+- **Flash I/O (erase/write) do tasku tła, nigdy w pętli RT**: Kasowanie/zapis sektora flash blokuje na dziesiątki ms i wprowadza jitter do pętli sterującej z twardym deadlinem. Trzymaj CAŁE I/O flash (log/blackbox) w osobnym tasku niskiego prio: pętla RT publikuje snapshot, task tła robi nieblokujący peek i zapisuje best-effort (błąd = log-and-continue). Utrata próbki diagnostycznej akceptowalna, jitter pętli nie.
+  Source: docs/solutions/performance-issues/2026-07-01-rt-loop-flash-io-background-task.md
+
+- **Cursor/seq ringu na flashu zasiej skanem regionu na init**: Write cursor i licznik sesji żyjące w RAM po reboocie resetują się do 0 → nowa sesja nadpisuje ring od slotu 0 z tym samym id (kolizja + przeplot danych, cicho). Na init skanuj region fizycznie i złóż czystą funkcją ziarno: `session_seq=max(header seq)`, `cursor=ostatni ważny slot+1`. Host-testuj z mocą wyroczni (mutacja decyzji do {0,0} MUSI FAILować). Partycję data trzymaj NA KOŃCU partitions.csv, by nie przesunąć offsetów.
+  Source: docs/solutions/runtime-errors/2026-07-01-ring-buffer-cursor-reboot-resume-seed.md
