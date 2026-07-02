@@ -61,7 +61,10 @@ typedef struct {
     bool goto_engage;    /* app goto latch (source-of-target request, R3) */
     int32_t goto_lat_e7; /* external goto target latitude, degrees * 1e7 */
     int32_t goto_lon_e7; /* external goto target longitude, degrees * 1e7 */
-    bool comms_fresh;    /* app link freshness (R5): gates SRC_GOTO only */
+    bool comms_fresh;    /* app link freshness: NOT a failsafe/pause input. It is
+                          * the retarget-in-flight gate - a fresh link re-latches
+                          * ref_* to a newly commanded goto point; a stale link
+                          * retains the last good target (null-island guard, R1). */
 } spot_lock_inputs;
 
 /** Tunable regulator parameters (mapped from settings by the integration). */
@@ -102,16 +105,17 @@ typedef struct {
  *      current position as the target; a running goto is preempted here (R4).
  *   3. goto_engage && !ch3_on -> SRC_GOTO: target is the external goto point.
  *      ref_* is (re)latched from goto_* only on entry into SRC_GOTO or while the
- *      link is fresh (R1: a fresh link tracks a newly commanded point); gated by
- *      comms_fresh in addition to GPS/IMU (R3/R5). During a link pause the core
- *      RETAINS the last good ref_* and never overwrites it from the input, so
- *      target retention across a link gap does not depend on the upstream latch.
+ *      link is fresh (R1: a fresh link tracks a newly commanded point). A stale
+ *      app link does NOT pause goto (R3/R4): it is a latched intent, only the
+ *      RC failsafe ends it. While the link is stale the core RETAINS the last
+ *      good ref_* and never overwrites it from the input, so target retention
+ *      across a link gap does not depend on the upstream latch.
  *   4. otherwise -> OFF.
  *
  * Within an engaged source:
- *   - PAUSED when !gps_fresh || !imu_ok || !gps_has_fix (SRC_HOLD/SRC_GOTO), or
- *     additionally !comms_fresh for SRC_GOTO only (link loss never pauses the
- *     RC-owned SRC_HOLD, R5); target retained, recovers to ACTIVE on return.
+ *   - PAUSED when !gps_fresh || !imu_ok || !gps_has_fix (SRC_HOLD/SRC_GOTO): the
+ *     SENSOR degradation domain. The app link is NOT a pause input for either
+ *     source (R3/R4); target retained, recovers to ACTIVE on sensor return.
  *   - ACTIVE: within deadband -> neutral+center (R6); outside -> steer toward
  *     target and add forward thrust only while the bearing error is within the
  *     +/-60 deg gate (R2). arrived = err_m <= deadband_m. The thrust profile

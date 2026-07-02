@@ -14,16 +14,16 @@ Nakład: S ≤0.5d · M ~1d · L ~2d · XL >2d
 Zależności: brak. Realizuje: R3, R4.
 
 **Implementacja:**
-- [ ] Przepisać test wyroczni PRZED zmianą kodu (test-first): `test/host/test_spot_lock.c` — scenariusz odwrócenia.
-- [ ] `components/control_loop/src/spot_lock.c` — flip `comms_gated` na `false` w wywołaniu `hold_or_pause` dla gałęzi `SRC_GOTO` (~linia 217).
-- [ ] NIE ruszać bramki re-latchu `if (is_entering_goto || in->comms_fresh)` ani predykatu sensorycznego `!gps_fresh||!imu_ok||!gps_has_fix`.
-- [ ] `components/control_loop/include/spot_lock.h` + `include/loop_step.h` — prze-dokumentować `comms_fresh` („link failsafe" → „świeżość retargetu / bramka re-latchu").
+- [x] Przepisać test wyroczni PRZED zmianą kodu (test-first): `test/host/test_spot_lock.c` — scenariusz odwrócenia.
+- [x] `components/control_loop/src/spot_lock.c` — flip `comms_gated` na `false` w wywołaniu `hold_or_pause` dla gałęzi `SRC_GOTO` (~linia 217).
+- [x] NIE ruszać bramki re-latchu `if (is_entering_goto || in->comms_fresh)` ani predykatu sensorycznego `!gps_fresh||!imu_ok||!gps_has_fix`.
+- [x] `components/control_loop/include/spot_lock.h` + `include/loop_step.h` — prze-dokumentować `comms_fresh` („link failsafe" → „świeżość retargetu / bramka re-latchu").
 
 **Testy:**
-- [ ] Test: ARMED + `SRC_GOTO` ACTIVE + `comms_fresh=false` + fix ważny → substate ACTIVE, `throttle_cmd>0`, `ref_*` zachowany (NOWY oracle odwrócenia).
-- [ ] Test: `comms_fresh=false` + upstream zeruje `goto_lat/lon` → `ref_*` == ostatni dobry (nie 0,0); mutacja „bezwarunkowy re-latch" failuje (ZACHOWANY).
-- [ ] Test: `SRC_GOTO` ACTIVE + `gps_has_fix=false` → PAUSED co cykl; mutacja „usuń re-walidację sensoryczną" failuje (ZACHOWANY).
-- [ ] Test: `!armed` → OFF; `SRC_HOLD` + `comms_fresh=false` → nadal ACTIVE (precedence, ZACHOWANY).
+- [x] Test: ARMED + `SRC_GOTO` ACTIVE + `comms_fresh=false` + fix ważny → substate ACTIVE, `throttle_cmd>0`, `ref_*` zachowany (NOWY oracle odwrócenia).
+- [x] Test: `comms_fresh=false` + upstream zeruje `goto_lat/lon` → `ref_*` == ostatni dobry (nie 0,0); mutacja „bezwarunkowy re-latch" failuje (ZACHOWANY).
+- [x] Test: `SRC_GOTO` ACTIVE + `gps_has_fix=false` → PAUSED co cykl; mutacja „usuń re-walidację sensoryczną" failuje (ZACHOWANY).
+- [x] Test: `!armed` → OFF; `SRC_HOLD` + `comms_fresh=false` → nadal ACTIVE (precedence, ZACHOWANY).
 
 **Weryfikacja:**
 - [ ] Weryfikacja: `test/host/run.sh` zielone; test odwrócenia przechodzi, a przywrócenie `comms_gated=true` czyni go czerwonym (moc wyroczni potwierdzona).

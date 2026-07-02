@@ -64,13 +64,15 @@ typedef struct {
     /* App-driven goto: source-of-target request + external target + link
      * freshness. Same contract as GPS/IMU: consumed by spot_lock_step ONLY in the
      * ARMED branch, NEVER fed to rc_valid / channel_valid / sm_inputs / failsafe.
-     * comms_fresh gates SRC_GOTO only (link loss pauses goto, never trips
-     * failsafe). The target is HTTP-validated upstream (Unit 2); a fresh link
-     * never carries a zeroed target. */
+     * A stale app link does NOT pause goto (R3/R4): goto is a latched intent, the
+     * RC is the sole failsafe. comms_fresh is the retarget-in-flight / re-latch
+     * gate, not a link failsafe. The target is HTTP-validated upstream; a fresh
+     * link never carries a zeroed target. */
     bool goto_engage;          /* app goto latch (SRC_GOTO request, R3) */
     int32_t goto_lat_e7;       /* external goto target latitude, degrees * 1e7 */
     int32_t goto_lon_e7;       /* external goto target longitude, degrees * 1e7 */
-    bool comms_fresh;          /* app link freshness (R5): gates SRC_GOTO only */
+    bool comms_fresh;          /* app link freshness: re-latch gate (R1), not a
+                                * pause/failsafe input */
 } loop_inputs;
 
 /** Per-channel validity thresholds (constant across cycles). */

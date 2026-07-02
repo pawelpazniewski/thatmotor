@@ -737,9 +737,17 @@ static void test_goto_rc_loss_failsafe_wins(void)
     TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
 }
 
-static void test_goto_pauses_on_comms_loss_latch_retained_then_resumes(void)
+static void test_goto_persists_on_comms_loss_latch_retained(void)
 {
-    /* Arrange: goto ACTIVE and drifted. */
+    /* R3 inversion at the integration level: an app link loss must NOT pause an
+     * app-driven goto. With GPS/IMU fresh and the bow aligned toward the target, a
+     * stale link keeps SRC_GOTO ACTIVE and driving forward (ESC > neutral), the
+     * latch is retained on the same external target, and the boat stays ARMED - the
+     * RC is the sole failsafe. Oracle for the comms-gate flip: were the link still
+     * a pause input, this would be PAUSED with a neutral ESC and this ESC>neutral
+     * assertion would go red. Rewritten from the former pause test - the
+     * PAUSE-on-link-loss functionality is removed per R3, a spec change not a
+     * weakened assertion. */
     settings_params params;
     settings_load_defaults(&params);
     loop_validity_cfg cfg = make_cfg();
@@ -748,44 +756,29 @@ static void test_goto_pauses_on_comms_loss_latch_retained_then_resumes(void)
     arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
                         HEADING_SOUTH_DEG10);
 
-    uint32_t center = ((uint32_t)params.servo_min_us +
-                       (uint32_t)params.servo_max_us) / 2U;
-
     /* Act: app link goes stale (comms_fresh=false); GPS/IMU still fresh. */
-    loop_inputs paused =
+    loop_inputs stale =
         goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
-    paused.comms_fresh = false;
+    stale.comms_fresh = false;
 
-    loop_outputs first = loop_step(&paused, &cfg, &params, &state);
-    /* The link pause must NOT clear the goto latch (transient loss resumes). */
+    loop_outputs first = loop_step(&stale, &cfg, &params, &state);
+    /* The link loss must NOT clear the goto latch (RC is the only thing that does). */
     TEST_ASSERT_FALSE(first.goto_latch_clear);
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, state.spot_lock.target_source);
 
     loop_outputs out = {0};
     for (int i = 0; i < 400; i++) {
-        out = loop_step(&paused, &cfg, &params, &state);
+        out = loop_step(&stale, &cfg, &params, &state);
     }
 
-    /* Assert: PAUSED (NOT OFF, NOT failsafe) -> ESC neutral + servo center; the
-     * boat state stays ARMED and the goto latch survives. */
+    /* Assert: still ARMED + SRC_GOTO ACTIVE, driving forward on the retained
+     * external target (0,0); the latch survives the stale link. */
     TEST_ASSERT_EQUAL(SM_STATE_ARMED, out.telemetry.state);
-    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_PAUSED, out.telemetry.spot_lock_substate);
-    TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
-    TEST_ASSERT_EQUAL_UINT32(center, out.servo_us);
-    TEST_ASSERT_FALSE(out.goto_latch_clear);
-
-    /* Act: link returns -> resume the SAME external target. */
-    loop_inputs resume =
-        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
-    for (int i = 0; i < 400; i++) {
-        out = loop_step(&resume, &cfg, &params, &state);
-    }
-
-    /* Assert: ACTIVE again on the same goto point, thrust re-engaged. */
     TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, state.spot_lock.target_source);
     TEST_ASSERT_EQUAL_INT32(0, state.spot_lock.ref_lat_e7);
     TEST_ASSERT_GREATER_THAN_UINT32(ESC_NEUTRAL_US, out.esc_us);
+    TEST_ASSERT_FALSE(out.goto_latch_clear);
 }
 
 static void test_goto_pauses_on_gps_loss_latch_retained(void)
@@ -1017,7 +1010,7 @@ void run_loop_step_tests(void)
     RUN_TEST(test_spot_lock_output_passes_hard_clamp);
     RUN_TEST(test_goto_engages_and_computes_throttle);
     RUN_TEST(test_goto_rc_loss_failsafe_wins);
-    RUN_TEST(test_goto_pauses_on_comms_loss_latch_retained_then_resumes);
+    RUN_TEST(test_goto_persists_on_comms_loss_latch_retained);
     RUN_TEST(test_goto_pauses_on_gps_loss_latch_retained);
     RUN_TEST(test_goto_stick_override_clears_latch);
     RUN_TEST(test_goto_ch3_preempt_holds_here_and_clears_latch);

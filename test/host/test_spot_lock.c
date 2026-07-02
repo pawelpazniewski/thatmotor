@@ -460,33 +460,29 @@ void test_ch3_preempts_active_goto_and_snapshots_here_and_now(void)
     TEST_ASSERT_NOT_EQUAL(SPOT_LOCK_OFF, out.substate);
 }
 
-void test_goto_pauses_on_comms_loss_then_resumes_same_target(void)
+void test_goto_persists_through_comms_loss_with_valid_fix(void)
 {
-    /* Arrange: goto ACTIVE ~10 m from the target, app link goes stale. The comms
-     * gate applies to SRC_GOTO: link loss must pause (neutral+center), target
-     * retained. Removing the comms gate keeps it ACTIVE with thrust -> fail. */
+    /* R3 inversion: app link loss must NOT pause an app-driven goto. With a valid
+     * fix and the bow aligned, a stale link keeps SRC_GOTO ACTIVE and driving; the
+     * external target is retained. This is the ORACLE for the comms-gate flip:
+     * restoring comms_gated=true for SRC_GOTO pauses here and this ACTIVE+thrust
+     * assertion goes red. Rewritten from the former pause test - we removed the
+     * PAUSE-on-link-loss functionality per R3, so this is a spec change, NOT a
+     * weakened assertion. */
     spot_lock_params p = make_params();
     spot_lock_inputs in = make_goto_inputs();
-    in.lat_e7 = REF_LAT_E7 - E7_10M;
-    in.comms_fresh = false;
+    in.lat_e7 = REF_LAT_E7 - E7_10M; /* target north/east, bow aligned -> thrust */
+    in.heading_deg10 = 0;
+    in.comms_fresh = false;          /* link lost; GPS/IMU fix still valid */
     spot_lock_state st = make_active_goto_state();
 
     /* Act: link lost. */
-    spot_lock_outputs paused = spot_lock_step(&in, &p, &st);
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
 
-    /* Assert: PAUSED, relaxed, goto target retained. */
-    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_PAUSED, paused.substate);
-    TEST_ASSERT_EQUAL_INT32(0, paused.throttle_cmd);
-    TEST_ASSERT_EQUAL_INT32(0, paused.servo_cmd);
+    /* Assert: still ACTIVE and driving on the retained external target. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    TEST_ASSERT_TRUE(out.throttle_cmd > 0);
     TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7, st.ref_lat_e7);
-    TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
-
-    /* Act: link returns. */
-    in.comms_fresh = true;
-    spot_lock_outputs resumed = spot_lock_step(&in, &p, &st);
-
-    /* Assert: back to ACTIVE on the SAME external target. */
-    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, resumed.substate);
     TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
 }
 
@@ -563,13 +559,16 @@ void test_goto_override_on_stick_deflection(void)
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_NONE, st.target_source);
 }
 
-void test_goto_retains_target_during_pause_ignoring_input(void)
+void test_goto_retains_target_ignoring_zeroed_input_on_stale_link(void)
 {
     /* Arrange: goto ACTIVE on the external target, then the link goes stale AND
      * the loop presents a ZEROED goto_* (the null-island hazard: upstream drops
-     * the latch on link loss). The pure core must PAUSE and RETAIN the last good
-     * ref_* - never overwrite it from the input while comms is stale. A naive
-     * "ref_* = goto_* every cycle" writes (0,0) here -> this test fails (oracle). */
+     * the latch on link loss). The re-latch gate (is_entering_goto || comms_fresh)
+     * must NOT overwrite ref_* from the input while comms is stale, so the last
+     * good target is RETAINED. A naive "ref_* = goto_* every cycle" writes (0,0)
+     * here -> this test fails (oracle for the null-island guard, P3). After the
+     * comms-gate flip the source no longer pauses on link loss (fix valid), so it
+     * stays ACTIVE - the retention is what this test pins, NOT the pause. */
     spot_lock_params p = make_params();
     spot_lock_inputs in = make_goto_inputs();
     in.lat_e7 = REF_LAT_E7 - E7_10M;
@@ -578,11 +577,12 @@ void test_goto_retains_target_during_pause_ignoring_input(void)
     in.goto_lon_e7 = 0;
     spot_lock_state st = make_active_goto_state();
 
-    /* Act: link lost with a zeroed input target. */
-    spot_lock_outputs paused = spot_lock_step(&in, &p, &st);
+    /* Act: stale link with a zeroed input target. */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
 
-    /* Assert: PAUSED and the ORIGINAL target retained (not 0,0, not the input). */
-    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_PAUSED, paused.substate);
+    /* Assert: ACTIVE (link loss no longer pauses) and the ORIGINAL target
+     * retained (not 0,0, not the input). */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
     TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7, st.ref_lat_e7);
     TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
 
@@ -592,7 +592,7 @@ void test_goto_retains_target_during_pause_ignoring_input(void)
     in.goto_lon_e7 = GOTO_LON_E7;
     spot_lock_outputs resumed = spot_lock_step(&in, &p, &st);
 
-    /* Assert: back to ACTIVE on the SAME retained target. */
+    /* Assert: still ACTIVE on the SAME retained target. */
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, resumed.substate);
     TEST_ASSERT_EQUAL_INT32(GOTO_LAT_E7, st.ref_lat_e7);
     TEST_ASSERT_EQUAL_INT32(GOTO_LON_E7, st.ref_lon_e7);
@@ -800,11 +800,11 @@ void run_spot_lock_tests(void)
     RUN_TEST(test_step_is_deterministic);
     RUN_TEST(test_goto_engages_active_with_external_target);
     RUN_TEST(test_ch3_preempts_active_goto_and_snapshots_here_and_now);
-    RUN_TEST(test_goto_pauses_on_comms_loss_then_resumes_same_target);
+    RUN_TEST(test_goto_persists_through_comms_loss_with_valid_fix);
     RUN_TEST(test_goto_pauses_on_gps_loss_keeps_target);
     RUN_TEST(test_comms_gate_does_not_pause_ch3_hold);
     RUN_TEST(test_goto_override_on_stick_deflection);
-    RUN_TEST(test_goto_retains_target_during_pause_ignoring_input);
+    RUN_TEST(test_goto_retains_target_ignoring_zeroed_input_on_stale_link);
     RUN_TEST(test_goto_fresh_link_tracks_new_target);
     RUN_TEST(test_goto_arrived_flag_tracks_deadband);
     RUN_TEST(test_goto_cruises_at_full_beyond_slowdown);

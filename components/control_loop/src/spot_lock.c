@@ -145,9 +145,12 @@ static spot_lock_outputs make_off(spot_lock_state *st)
 /**
  * Pause-or-run for an engaged source with the target already set in st.
  * The fix is re-validated each cycle: a stale fix can still be inside the
- * freshness window (seed-fresh), so holding on a lost fix is unsafe. The comms
- * gate applies to SRC_GOTO only - link loss must never pause the RC-owned
- * SRC_HOLD (R5).
+ * freshness window (seed-fresh), so holding on a lost fix is unsafe. This SENSOR
+ * degradation domain (GPS/IMU) is separate from the app link: comms_gated maps a
+ * source onto the (now non-pausing) link domain. Both sources pass comms_gated =
+ * false - a stale app link never pauses a latched intent (R3/R4), the RC is the
+ * sole failsafe. The parameter is kept so the two degradation domains stay
+ * structurally distinct at the call sites.
  */
 static spot_lock_outputs hold_or_pause(const spot_lock_inputs *in,
                                        const spot_lock_params *p,
@@ -200,13 +203,17 @@ spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
         return run_ch3_hold(in, p, st);
     }
 
-    /* 3. App-driven goto: external target, link-gated (R3/R5). The reference is
-     * (re)latched from the input ONLY on entry into SRC_GOTO or while the link is
-     * fresh (R1: a fresh link tracks a newly commanded goto point). During a link
-     * pause (comms_fresh == false) the core RETAINS the last good target and does
-     * NOT overwrite ref_* from the input - so retention across a link gap is a
-     * property of this pure core, not an implicit contract on the upstream latch
-     * (guards null-island if the loop zeroes goto_* on link loss). */
+    /* 3. App-driven goto: a latched external target that PERSISTS across app-link
+     * loss (R3/R4) - a stale link never pauses it (comms_gated = false below); the
+     * RC (stick override / CH3 preempt / disarm) is the sole failsafe. comms_fresh
+     * is NOT a link failsafe here: it is the retarget-in-flight / re-latch gate.
+     * The reference is (re)latched from the input ONLY on entry into SRC_GOTO or
+     * while the link is fresh (R1: a fresh link tracks a newly commanded goto
+     * point). While the link is stale (comms_fresh == false) the core RETAINS the
+     * last good target and does NOT overwrite ref_* from the input - so retention
+     * across a link gap is a property of this pure core, not an implicit contract
+     * on the upstream latch (guards null-island if the loop zeroes goto_* on link
+     * loss). Only the SENSOR domain (GPS/IMU, in hold_or_pause) pauses goto. */
     if (in->goto_engage) {
         bool is_entering_goto = st->target_source != SPOT_LOCK_SRC_GOTO;
         if (is_entering_goto || in->comms_fresh) {
@@ -214,7 +221,7 @@ spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
             st->ref_lon_e7 = in->goto_lon_e7;
         }
         st->target_source = SPOT_LOCK_SRC_GOTO;
-        return hold_or_pause(in, p, st, true);
+        return hold_or_pause(in, p, st, false);
     }
 
     /* 4. No source engaged. */
