@@ -26,6 +26,15 @@ struct CommandEnvelopeTests {
         #expect(disarm["cmd"] as? String == "disarm")
     }
 
+    @Test("hold serializuje tylko cmd=hold (bez lat/lon — kotwica na własnym fixie)")
+    func holdBody() throws {
+        let obj = try JSONSerialization.jsonObject(with: Command.hold.httpBody()) as! [String: Any]
+        #expect(obj["cmd"] as? String == "hold")
+        #expect(obj["lat_e7"] == nil)
+        #expect(obj["lon_e7"] == nil)
+        #expect(obj.count == 1)
+    }
+
     @Test("koperta sukcesu {data:null,error:null} → isSuccess")
     func successEnvelope() throws {
         let env = try JSONDecoder().decode(

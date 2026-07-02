@@ -13,6 +13,10 @@ final class AppModel {
     let telemetry: TelemetryStore
     let target = GotoTargetController()
 
+    /// Lokalna intencja trybu autonomicznego (którą komendę wciśnięto) — używana
+    /// tylko do etykiety UI; telemetria nie rozróżnia app-hold od app-goto.
+    private(set) var autonomousIntent: AutonomousIntent = .none
+
     /// Kopia listy waypointów w warstwie obserwowalnej (`WaypointStore` to zwykła
     /// klasa persystencji — jej mutacje same nie odświeżają widoku).
     private(set) var waypointList: [Waypoint] = []
@@ -74,6 +78,7 @@ final class AppModel {
     /// „Płyń do punktu" — sprawdza miękką barierę geofence, potem wysyła.
     func requestGoto() {
         guard let staged = target.staged, let coordinate = target.stagedCoordinate else { return }
+        autonomousIntent = .goto
         let point = GeoPoint(latDegrees: coordinate.latitude, lonDegrees: coordinate.longitude)
         if !lakePolygon.isEmpty && !WaterGeofence.contains(point, polygon: lakePolygon) {
             pendingGeofencedTarget = staged
@@ -107,6 +112,7 @@ final class AppModel {
 
     /// STOP: natychmiastowy `goto_cancel`, bez rozbrajania, bez potwierdzenia.
     func stopGoto() {
+        autonomousIntent = .none
         target.clear()
         Task {
             do { try await commands.send(.gotoCancel); lastActionMessage = "STOP wysłany" }
@@ -122,16 +128,21 @@ final class AppModel {
         }
     }
 
-    /// Spot-lock — placeholder. Kontrakt nie ma jeszcze komendy; logikę dodamy
-    /// w kolejnej sesji (utrzymanie pozycji „na kotwicy").
+    /// Spot-lock — kotwica w bieżącej pozycji łodzi. Wysyła `hold`; firmware łapie
+    /// własny fix i latchuje `SRC_GOTO`. Intencję zapamiętujemy lokalnie (etykieta).
     func requestSpotLock() {
-        lastActionMessage = "Spot-lock — wkrótce (w budowie)"
+        autonomousIntent = .hold
+        Task {
+            do { try await commands.send(.hold); lastActionMessage = "Kotwica — trzymam pozycję" }
+            catch { lastActionMessage = "Spot-lock: błąd wysłania" }
+        }
     }
 
     /// Usuń/abortuj cel goto: kasuje pinezkę (zatrzymuje resend keepalive), a gdy
     /// nawigacja już trwa na firmware — dodatkowo wysyła `goto_cancel`.
     func clearTarget() {
         let wasActive = (telemetry.latest?.gotoState ?? .off) != .off
+        autonomousIntent = .none
         target.clear()
         guard wasActive else { return }
         Task {

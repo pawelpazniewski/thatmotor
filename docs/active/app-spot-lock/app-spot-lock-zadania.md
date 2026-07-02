@@ -89,13 +89,13 @@ Krytyczne inwarianty failsafe (flip chirurgiczny, bramka re-latchu, predykat sen
 Zależności: Unit 2 (firmware rozumie `hold`). Realizuje: R1, R5, R7.
 
 **Implementacja:**
-- [ ] `ios/KayakKit/Sources/KayakContract/Command.swift` — `case hold`; `cmdName`→`"hold"`; `httpBody()` bez współrzędnych (jak `gotoCancel`).
-- [ ] `ios/KayakMotor/App/AppModel.swift` — `requestSpotLock()` → `commands.send(.hold)` + `target.markSending/Sent`; dodać `enum AutonomousIntent { none, goto, hold }` ustawiane przy tapnięciu.
+- [x] `ios/KayakKit/Sources/KayakContract/Command.swift` — `case hold`; `cmdName`→`"hold"`; `httpBody()` bez współrzędnych (jak `gotoCancel`).
+- [x] `ios/KayakMotor/App/AppModel.swift` — `requestSpotLock()` → `commands.send(.hold)` + `lastActionMessage` (feedback jak disarm/STOP — spot-lock nie ma pinezki, więc NIE `target.markSending`); dodać `enum AutonomousIntent { none, goto, hold }` ustawiane przy tapnięciu. **ODSTĘPSTWO**: `AutonomousIntent` w KayakContract (pure), NIE w AppModel — pure reconciler (Unit 7) musi go typować, a nie może zależeć od app-targetu.
 
 **Testy:**
-- [ ] Test: `Command.hold.httpBody()` → `{"cmd":"hold"}` (bez lat/lon).
-- [ ] Test: `Command.hold.cmdName == "hold"`.
-- [ ] Test: tap Spot-lock → `AutonomousIntent=.hold`; tap Goto → `.goto`.
+- [x] Test: `Command.hold.httpBody()` → `{"cmd":"hold"}` (bez lat/lon).
+- [x] Test: `Command.hold.cmdName == "hold"` (pokryty przez `holdBody` — pole `cmd` w httpBody; `cmdName` jest private).
+- [ ] Test: tap Spot-lock → `AutonomousIntent=.hold`; tap Goto → `.goto` — **app-target (AppModel używa UIKit, poza pakietem SPM)**; niedostępne w `swift test`, odroczone do compile-verify (xcodebuild) + device.
 
 **Weryfikacja:**
 - [ ] Weryfikacja: testy KayakContract zielone; tap Spot-lock POST-uje `hold`.

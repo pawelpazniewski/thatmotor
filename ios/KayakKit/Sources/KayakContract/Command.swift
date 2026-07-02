@@ -1,17 +1,20 @@
 import Foundation
 
-/// Komenda wysyłana do `POST /api/command`. MVP używa tylko goto/goto_cancel/disarm.
-/// App NIGDY nie uzbraja — brak `arm` w tym enumie celowo.
+/// Komenda wysyłana do `POST /api/command`. App używa goto/goto_cancel/disarm/hold.
+/// `hold` = kotwica w bieżącej pozycji łodzi (firmware łapie własny fix); nie niesie
+/// współrzędnych — jak `gotoCancel`. App NIGDY nie uzbraja — brak `arm` w tym enumie celowo.
 public enum Command: Equatable, Sendable {
     case goto(LatLonE7)
     case gotoCancel
     case disarm
+    case hold
 
     private var cmdName: String {
         switch self {
         case .goto: return "goto"
         case .gotoCancel: return "goto_cancel"
         case .disarm: return "disarm"
+        case .hold: return "hold"
         }
     }
 
