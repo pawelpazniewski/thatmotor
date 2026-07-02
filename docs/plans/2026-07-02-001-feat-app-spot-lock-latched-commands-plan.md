@@ -203,7 +203,7 @@ Pominięte — codebase ma silne lokalne wzorce (pure⊥HAL, Unity host-tests, S
 
 ### Faza 2 — iOS (mapowanie, usunięcie keepalive, resync)
 
-- [ ] **Unit 4: Komenda `.hold` w kontrakcie + mapowanie przycisku + lokalna intencja**
+- [x] **Unit 4: Komenda `.hold` w kontrakcie + mapowanie przycisku + lokalna intencja**
 
 **Cel:** Przycisk Spot-lock wysyła `{"cmd":"hold"}`; app pamięta lokalnie, że to kotwica (do etykiety).
 
@@ -231,7 +231,7 @@ Pominięte — codebase ma silne lokalne wzorce (pure⊥HAL, Unity host-tests, S
 
 ---
 
-- [ ] **Unit 5: Wyszarzanie przycisku Spot-lock bez fixu GPS (pure readiness)**
+- [x] **Unit 5: Wyszarzanie przycisku Spot-lock bez fixu GPS (pure readiness)**
 
 **Cel:** Przycisk Spot-lock nieaktywny/ostrzega, gdy telemetria nie pokazuje świeżego fixu (R6).
 
@@ -257,7 +257,7 @@ Pominięte — codebase ma silne lokalne wzorce (pure⊥HAL, Unity host-tests, S
 
 ---
 
-- [ ] **Unit 6: Usunięcie keepalive / idle-timer (persist nie potrzebuje resendu)**
+- [x] **Unit 6: Usunięcie keepalive / idle-timer (persist nie potrzebuje resendu)**
 
 **Cel:** App nie trzyma ekranu włączonego i nie resenduje goto; ekran może gasnąć, łódź płynie dalej (R3 od strony app).
 
@@ -280,7 +280,7 @@ Pominięte — codebase ma silne lokalne wzorce (pure⊥HAL, Unity host-tests, S
 
 ---
 
-- [ ] **Unit 7: Resync-on-resume + uzgodnienie intencji ze stanem firmware**
+- [x] **Unit 7: Resync-on-resume + uzgodnienie intencji ze stanem firmware**
 
 **Cel:** Po powrocie z tła/wygaszenia app reconnectuje telemetrię i odtwarza UI zgodnie z prawdą firmware (R8); jeśli pilot zakończył tryb — app to pokazuje.
 
