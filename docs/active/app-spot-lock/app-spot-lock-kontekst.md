@@ -3,6 +3,15 @@
 Branch: `feature/app-spot-lock`
 Ostatnia aktualizacja: 2026-07-02
 
+## Postęp — Faza 1 (Firmware) UKOŃCZONA
+
+- **Unit 1** (commit eccc76d): chirurgiczny flip `comms_gated=false` dla `SRC_GOTO` w wywołaniu `hold_or_pause` (spot_lock.c:~218). Utrata linku nie pauzuje goto (R3/R4). Bramka re-latchu i predykat sensoryczny nietknięte. `comms_fresh` prze-dokumentowane (spot_lock.h, loop_step.h). Oracle odwrócenia przepisany test-first (potwierdzona moc wyroczni: 2 testy czerwone przed flipem). Dodatkowo przepisany integracyjny bliźniak w `test_loop_step.c` (`test_goto_persists_on_comms_loss_latch_retained`), który też asertował usuniętą pauzę.
+- **Unit 2** (commit 4f4d3ef): `hold_request` w `command_parse_result` + wiersz `{"hold", ...}` w `COMMAND_TABLE`.
+- **Unit 3** (commit bae631e): `hold_request` w `control_loop_ui_events` + `to_ui_events`; `hold` nie idzie przez `extract_goto_target` (brak 400). Atomowy grab: `apply_goto_events` na `hold_request` robi jeden `gps_get_state()` → `goto_grab_decide` → engage przy fresh+fix+range.
+  - **ODSTĘPSTWO od planu**: pure helper `goto_grab_decide` umieszczony w komponencie **control_loop** (`goto_grab.c/h`), NIE w `web_panel/src/goto_target.c` jak sugerował plan. Powód: `web_panel` REQUIRES `control_loop`, więc odwrotna zależność (control_loop → web_panel, po `goto_target_valid`) byłaby circular dependency (zakazane regułą architektury). Helper ma własny range-check mirrorujący `goto_target_valid` (świadoma drobna duplikacja stałych zamiast couplingu).
+
+Host-testy: 442 przechodzą (było 437; +1 hold parse, +4 grab, 2 przepisane). Weryfikacja: pozostają checkboxy `Weryfikacja:` dla /dev-docs-review + firmware ESP-IDF build (host-only tu nie weryfikuje device buildu).
+
 ## Powiązane pliki
 
 ### Firmware — do modyfikacji

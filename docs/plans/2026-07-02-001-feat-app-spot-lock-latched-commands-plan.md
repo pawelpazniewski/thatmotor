@@ -112,7 +112,7 @@ Pominięte — codebase ma silne lokalne wzorce (pure⊥HAL, Unity host-tests, S
 
 ### Faza 1 — Firmware (fundament: persist + komenda hold)
 
-- [ ] **Unit 1: Odwrócenie PAUSE→CONTINUE dla `SRC_GOTO` (chirurgiczny flip)**
+- [x] **Unit 1: Odwrócenie PAUSE→CONTINUE dla `SRC_GOTO` (chirurgiczny flip)**
 
 **Cel:** Utrata linku z aplikacją przestaje pauzować goto; latch celu i RC-abort nietknięte.
 
@@ -144,7 +144,7 @@ Pominięte — codebase ma silne lokalne wzorce (pure⊥HAL, Unity host-tests, S
 
 ---
 
-- [ ] **Unit 2: Komenda `hold` w warstwie parsowania (pure)**
+- [x] **Unit 2: Komenda `hold` w warstwie parsowania (pure)**
 
 **Cel:** Rozpoznanie keywordu `hold` jako osobnej intencji, bez współrzędnych.
 
@@ -169,7 +169,7 @@ Pominięte — codebase ma silne lokalne wzorce (pure⊥HAL, Unity host-tests, S
 
 ---
 
-- [ ] **Unit 3: Okablowanie `hold` + atomowy grab własnego fixu w pętli**
+- [x] **Unit 3: Okablowanie `hold` + atomowy grab własnego fixu w pętli**
 
 **Cel:** `hold` z HTTP → pętla łapie bieżący fix, waliduje i latchuje jako `SRC_GOTO` (cel = własna pozycja); brak fixu → nie angażuje.
 
