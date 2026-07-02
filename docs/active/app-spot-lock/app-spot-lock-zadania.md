@@ -69,6 +69,19 @@ Zależności: Unit 2 (flaga), Unit 1 (persist). Realizuje: R1, R2, R6 (bramka fi
 
 ---
 
+## Do poprawy po review fazy 1
+
+Gate: ⚠️ KONTYNUUJ Z ZASTRZEŻENIAMI (P1=0, P2=1, P3=4). Pełny raport: `review-faza-1.md`.
+Krytyczne inwarianty failsafe (flip chirurgiczny, bramka re-latchu, predykat sensoryczny, ścieżka RC, moc wyroczni) — WSZYSTKIE zweryfikowane OK. 442 host-testy zielone.
+
+- [x] 🟠 [important] **components/control_loop/src/spot_lock.c:157,160-162,189,224** — Martwy kod po flipie: `comms_gated` == `false` w obu call-site'ach → gałąź `if (comms_gated && !in->comms_fresh)` nieosiągalna, parametr martwy. Usunąć parametr i gałąź (proza już w komentarzu :148-153). Powód surowy: moduł failsafe — martwa ścieżka może po cichu re-odwrócić failsafe zmianą jednego boola; usunięcie czyni inwariant strukturalnym (§6, §5#10, §11).
+- [ ] 🟡 [nit] **components/control_loop/include/control_loop.h:95, command_parse.h:40** — Kolizja nazewnicza: `hold_request` engażuje SRC_GOTO, a SRC_HOLD to hold pilota RC. Rozważ `anchor_request` lub notkę przy polu.
+- [ ] 🟡 [nit] **test/host/test_goto_target.c:122** — Testy `goto_grab_decide` w `test_goto_target.c` zamiast dedykowanego `test_goto_grab.c` (kolokacja suite).
+- [ ] 🟡 [nit] **test/host/test_goto_target.c (suite goto_grab)** — Inkluzywna granica geo (±90/±180) niepinowana; mutacja `>=`→`>` w `grab_in_range` przeszłaby (duplikacja stałych łamie tranzytywne pokrycie). Dodać 1 test at-boundary.
+- [ ] 🟡 [nit] **goto_grab.h:28-31 vs goto_target.h:22-26** — Brak compile-time linku pinującego mirror stałych; opcjonalny `TEST_ASSERT_EQUAL` drift-guard.
+
+---
+
 ## Faza 2 — iOS
 
 ### Unit 4: `.hold` w kontrakcie + mapowanie przycisku + lokalna intencja — **S**

@@ -145,21 +145,16 @@ static spot_lock_outputs make_off(spot_lock_state *st)
 /**
  * Pause-or-run for an engaged source with the target already set in st.
  * The fix is re-validated each cycle: a stale fix can still be inside the
- * freshness window (seed-fresh), so holding on a lost fix is unsafe. This SENSOR
- * degradation domain (GPS/IMU) is separate from the app link: comms_gated maps a
- * source onto the (now non-pausing) link domain. Both sources pass comms_gated =
- * false - a stale app link never pauses a latched intent (R3/R4), the RC is the
- * sole failsafe. The parameter is kept so the two degradation domains stay
- * structurally distinct at the call sites.
+ * freshness window (seed-fresh), so holding on a lost fix is unsafe. Pausing is
+ * driven SOLELY by the SENSOR degradation domain (GPS/IMU): the app link never
+ * pauses a latched intent (R3/R4), the RC (stick override / CH3 preempt / disarm)
+ * is the sole failsafe.
  */
 static spot_lock_outputs hold_or_pause(const spot_lock_inputs *in,
                                        const spot_lock_params *p,
-                                       spot_lock_state *st, bool comms_gated)
+                                       spot_lock_state *st)
 {
     bool sensors_lost = !in->gps_fresh || !in->imu_ok || !in->gps_has_fix;
-    if (comms_gated && !in->comms_fresh) {
-        sensors_lost = true;
-    }
     if (sensors_lost) {
         st->substate = SPOT_LOCK_PAUSED;
         return make_idle_output(SPOT_LOCK_PAUSED);
@@ -186,7 +181,7 @@ static spot_lock_outputs run_ch3_hold(const spot_lock_inputs *in,
         st->ref_lon_e7 = in->lon_e7;
         st->target_source = SPOT_LOCK_SRC_HOLD;
     }
-    return hold_or_pause(in, p, st, false);
+    return hold_or_pause(in, p, st);
 }
 
 spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
@@ -204,8 +199,8 @@ spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
     }
 
     /* 3. App-driven goto: a latched external target that PERSISTS across app-link
-     * loss (R3/R4) - a stale link never pauses it (comms_gated = false below); the
-     * RC (stick override / CH3 preempt / disarm) is the sole failsafe. comms_fresh
+     * loss (R3/R4) - a stale link never pauses it (hold_or_pause has no link gate);
+     * the RC (stick override / CH3 preempt / disarm) is the sole failsafe. comms_fresh
      * is NOT a link failsafe here: it is the retarget-in-flight / re-latch gate.
      * The reference is (re)latched from the input ONLY on entry into SRC_GOTO or
      * while the link is fresh (R1: a fresh link tracks a newly commanded goto
@@ -221,7 +216,7 @@ spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
             st->ref_lon_e7 = in->goto_lon_e7;
         }
         st->target_source = SPOT_LOCK_SRC_GOTO;
-        return hold_or_pause(in, p, st, false);
+        return hold_or_pause(in, p, st);
     }
 
     /* 4. No source engaged. */
