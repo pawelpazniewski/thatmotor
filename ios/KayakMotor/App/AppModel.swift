@@ -52,6 +52,40 @@ final class AppModel {
         telemetry.stop()
     }
 
+    /// Powrót z tła/wygaszenia (`scenePhase == .active`): reconnect WS i uzgodnienie
+    /// lokalnej intencji ze stanem firmware. Gdy firmware zakończył tryb — czyścimy
+    /// intencję i pinezkę; gdy tryb wciąż żyje — odtwarzamy pinezkę z telemetrii (R8).
+    func resync() {
+        telemetry.reconnect()
+        reconcileAutonomousState()
+    }
+
+    /// Etykieta trybu autonomicznego liczona lokalnie (intencja × telemetria).
+    var autonomousLabel: AutonomousLabel {
+        AutonomousModeReconciler.reconcile(
+            intent: autonomousIntent,
+            gotoState: telemetry.latest?.gotoState ?? .off,
+            spotLockState: telemetry.latest?.spotLockState ?? .off)
+    }
+
+    private func reconcileAutonomousState() {
+        switch autonomousLabel {
+        case .cleared:
+            autonomousIntent = .none
+            target.clear()
+        default:
+            restoreTargetPinFromTelemetry()
+        }
+    }
+
+    /// Odtwarza pinezkę celu z telemetrii, gdy tryb żyje, a app nie ma jej lokalnie
+    /// (np. po force-quit). Współrzędne z firmware są już w prawidłowym zakresie e7.
+    private func restoreTargetPinFromTelemetry() {
+        guard target.staged == nil,
+              let t = telemetry.latest, t.gotoState != .off else { return }
+        target.stage(target: LatLonE7(latE7: t.gotoTargetLatE7, lonE7: t.gotoTargetLonE7))
+    }
+
     // MARK: - Tap-to-goto
 
     func handleMapTap(_ coordinate: CLLocationCoordinate2D) {

@@ -8,6 +8,7 @@ struct RootView: View {
     @State private var showWaypoints = false
     @State private var camera = MapCameraController()
     @State private var showSplash = true
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -53,6 +54,10 @@ struct RootView: View {
         }
         .onChange(of: model.telemetry.latest != nil) { _, hasData in
             if hasData { hideSplash() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Powrót na pierwszy plan: reconnect WS + resync (iOS zawiesza socket w tle).
+            if phase == .active { model.resync() }
         }
         .onChange(of: model.lastActionMessage) { _, msg in
             guard let msg else { return }

@@ -48,6 +48,13 @@ final class TelemetryStore {
         linkState = machine.state
     }
 
+    /// Wznawia strumień WS po powrocie z tła (iOS zawiesza socket). `socket.events()`
+    /// tworzy świeże `NWConnection`, więc wystarczy stop→start.
+    func reconnect() {
+        stop()
+        start()
+    }
+
     private func handle(_ event: TelemetryStreamEvent) {
         switch event {
         case .opened:

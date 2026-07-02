@@ -145,18 +145,18 @@ Zależności: Unit 1 (firmware nie pauzuje). Realizuje: R3.
 Zależności: Unit 4 (intencja), Unit 6 (brak keepalive). Realizuje: R7, R8.
 
 **Implementacja:**
-- [ ] Stwórz `ios/KayakKit/Sources/KayakContract/AutonomousModeReconciler.swift` — pure `(intent, gotoState, spotLockState) → etykieta/stan`.
-- [ ] `ios/KayakMotor/RootView.swift` — `@Environment(\.scenePhase)` + `.onChange(of:)` → na `.active` reconnect WS + `resync()`.
-- [ ] `ios/KayakMotor/App/AppModel.swift` — `resync()`: reconnect telemetrii; uzgodnienie `AutonomousIntent` z telemetrią; odtworzenie pinezki celu.
-- [ ] `ios/KayakMotor/Networking/TelemetrySocket.swift`/`TelemetryStore` — jawny `reconnect()` jeśli potrzebny.
-- [ ] Stwórz `ios/KayakKit/Tests/KayakContractTests/AutonomousModeReconcilerTests.swift`.
+- [x] Stwórz `ios/KayakKit/Sources/KayakContract/AutonomousModeReconciler.swift` — pure `(intent, gotoState, spotLockState) → AutonomousLabel` (+ `text`). `paused` traktowany jak `active` (tryb wciąż żyje).
+- [x] `ios/KayakMotor/RootView.swift` — `@Environment(\.scenePhase)` + `.onChange(of: scenePhase)` → na `.active` `model.resync()`.
+- [x] `ios/KayakMotor/App/AppModel.swift` — `resync()`: `telemetry.reconnect()` + `reconcileAutonomousState()` (czyści intencję/pinezkę gdy `.cleared`; odtwarza pinezkę z telemetrii gdy tryb żyje). `autonomousLabel` computed z reconcilera.
+- [x] `ios/KayakMotor/Features/Telemetry/TelemetryStore.swift` — jawny `reconnect()` (stop→start; `socket.events()` tworzy świeże `NWConnection`). TelemetrySocket bez zmian (nie było potrzeby).
+- [x] Stwórz `ios/KayakKit/Tests/KayakContractTests/AutonomousModeReconcilerTests.swift`.
 
 **Testy:**
-- [ ] Test: intencja `.hold` + `gotoState=active` → „Kotwica".
-- [ ] Test: intencja `.none` + `gotoState=active` → „Trzymam pozycję" (po force-quit).
-- [ ] Test: `gotoState=off` + `spotLockState=active` → „Pilot przejął".
-- [ ] Test: `gotoState=off` + `spotLockState=off` → stan wyczyszczony.
-- [ ] Test (urządzenie): goto aktywne → background 20 s → foreground → UI wciąż-aktywny + pinezka; pilot override → „zakończono".
+- [x] Test: intencja `.hold` + `gotoState=active` → „Kotwica".
+- [x] Test: intencja `.none` + `gotoState=active` → „Trzymam pozycję" (po force-quit).
+- [x] Test: `gotoState=off` + `spotLockState=active` → „Pilot przejął".
+- [x] Test: `gotoState=off` + `spotLockState=off` → stan wyczyszczony.
+- [ ] Test (urządzenie): goto aktywne → background 20 s → foreground → UI wciąż-aktywny + pinezka; pilot override → „zakończono". **DEVICE E2E — dla review.**
 
 **Weryfikacja:**
 - [ ] Weryfikacja: testy reconcilera zielone; cykl background→foreground odtwarza stan; brak fałszywego „anulowano".
