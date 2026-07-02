@@ -107,14 +107,14 @@ Zależności: Unit 2 (firmware rozumie `hold`). Realizuje: R1, R5, R7.
 Zależności: Unit 4. Realizuje: R6.
 
 **Implementacja:**
-- [ ] Stwórz `ios/KayakKit/Sources/KayakContract/SpotLockReadiness.swift` — `canEngage(telemetry)` (+ opcjonalny `blockReason`).
-- [ ] `ios/KayakMotor/Features/Goto/ControlBarView.swift` — przycisk Spot-lock `enabled:` z readiness (wzór Goto linie 23-27).
-- [ ] Stwórz `ios/KayakKit/Tests/KayakContractTests/SpotLockReadinessTests.swift`.
+- [x] Stwórz `ios/KayakKit/Sources/KayakContract/SpotLockReadiness.swift` — `canEngage(telemetry)` + `blockReason` (deleguje do `GotoReadiness` dla non-nil; nil → `.noGpsFix`).
+- [x] `ios/KayakMotor/Features/Goto/ControlBarView.swift` — przycisk Spot-lock `enabled: SpotLockReadiness.canEngage(telemetry)` (wzór Goto).
+- [x] Stwórz `ios/KayakKit/Tests/KayakContractTests/SpotLockReadinessTests.swift`.
 
 **Testy:**
-- [ ] Test: `gpsFix=false` → `canEngage=false` (+ blockReason „brak GPS").
-- [ ] Test: `gpsFix=true` (+ ARMED jeśli w telemetrii) → `canEngage=true`.
-- [ ] Test: `telemetry=nil` → `canEngage=false`.
+- [x] Test: `gpsFix=false` → `canEngage=false` (+ blockReason `.noGpsFix` „Brak fixu GPS").
+- [x] Test: `gpsFix=true` + ARMED → `canEngage=true`.
+- [x] Test: `telemetry=nil` → `canEngage=false`.
 
 **Weryfikacja:**
 - [ ] Weryfikacja: testy zielone; w UI przycisk 0.5 opacity + `.disabled` bez fixu.

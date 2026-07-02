@@ -2,8 +2,8 @@ import SwiftUI
 import KayakContract
 
 /// Dolny pasek sterowania: 4 przyciski ikonowe inline — Goto, STOP, Rozbrój,
-/// Spot-lock. Nad nimi kompaktowy status (dystans/namiar albo powód blokady),
-/// pokazywany tylko gdy istotny. Spot-lock to na razie placeholder (logika później).
+/// Spot-lock (kotwica). Nad nimi kompaktowy status (dystans/namiar albo powód
+/// blokady), pokazywany tylko gdy istotny. Spot-lock wyszarzony bez ARMED+fixu (R6).
 struct ControlBarView: View {
     let hasTarget: Bool
     let sendState: GotoTargetController.SendState
@@ -27,7 +27,9 @@ struct ControlBarView: View {
                            action: onGoto)
                 iconButton("stop.fill", tint: SunlightTheme.stopColor, label: "STOP", action: onStop)
                 iconButton("bolt.slash.fill", tint: SunlightTheme.disarmColor, label: "Rozbrój", action: onDisarm)
-                iconButton("anchor", tint: SunlightTheme.brand, label: "Spot-lock (wkrótce)", action: onSpotLock)
+                iconButton("anchor", tint: SunlightTheme.brand, label: "Spot-lock (kotwica)",
+                           enabled: SpotLockReadiness.canEngage(telemetry),
+                           action: onSpotLock)
             }
         }
     }
