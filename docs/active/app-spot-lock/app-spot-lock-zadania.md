@@ -35,13 +35,13 @@ Zależności: brak. Realizuje: R3, R4.
 Zależności: brak. Realizuje: R1, R2.
 
 **Implementacja:**
-- [ ] `components/web_panel/include/command_parse.h` — dodać `bool hold_request;` + zaktualizować docstring listy keywordów.
-- [ ] `components/web_panel/src/command_parse.c` — dodać `{"hold", {.ok=true, .hold_request=true}}` do `COMMAND_TABLE`.
-- [ ] `test/host/test_command_parse.c` — dodać `test_hold_maps_to_hold_request`.
+- [x] `components/web_panel/include/command_parse.h` — dodać `bool hold_request;` + zaktualizować docstring listy keywordów.
+- [x] `components/web_panel/src/command_parse.c` — dodać `{"hold", {.ok=true, .hold_request=true}}` do `COMMAND_TABLE`.
+- [x] `test/host/test_command_parse.c` — dodać `test_hold_maps_to_hold_request`.
 
 **Testy:**
-- [ ] Test: `command_parse("hold")` → `ok=true`, `hold_request=true`, `goto_request=false`, `goto_cancel_request=false`.
-- [ ] Test: nieznany keyword nadal `ok=false` (regresja — istniejący test bez zmian).
+- [x] Test: `command_parse("hold")` → `ok=true`, `hold_request=true`, `goto_request=false`, `goto_cancel_request=false`.
+- [x] Test: nieznany keyword nadal `ok=false` (regresja — istniejący test bez zmian).
 
 **Weryfikacja:**
 - [ ] Weryfikacja: host-tests zielone; `test_command_parse` +1 test.
