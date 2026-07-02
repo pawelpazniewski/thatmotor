@@ -122,6 +122,24 @@ final class AppModel {
         }
     }
 
+    /// Spot-lock — placeholder. Kontrakt nie ma jeszcze komendy; logikę dodamy
+    /// w kolejnej sesji (utrzymanie pozycji „na kotwicy").
+    func requestSpotLock() {
+        lastActionMessage = "Spot-lock — wkrótce (w budowie)"
+    }
+
+    /// Usuń/abortuj cel goto: kasuje pinezkę (zatrzymuje resend keepalive), a gdy
+    /// nawigacja już trwa na firmware — dodatkowo wysyła `goto_cancel`.
+    func clearTarget() {
+        let wasActive = (telemetry.latest?.gotoState ?? .off) != .off
+        target.clear()
+        guard wasActive else { return }
+        Task {
+            do { try await commands.send(.gotoCancel); lastActionMessage = "Nawigacja anulowana" }
+            catch { lastActionMessage = "Anuluj: błąd wysłania" }
+        }
+    }
+
     // MARK: - Waypointy (R4)
 
     /// Zapisuje realną pozycję łódki jako nazwany waypoint (odrzuca brak fixu).

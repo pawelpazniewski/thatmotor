@@ -27,6 +27,14 @@ final class MapCameraController {
     func zoomIn() { step(by: 1) }
     func zoomOut() { step(by: -1) }
 
+    /// Wyśrodkuj widok na „Tobie": łódka (fix z telemetrii) jeśli dostępna, inaczej
+    /// pozycja telefonu (GPS). Zachowuje bieżący zoom. Nic nie robi bez żadnej pozycji.
+    func recenter(boat: CLLocationCoordinate2D?) {
+        guard let mapView else { return }
+        guard let target = boat ?? mapView.userLocation?.location?.coordinate else { return }
+        mapView.setCenter(target, animated: true)
+    }
+
     private func step(by delta: Double) {
         guard let mapView else { return }
         mapView.setZoomLevel(mapView.zoomLevel + delta, animated: true)
