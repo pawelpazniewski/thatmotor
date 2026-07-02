@@ -18,9 +18,25 @@ struct BoatRenderState: Equatable {
 /// Mapa offline (Unit 5/6): bundlowy blank-style + kontur akwenu z `lake.geojson`,
 /// marker łodzi (`MLNSymbolStyleLayer` z `iconRotation`), pin celu + linia łódź→cel.
 /// Aktualizacja markerów przez podmianę `MLNShapeSource.shape` (bufor GPU). Zero sieci.
+/// Most między przyciskami SwiftUI a `MLNMapView` do sterowania zoomem. Trzyma
+/// słabą referencję do mapy (ustawianą w `makeUIView`), by nie tworzyć retain cycle.
+@MainActor
+final class MapCameraController {
+    fileprivate weak var mapView: MLNMapView?
+
+    func zoomIn() { step(by: 1) }
+    func zoomOut() { step(by: -1) }
+
+    private func step(by delta: Double) {
+        guard let mapView else { return }
+        mapView.setZoomLevel(mapView.zoomLevel + delta, animated: true)
+    }
+}
+
 struct LakeMapView: UIViewRepresentable {
     var boat: BoatRenderState
     var target: CLLocationCoordinate2D?
+    var camera: MapCameraController
     var followsBoat: Bool = true
     var onTap: (CLLocationCoordinate2D) -> Void = { _ in }
 
@@ -31,9 +47,15 @@ struct LakeMapView: UIViewRepresentable {
         mapView.styleURL = Bundle.main.url(forResource: "blank-style", withExtension: "json")
         mapView.delegate = context.coordinator
         mapView.logoView.isHidden = true
-        mapView.allowsRotating = false
+        mapView.allowsZooming = true
+        mapView.allowsRotating = true
+        // Niebieska kropka „tu jestem" (pozycja telefonu). MapLibre sam prosi o
+        // uprawnienie i zarządza CLLocationManager. Tryb .none — kamera nadal śledzi
+        // łódkę; pozycja telefonu to wyłącznie odniesienie, nie wejście nawigacji.
+        mapView.showsUserLocation = true
         mapView.setCenter(CLLocationCoordinate2D(latitude: 52.02, longitude: 21.02),
                           zoomLevel: 13, animated: false)
+        camera.mapView = mapView
 
         let tap = UITapGestureRecognizer(target: context.coordinator,
                                          action: #selector(Coordinator.handleTap(_:)))
@@ -54,6 +76,8 @@ struct LakeMapView: UIViewRepresentable {
         private static let boatIconName = "boat-icon"
         private static let targetIconName = "target-icon"
         private var lastCameraMove = Date.distantPast
+        private var hasBoatFix = false
+        private var hasCenteredOnUser = false
         var onTap: (CLLocationCoordinate2D) -> Void = { _ in }
 
         @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
@@ -63,26 +87,75 @@ struct LakeMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
-            addLakeContour(to: style)
+            addBasemap(to: style)
             addRouteLine(to: style)
             addBoatLayer(to: style)
             addTargetLayer(to: style)
         }
 
-        private func addLakeContour(to style: MLNStyle) {
-            guard let url = Bundle.main.url(forResource: "lake", withExtension: "geojson") else { return }
-            let source = MLNShapeSource(identifier: "lake-src", url: url, options: nil)
+        /// Zanim silnik złapie fix, kamera stoi na domyślnym środku — wyśrodkuj więc
+        /// jednorazowo na pozycji telefonu, by kropka „tu jestem" była widoczna.
+        /// Po pojawieniu się pozycji łódki `updateBoat` przejmuje kamerę.
+        func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {
+            guard !hasCenteredOnUser, !hasBoatFix,
+                  let location = userLocation?.location else { return }
+            mapView.setCenter(location.coordinate, zoomLevel: 15, animated: true)
+            hasCenteredOnUser = true
+        }
+
+        /// Offline vector basemap (Protomaps Basemap v4) z bundlowego `.pmtiles`.
+        /// Bez etykiet (brak glyphs/sprite w bundlu) — ląd/woda/zieleń/drogi. Ścieżkę
+        /// bundla resolwujemy w runtime (`file://` z UUID zmiennym po reinstalacji),
+        /// stąd `pmtiles://` + `configurationURL`, a nie ścieżka w statycznym stylu.
+        private func addBasemap(to style: MLNStyle) {
+            guard let fileURL = Bundle.main.url(forResource: "mazowsze", withExtension: "pmtiles"),
+                  let sourceURL = URL(string: "pmtiles://\(fileURL.absoluteString)") else { return }
+            let source = MLNVectorTileSource(identifier: "basemap", configurationURL: sourceURL)
             style.addSource(source)
 
-            let fill = MLNFillStyleLayer(identifier: "lake-fill", source: source)
-            fill.fillColor = NSExpression(forConstantValue: UIColor(red: 0.20, green: 0.50, blue: 0.80, alpha: 1))
-            fill.fillOpacity = NSExpression(forConstantValue: 0.85)
-            style.addLayer(fill)
+            // Cały ląd na jednolitą jasną zieleń — teren bez poligonu landuse (pola,
+            // nieokryty grunt) NIE odcina się wtedy jasną plamą od roślinności (to był
+            // mylący „ukośny pas": goły `earth` między zielenią, np. dolina rzeki).
+            let earth = MLNFillStyleLayer(identifier: "basemap-earth", source: source)
+            earth.sourceLayerIdentifier = "earth"
+            earth.fillColor = NSExpression(forConstantValue: UIColor(red: 0.86, green: 0.89, blue: 0.79, alpha: 1))
+            style.addLayer(earth)
 
-            let line = MLNLineStyleLayer(identifier: "lake-outline", source: source)
-            line.lineColor = NSExpression(forConstantValue: UIColor.white)
-            line.lineWidth = NSExpression(forConstantValue: 1.5)
-            style.addLayer(line)
+            // Tereny zabudowane/przemysłowe — neutralna szarość, odróżnia od zieleni.
+            let developed = MLNFillStyleLayer(identifier: "basemap-developed", source: source)
+            developed.sourceLayerIdentifier = "landuse"
+            developed.predicate = NSPredicate(format: "kind IN %@",
+                ["residential", "industrial", "commercial", "retail", "military",
+                 "railway", "aerodrome", "quarry", "school", "university", "hospital"])
+            developed.fillColor = NSExpression(forConstantValue: UIColor(red: 0.84, green: 0.82, blue: 0.78, alpha: 1))
+            style.addLayer(developed)
+
+            // Las — ciemniejsza zieleń, TYLKO realny las (`forest`/`wood`). Granic
+            // obszarów chronionych (`national_park`/`nature_reserve`) NIE wypełniamy:
+            // obejmują też pola i wsie, więc jednolite wypełnienie robiło wielki
+            // ciemnozielony „blob" wyglądający jak nakładka. Las w parku i tak się rysuje.
+            let woodland = MLNFillStyleLayer(identifier: "basemap-wood", source: source)
+            woodland.sourceLayerIdentifier = "landuse"
+            woodland.predicate = NSPredicate(format: "kind IN %@", ["forest", "wood"])
+            woodland.fillColor = NSExpression(forConstantValue: UIColor(red: 0.59, green: 0.75, blue: 0.55, alpha: 1))
+            style.addLayer(woodland)
+
+            // Wypełnienie wody na wszystkich zoomach, ale TYLKO zwarte akweny (jeziora,
+            // zbiorniki, Wisła jako `water`, stawy). Wykluczamy `river`/`canal`/`stream`:
+            // to wydłużone, źle domknięte wielokąty, które earcut MapLibre „rozlewa"
+            // w kliny/„widma". `water` tesseluje się czysto na każdym zoomie (zweryfikowane).
+            let water = MLNFillStyleLayer(identifier: "basemap-water", source: source)
+            water.sourceLayerIdentifier = "water"
+            water.predicate = NSPredicate(format: "NOT (kind IN %@)", ["river", "canal", "stream"])
+            water.fillColor = NSExpression(forConstantValue: UIColor(red: 0.42, green: 0.65, blue: 0.82, alpha: 1))
+            style.addLayer(water)
+
+            let roads = MLNLineStyleLayer(identifier: "basemap-roads", source: source)
+            roads.sourceLayerIdentifier = "roads"
+            roads.predicate = NSPredicate(format: "kind IN %@", ["highway", "major_road", "medium_road"])
+            roads.lineColor = NSExpression(forConstantValue: UIColor(white: 0.6, alpha: 1))
+            roads.lineWidth = NSExpression(forConstantValue: 1.2)
+            style.addLayer(roads)
         }
 
         private func addRouteLine(to style: MLNStyle) {
@@ -125,6 +198,7 @@ struct LakeMapView: UIViewRepresentable {
             guard let style = mapView.style,
                   let source = style.source(withIdentifier: Self.boatSourceID) as? MLNShapeSource,
                   let coordinate = boat.coordinate else { return }
+            hasBoatFix = true
             let feature = MLNPointFeature()
             feature.coordinate = coordinate
             feature.attributes = ["heading": boat.headingDegrees]

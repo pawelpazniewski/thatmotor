@@ -1,6 +1,5 @@
 import Foundation
 import Network
-import NetworkExtension
 
 /// Konfiguracja AP silnika (zweryfikowana w firmware: sdkconfig / wifi_ap.c).
 enum MotorAP {
@@ -29,28 +28,30 @@ final class ProbeModel {
         log.insert("[\(stamp)] \(line)", at: 0)
     }
 
-    // MARK: - Test 1: Dołączenie do AP
+    // MARK: - Test 1: Sprawdzenie łączności z AP
 
+    /// Programowy join (`NEHotspotConfiguration`) wymaga capability Hotspot, której
+    /// darmowe konto Apple nie wspiera. Zamiast dołączać sprawdzamy realną łączność:
+    /// odpytujemy hosta silnika. Użytkownik łączy się z Wi‑Fi ręcznie w Ustawieniach.
     func joinAP() async {
         isBusy = true
         defer { isBusy = false }
         let start = Date()
-        append("Join: proszę o dołączenie do \(MotorAP.ssid)…")
-        let config = NEHotspotConfiguration(ssid: MotorAP.ssid, passphrase: MotorAP.passphrase, isWEP: false)
-        config.joinOnce = false
+        append("Sprawdzam łączność z silnikiem (\(MotorAP.host))…")
+
+        var request = URLRequest(url: URL(string: "http://\(MotorAP.host)/")!)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 5
+
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForResource = 6
+        let session = URLSession(configuration: config)
         do {
-            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-                NEHotspotConfigurationManager.shared.apply(config) { error in
-                    if let error, (error as NSError).code != NEHotspotConfigurationError.alreadyAssociated.rawValue {
-                        cont.resume(throwing: error)
-                    } else {
-                        cont.resume()
-                    }
-                }
-            }
-            append(String(format: "Join: OK po %.1f s", Date().timeIntervalSince(start)))
+            let (_, response) = try await session.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            append(String(format: "Połączenie OK — silnik odpowiada (HTTP %d) po %.1f s", status, Date().timeIntervalSince(start)))
         } catch {
-            append("Join: BŁĄD — \(error.localizedDescription). Fallback: dołącz ręcznie w Ustawieniach.")
+            append("Brak łączności — połącz telefon z Wi‑Fi „\(MotorAP.ssid)” w Ustawieniach, potem spróbuj ponownie.")
         }
     }
 

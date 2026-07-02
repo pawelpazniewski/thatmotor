@@ -17,7 +17,7 @@ struct ContentView: View {
                 .font(.title3)
 
                 VStack(spacing: 8) {
-                    Button("1. Dołącz do AP") { Task { await model.joinAP() } }
+                    Button("1. Sprawdź połączenie") { Task { await model.joinAP() } }
                     Button("2. HTTP POST goto_cancel") { Task { await model.httpPost() } }
                     Button("3. Start WebSocket") { model.startWebSocket() }
                     Button("Stop WebSocket") { model.stopWebSocket() }

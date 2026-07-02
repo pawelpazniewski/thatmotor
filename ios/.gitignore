@@ -10,3 +10,6 @@ DerivedData/
 .build/
 .swiftpm/
 Package.resolved
+
+# Offline vector basemap (188 MB) — regenerowalny przez scripts/generate-basemap.sh
+KayakMotor/Resources/*.pmtiles

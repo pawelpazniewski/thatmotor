@@ -6,17 +6,21 @@ import KayakContract
 struct RootView: View {
     @State private var model = AppModel()
     @State private var showWaypoints = false
+    @State private var camera = MapCameraController()
 
     var body: some View {
         ZStack(alignment: .top) {
             LakeMapView(
                 boat: model.telemetry.boat,
                 target: model.target.stagedCoordinate,
+                camera: camera,
                 onTap: { model.handleMapTap($0) }
             )
             .ignoresSafeArea()
 
             topBar
+
+            zoomControls
 
             bottomPanel
         }
@@ -55,6 +59,25 @@ struct RootView: View {
         .padding()
     }
 
+    private var zoomControls: some View {
+        VStack(spacing: 12) {
+            zoomButton("plus") { camera.zoomIn() }
+            zoomButton("minus") { camera.zoomOut() }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+    }
+
+    private func zoomButton(_ systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title2.bold())
+                .frame(width: SunlightTheme.minHitTarget, height: SunlightTheme.minHitTarget)
+                .background(SunlightTheme.panelBackground, in: Circle())
+                .foregroundStyle(.white)
+        }
+    }
+
     private var bottomPanel: some View {
         VStack {
             Spacer()
@@ -82,6 +105,7 @@ struct RootView: View {
             LinearGradient(colors: [.clear, SunlightTheme.panelBackground],
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
+                .allowsHitTesting(false)
         )
     }
 }

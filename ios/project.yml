@@ -44,8 +44,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pawel.kayak.motor
+        DEVELOPMENT_TEAM: "3H77MD6J7M"
         CODE_SIGN_ENTITLEMENTS: KayakMotor/KayakMotor.entitlements
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Łączy się z silnikiem kajaka (AP kayak-motor) po Wi‑Fi, by wysyłać cel nawigacji i odbierać telemetrię."
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Pokazuje Twoją pozycję na mapie akwenu, byś widział siebie względem łódki i celu."
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
 
@@ -58,6 +60,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pawel.kayak.derisk
+        DEVELOPMENT_TEAM: "3H77MD6J7M"
         CODE_SIGN_ENTITLEMENTS: DeRiskProbe/DeRiskProbe.entitlements
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Łączy się z silnikiem kajaka (AP kayak-motor) po Wi‑Fi, by wysłać komendę i odbierać telemetrię."
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
