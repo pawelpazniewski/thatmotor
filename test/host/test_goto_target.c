@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "api_contract.h"
+#include "goto_grab.h"
 #include "goto_target.h"
 #include "unity.h"
 
@@ -118,6 +119,47 @@ static void test_from_double_just_out_of_range_is_rejected(void)
     TEST_ASSERT_FALSE(goto_target_from_double(0.0, -1800000001.0, &lat_e7, &lon_e7));
 }
 
+/* --- Unit 3: hold fix-grab decision (goto_grab_decide) --- */
+
+static void test_grab_engages_on_fresh_in_range_fix(void)
+{
+    /* A fresh, real, in-range fix -> engage with the sampled coordinates as the
+     * anchor target (target == the sampled input, passed through). */
+    goto_grab_decision d = goto_grab_decide(true, true, 521000000, 210000000);
+
+    TEST_ASSERT_TRUE(d.engage);
+    TEST_ASSERT_EQUAL_INT32(521000000, d.lat_e7);
+    TEST_ASSERT_EQUAL_INT32(210000000, d.lon_e7);
+}
+
+static void test_grab_blocked_without_real_fix(void)
+{
+    /* Seed-fresh: fresh window but NO real fix. Must NOT engage. Oracle power:
+     * dropping the fix gate (engage on fresh alone) would return true here. */
+    goto_grab_decision d = goto_grab_decide(true, false, 521000000, 210000000);
+
+    TEST_ASSERT_FALSE(d.engage);
+}
+
+static void test_grab_blocked_when_stale(void)
+{
+    /* Not fresh -> must not engage (symmetric guard to the fix gate). */
+    goto_grab_decision d = goto_grab_decide(false, true, 521000000, 210000000);
+
+    TEST_ASSERT_FALSE(d.engage);
+}
+
+static void test_grab_blocked_out_of_range_fix(void)
+{
+    /* A garbage fix out of the geographic range must not engage even when fresh
+     * with a real fix (mirrors goto_target_valid; oracle: input past +/-90 lat). */
+    goto_grab_decision d = goto_grab_decide(true, true, 900000001, 0);
+    TEST_ASSERT_FALSE(d.engage);
+
+    goto_grab_decision d2 = goto_grab_decide(true, true, 0, -1800000001);
+    TEST_ASSERT_FALSE(d2.engage);
+}
+
 void run_goto_target_tests(void)
 {
     RUN_TEST(test_target_inside_range_is_valid);
@@ -132,4 +174,8 @@ void run_goto_target_tests(void)
     RUN_TEST(test_from_double_nan_is_rejected);
     RUN_TEST(test_from_double_out_of_int32_wrap_is_rejected);
     RUN_TEST(test_from_double_just_out_of_range_is_rejected);
+    RUN_TEST(test_grab_engages_on_fresh_in_range_fix);
+    RUN_TEST(test_grab_blocked_without_real_fix);
+    RUN_TEST(test_grab_blocked_when_stale);
+    RUN_TEST(test_grab_blocked_out_of_range_fix);
 }

@@ -187,6 +187,7 @@ static control_loop_ui_events to_ui_events(const command_parse_result *parsed)
         .trim_save = parsed->trim_save,
         .goto_request = parsed->goto_request,
         .goto_cancel_request = parsed->goto_cancel_request,
+        .hold_request = parsed->hold_request,
         .goto_lat_e7 = parsed->goto_lat_e7,
         .goto_lon_e7 = parsed->goto_lon_e7,
         .calib_event = parsed->calib_event,

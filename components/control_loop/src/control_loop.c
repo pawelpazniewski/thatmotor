@@ -9,6 +9,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "goto_grab.h"
 #include "gps.h"
 #include "imu.h"
 #include "led_driver.h"
@@ -341,8 +342,11 @@ static void apply_trim_events(const control_loop_ui_events *ev)
 /* Stage an app-driven goto command: latch the engage + external target on a goto
  * request (idempotent keepalive: a repeated goto refreshes the target and the
  * link stamp), clear the latch on goto_cancel. Every received goto stamps
- * s_last_goto_ms so the comms-watchdog can gate on link freshness. The
- * engage/target are read into the loop inputs by apply_goto_inputs each cycle. */
+ * s_last_goto_ms so the link-freshness re-latch gate stays wrap-safe. A hold
+ * request anchors at the boat's OWN fix: sample the fix ONCE atomically, and only
+ * when it is usable (fresh + real fix + in range, via goto_grab_decide) latch it
+ * as the SRC_GOTO target (anchor = own position, R1/R2/R6). The engage/target are
+ * read into the loop inputs by apply_goto_inputs each cycle. */
 static void apply_goto_events(const control_loop_ui_events *ev)
 {
     if (ev->goto_request) {
@@ -350,6 +354,17 @@ static void apply_goto_events(const control_loop_ui_events *ev)
         s_goto_lat_e7 = ev->goto_lat_e7;
         s_goto_lon_e7 = ev->goto_lon_e7;
         s_last_goto_ms = sensor_freshness_stamp(s_last_goto_ms, now_ms(), true);
+    }
+    if (ev->hold_request) {
+        gps_state g;
+        gps_get_state(&g); /* one atomic sample: lat/lon from the same fix */
+        goto_grab_decision d = goto_grab_decide(g.fresh, g.fix, g.lat_e7, g.lon_e7);
+        if (d.engage) {
+            s_goto_engage = true;
+            s_goto_lat_e7 = d.lat_e7;
+            s_goto_lon_e7 = d.lon_e7;
+            s_last_goto_ms = sensor_freshness_stamp(s_last_goto_ms, now_ms(), true);
+        }
     }
     if (ev->goto_cancel_request) {
         s_goto_engage = false;

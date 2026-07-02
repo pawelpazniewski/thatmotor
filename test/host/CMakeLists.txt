@@ -36,6 +36,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/control_loop/src/loop_step.c
     ${REPO_ROOT}/components/control_loop/src/geo_math.c
     ${REPO_ROOT}/components/control_loop/src/spot_lock.c
+    ${REPO_ROOT}/components/control_loop/src/goto_grab.c
     ${REPO_ROOT}/components/web_panel/src/api_contract.c
     ${REPO_ROOT}/components/web_panel/src/command_parse.c
     ${REPO_ROOT}/components/web_panel/src/goto_target.c

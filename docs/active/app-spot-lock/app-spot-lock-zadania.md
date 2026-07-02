@@ -53,16 +53,16 @@ Zależności: brak. Realizuje: R1, R2.
 Zależności: Unit 2 (flaga), Unit 1 (persist). Realizuje: R1, R2, R6 (bramka fixu).
 
 **Implementacja:**
-- [ ] `components/control_loop/include/control_loop.h` — dodać `bool hold_request;` do `control_loop_ui_events`.
-- [ ] `components/web_panel/src/http_server.c` — `to_ui_events` przenosi `hold_request`; gałąź `hold` NIE przez `extract_goto_target` (brak coords → nie zwracać 400).
-- [ ] Pure helper decyzji grabu: `(fresh, fix, lat_e7, lon_e7) → {engage, lat, lon}` = `fresh && fix && goto_target_valid(...)` (w `components/web_panel/src/goto_target.c` lub sąsiedztwie).
-- [ ] `components/control_loop/src/control_loop.c` — `apply_goto_events`: na `hold_request` jeden `gps_get_state()` → helper → przy engage `s_goto_engage=true`, `s_goto_lat/lon_e7` z fixu, stamp `s_last_goto_ms`.
+- [x] `components/control_loop/include/control_loop.h` — dodać `bool hold_request;` do `control_loop_ui_events`.
+- [x] `components/web_panel/src/http_server.c` — `to_ui_events` przenosi `hold_request`; gałąź `hold` NIE przez `extract_goto_target` (brak coords → nie zwracać 400).
+- [x] Pure helper decyzji grabu: `(fresh, fix, lat_e7, lon_e7) → {engage, lat, lon}` = `fresh && fix && in-range`. Umieszczony w `components/control_loop/{src,include}/goto_grab.c/h` (NIE w web_panel — control_loop nie może zależeć od web_panel: cykl). Range check mirroruje `goto_target_valid`.
+- [x] `components/control_loop/src/control_loop.c` — `apply_goto_events`: na `hold_request` jeden `gps_get_state()` → helper → przy engage `s_goto_engage=true`, `s_goto_lat/lon_e7` z fixu, stamp `s_last_goto_ms`.
 
 **Testy:**
-- [ ] Test: helper `fresh=true, fix=true, lat/lon w zakresie` → `engage=true`, cel = wejście.
-- [ ] Test: helper `fix=false` (seed-fresh) → `engage=false`; mutacja „pomiń bramkę fix" failuje.
-- [ ] Test: helper lat/lon POZA int32 / INF → `engage=false` (reużycie `goto_target_valid`).
-- [ ] Test: `command_parse` regresja — `hold` nie ustawia `goto_lat/lon`.
+- [x] Test: helper `fresh=true, fix=true, lat/lon w zakresie` → `engage=true`, cel = wejście.
+- [x] Test: helper `fix=false` (seed-fresh) → `engage=false`; mutacja „pomiń bramkę fix" failuje.
+- [x] Test: helper lat/lon POZA zakresem geo → `engage=false` (mirror `goto_target_valid`).
+- [x] Test: `command_parse` regresja — `hold` nie ustawia `goto_lat/lon`.
 
 **Weryfikacja:**
 - [ ] Weryfikacja: host-tests zielone; przegląd: `hold` bez body nie zwraca 400; przy fixie `s_goto_engage` latchuje `SRC_GOTO` z własną pozycją.

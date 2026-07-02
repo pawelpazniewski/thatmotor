@@ -92,6 +92,7 @@ typedef struct {
     bool trim_save;            /* persist the current servo trim to NVS */
     bool goto_request;         /* app "Goto": start/refresh nav to goto_lat/lon */
     bool goto_cancel_request;  /* app "Goto cancel": end the goto mode */
+    bool hold_request;         /* app "Spot-lock": anchor at the boat's own fix */
     int32_t goto_lat_e7;       /* goto target latitude (deg * 1e7), HTTP-validated */
     int32_t goto_lon_e7;       /* goto target longitude (deg * 1e7), HTTP-validated */
     calib_event calib_event;   /* discriminated calibration operator event */
