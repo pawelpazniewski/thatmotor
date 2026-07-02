@@ -126,13 +126,14 @@ Zależności: Unit 4. Realizuje: R6.
 Zależności: Unit 1 (firmware nie pauzuje). Realizuje: R3.
 
 **Implementacja:**
-- [ ] `ios/KayakMotor/App/AppModel.swift` — usunąć `keepaliveTick`, `KeepaliveController`, ustawianie `UIApplication.isIdleTimerDisabled`.
-- [ ] `ios/KayakKit/Sources/KayakContract/Keepalive.swift` — usunąć `KeepaliveDecision` (decyzja o pełnym usunięciu pliku w implementacji).
-- [ ] `ios/KayakKit/Tests/KayakContractTests/KeepaliveTests.swift` — usunąć (usuwana funkcjonalność).
+- [x] `ios/KayakMotor/App/AppModel.swift` — usunięto `keepaliveTick`, `KeepaliveController`, `UIApplication.isIdleTimerDisabled` (i nieużywany `import UIKit`). `start()`/`stop()` dotykają tylko telemetrii.
+- [x] `ios/KayakMotor/Features/Goto/KeepaliveController.swift` — usunięty (martwy po usunięciu keepalive).
+- [x] `ios/KayakKit/Sources/KayakContract/Keepalive.swift` — usunięto `KeepaliveDecision` + `keepaliveIntervalSeconds`; plik zmieniono nazwę na `GotoTiming.swift` (zostaje tylko `commsTimeoutSeconds` — próg świeżości telemetrii dla `TelemetryStore`, prze-dokumentowany).
+- [x] `ios/KayakKit/Tests/KayakContractTests/KeepaliveTests.swift` — usunięty (usuwana funkcjonalność — zgodne z regułą: usuwamy testy WRAZ z testowaną funkcją).
 
 **Testy:**
-- [ ] Test: brak referencji do `KeepaliveDecision`/`isIdleTimerDisabled` (kompilacja + brak martwego kodu).
-- [ ] Test (urządzenie): goto → wygaś ekran 30 s → łódź kontynuuje; po odblokowaniu tryb aktywny (agent-browser N/D — manualnie).
+- [x] Test: brak referencji do `KeepaliveDecision`/`isIdleTimerDisabled`/`keepaliveTick` (grep pusty; `swift test` + xcodebuild kompilują — brak martwego kodu).
+- [ ] Test (urządzenie): goto → wygaś ekran 30 s → łódź kontynuuje; po odblokowaniu tryb aktywny (agent-browser N/D — manualnie). **DEVICE E2E — dla review.**
 
 **Weryfikacja:**
 - [ ] Weryfikacja: build iOS zielony; ekran gaśnie normalnie; brak resendu w logach sieci.

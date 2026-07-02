@@ -1,12 +1,12 @@
 import Foundation
 import CoreLocation
 import Observation
-import UIKit
 import KayakContract
 
-/// Koordynator aplikacji — spina telemetrię, komendy, cel goto, keepalive i
-/// waypointy. Cienki klient: żadnej logiki regulatora, tylko orkiestracja wywołań
-/// kontraktu i prezentacja.
+/// Koordynator aplikacji — spina telemetrię, komendy, cel goto i waypointy.
+/// Cienki klient: żadnej logiki regulatora, tylko orkiestracja wywołań kontraktu
+/// i prezentacja. Bez keepalive/idle-timer — firmware nie pauzuje przy utracie
+/// linku (latch trwały), więc ekran może gasnąć, a łódź płynie dalej.
 @MainActor
 @Observable
 final class AppModel {
@@ -27,7 +27,6 @@ final class AppModel {
 
     private let waypoints: WaypointStore
     private let commands: any CommandSending
-    private let keepalive = KeepaliveController()
     private let lakePolygon: [GeoPoint]
     private var pendingGeofencedTarget: LatLonE7?
 
@@ -47,26 +46,10 @@ final class AppModel {
 
     func start() {
         telemetry.start()
-        keepalive.start { [weak self] in
-            await self?.keepaliveTick()
-        }
     }
 
     func stop() {
-        keepalive.stop()
         telemetry.stop()
-        UIApplication.shared.isIdleTimerDisabled = false
-    }
-
-    private func keepaliveTick() async {
-        let gotoState = telemetry.latest?.gotoState ?? .off
-        UIApplication.shared.isIdleTimerDisabled =
-            KeepaliveDecision.shouldDisableIdleTimer(gotoState: gotoState)
-        guard let staged = target.staged,
-              KeepaliveDecision.shouldResend(gotoState: gotoState, hasTarget: true) else {
-            return
-        }
-        try? await commands.send(.goto(staged))
     }
 
     // MARK: - Tap-to-goto
