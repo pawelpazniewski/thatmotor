@@ -4,6 +4,7 @@ idf_component_register(
          "src/goto_target.c"
          "src/params_decide.c"
          "src/wifi_ap_config.c"
+         "src/ws_client_set.c"
          "src/wifi_ap.c"
          "src/params_json.c"
          "src/params_api.c"
