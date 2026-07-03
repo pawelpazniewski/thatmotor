@@ -26,7 +26,7 @@ Zależności: brak. Realizuje: R3, R4.
 - [x] Test: `!armed` → OFF; `SRC_HOLD` + `comms_fresh=false` → nadal ACTIVE (precedence, ZACHOWANY).
 
 **Weryfikacja:**
-- [ ] Weryfikacja: `test/host/run.sh` zielone; test odwrócenia przechodzi, a przywrócenie `comms_gated=true` czyni go czerwonym (moc wyroczni potwierdzona).
+- [x] Weryfikacja: `test/host/run.sh` zielone (442/0); test odwrócenia przechodzi, a przywrócenie `comms_gated=true` czyniło go czerwonym (2 testy — moc wyroczni potwierdzona empirycznie, review fazy 1).
 
 ---
 
@@ -44,7 +44,7 @@ Zależności: brak. Realizuje: R1, R2.
 - [x] Test: nieznany keyword nadal `ok=false` (regresja — istniejący test bez zmian).
 
 **Weryfikacja:**
-- [ ] Weryfikacja: host-tests zielone; `test_command_parse` +1 test.
+- [x] Weryfikacja: host-tests zielone (442/0); `test_command_parse` +1 test (`test_hold_maps_to_hold_request`).
 
 ---
 
@@ -65,7 +65,7 @@ Zależności: Unit 2 (flaga), Unit 1 (persist). Realizuje: R1, R2, R6 (bramka fi
 - [x] Test: `command_parse` regresja — `hold` nie ustawia `goto_lat/lon`.
 
 **Weryfikacja:**
-- [ ] Weryfikacja: host-tests zielone; przegląd: `hold` bez body nie zwraca 400; przy fixie `s_goto_engage` latchuje `SRC_GOTO` z własną pozycją.
+- [x] Weryfikacja: host-tests zielone (442/0); przegląd potwierdził: `hold` bez body nie idzie przez `extract_goto_target` (brak 400); `apply_goto_events` na `hold_request` latchuje `SRC_GOTO` z własnej pozycji przy fresh+fix (review fazy 1).
 
 ---
 
