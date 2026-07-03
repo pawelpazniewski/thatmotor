@@ -10,6 +10,14 @@
 
 static const char *TAG = "ws_telemetry";
 
+/* Telemetry JSON line buffer size. Sized from the measured worst case of
+ * snapshot_to_json: with all fields present and full-width signed *_e7 coords
+ * the line reaches ~724 B (a typical fixed line is ~673 B) — the previous 640 B
+ * overflowed silently, so snprintf returned len >= size and push_work dropped
+ * EVERY frame (panel showed "--" in every field). Keep headroom above the
+ * measured max; ANY new field added to snapshot_to_json must re-check this. */
+#define WS_TELEMETRY_JSON_MAX 1024
+
 /*
  * Threading invariant (CRITICAL — do not break):
  *   The client list (s_clients) is mutated ONLY on the httpd task:
@@ -97,7 +105,7 @@ static void push_work(void *arg)
     control_loop_snapshot snap;
     control_loop_get_snapshot(&snap);
 
-    char json[640];
+    char json[WS_TELEMETRY_JSON_MAX];
     int len = snapshot_to_json(&snap, json, sizeof(json));
     if (len <= 0 || (size_t)len >= sizeof(json)) {
         atomic_store(&s_push_in_flight, false);
