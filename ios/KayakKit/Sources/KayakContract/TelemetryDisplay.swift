@@ -26,19 +26,41 @@ public enum TelemetryDisplay {
         }
     }
 
+    /// „Zaangażowane" źródło sterowania — stan `active` lub `paused`
+    /// (off/unknown = nieaktywne). Wspólny predykat dla `modeLabel` i wyboru
+    /// aktywnego celu, żeby priorytet goto>spot-lock nie rozjechał się między nimi.
+    private static func isEngaged(_ state: HoldState) -> Bool {
+        state == .active || state == .paused
+    }
+
     /// Aktywny tryb sterowania. Goto ma pierwszeństwo (jak w `ControlBarView`);
     /// gdy goto zgasło, pokazujemy spot-lock; inaczej tryb ręczny.
     public static func modeLabel(spotLock: HoldState, goto: HoldState) -> String {
-        switch goto {
-        case .active: return "Goto"
-        case .paused: return "Goto (pauza)"
-        case .off, .unknown:
-            switch spotLock {
-            case .active: return "Spot-lock"
-            case .paused: return "Spot-lock (pauza)"
-            case .off, .unknown: return "Ręczny"
-            }
+        if isEngaged(goto) {
+            return goto == .paused ? "Goto (pauza)" : "Goto"
         }
+        if isEngaged(spotLock) {
+            return spotLock == .paused ? "Spot-lock (pauza)" : "Spot-lock"
+        }
+        return "Ręczny"
+    }
+
+    /// Dystans i namiar z AKTYWNEGO źródła celu — ta sama reguła priorytetu co
+    /// `modeLabel` (goto > spot-lock, przez wspólny `isEngaged`). Zwraca gotowy
+    /// tekst (`targetText`) z pól wybranego źródła albo `nil` w trybie ręcznym
+    /// (brak celu). Widoki (HUD, arkusz) używają tego zamiast własnego wyboru
+    /// źródła, dzięki czemu logika wyboru jest host-testowalna, nie w widoku.
+    public static func activeTargetText(
+        gotoState: HoldState, gotoErrM: Int, gotoBearingDeg10: Int,
+        spotLockState: HoldState, spotLockErrM: Int, spotLockBearingDeg10: Int
+    ) -> String? {
+        if isEngaged(gotoState) {
+            return targetText(errM: gotoErrM, bearingDeg10: gotoBearingDeg10)
+        }
+        if isEngaged(spotLockState) {
+            return targetText(errM: spotLockErrM, bearingDeg10: spotLockBearingDeg10)
+        }
+        return nil
     }
 
     /// Dystans i namiar do celu, np. „123 m · 45°" (jak `ControlBarView`).

@@ -9,6 +9,11 @@ import KayakContract
 /// bramkuje `displayed(_:isFresh:)` — gdy łącze nie jest świeże LUB brak ramki,
 /// każdy wiersz pokazuje myślnik zamiast zamrożonej liczby.
 struct HudView: View {
+    /// Górny limit szerokości panelu — trzyma HUD kompaktowym w rogu, żeby długi
+    /// wiersz trybu (np. „Spot-lock (pauza) · 1234 m · 180°") truncował się
+    /// (`lineLimit(1)`), a nie rozciągał panelu przez środek mapy.
+    private static let maxPanelWidth: CGFloat = 240
+
     let store: TelemetryStore
     let onTap: () -> Void
 
@@ -19,11 +24,12 @@ struct HudView: View {
             row("scope", modeText)
             row("speedometer", speedHeadingText)
         }
+        .frame(maxWidth: Self.maxPanelWidth, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(SunlightTheme.panelBackground,
-                    in: RoundedRectangle(cornerRadius: SunlightTheme.cornerRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: SunlightTheme.cornerRadius, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: SunlightTheme.panelRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: SunlightTheme.panelRadius, style: .continuous)
             .strokeBorder(SunlightTheme.hairline))
         .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
         .contentShape(Rectangle())
@@ -79,15 +85,12 @@ struct HudView: View {
             isFresh: isFresh)
     }
 
-    /// Dystans/namiar z aktywnego źródła: goto gdy goto aktywne/pauza, inaczej
-    /// spot-lock; `nil` w trybie ręcznym (brak celu).
+    /// Dystans/namiar z aktywnego źródła — wybór (goto > spot-lock) i format są
+    /// w `TelemetryDisplay` (host-testowalne); widok tylko przekazuje pola.
     private func target(_ t: Telemetry) -> String? {
-        if t.gotoState != .off && t.gotoState != .unknown {
-            return TelemetryDisplay.targetText(errM: t.gotoErrM, bearingDeg10: t.gotoBearingDeg10)
-        }
-        if t.spotLockState != .off && t.spotLockState != .unknown {
-            return TelemetryDisplay.targetText(errM: t.spotLockErrM, bearingDeg10: t.spotLockBearingDeg10)
-        }
-        return nil
+        TelemetryDisplay.activeTargetText(
+            gotoState: t.gotoState, gotoErrM: t.gotoErrM, gotoBearingDeg10: t.gotoBearingDeg10,
+            spotLockState: t.spotLockState, spotLockErrM: t.spotLockErrM,
+            spotLockBearingDeg10: t.spotLockBearingDeg10)
     }
 }

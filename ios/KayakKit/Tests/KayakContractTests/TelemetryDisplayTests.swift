@@ -74,4 +74,41 @@ struct TelemetryDisplayTests {
         // 150 cm/s → 1.5 m/s ; 1234 deg10 → 123°
         #expect(TelemetryDisplay.speedHeadingText(speedCms: 150, headingDeg10: 1234) == "1.5 m/s · 123°")
     }
+
+    // Moc wyroczni: oba źródła aktywne, RÓŻNE pola → wynik MUSI pochodzić z goto.
+    // Mutacja odwracająca priorytet dałaby "200 m · 180°" i test failuje.
+    @Test("activeTargetText: oba źródła aktywne → wybiera goto (priorytet)")
+    func activeTargetPrefersGoto() {
+        let text = TelemetryDisplay.activeTargetText(
+            gotoState: .active, gotoErrM: 100, gotoBearingDeg10: 900,
+            spotLockState: .active, spotLockErrM: 200, spotLockBearingDeg10: 1800)
+        #expect(text == "100 m · 90°")
+    }
+
+    // Goto zgaszony → spadamy na spot-lock, z pól spot-locka (nie goto).
+    @Test("activeTargetText: tylko spot-lock aktywny → wybiera spot-lock")
+    func activeTargetFallsBackToSpotLock() {
+        let text = TelemetryDisplay.activeTargetText(
+            gotoState: .off, gotoErrM: 100, gotoBearingDeg10: 900,
+            spotLockState: .active, spotLockErrM: 200, spotLockBearingDeg10: 1800)
+        #expect(text == "200 m · 180°")
+    }
+
+    // Żadne źródło nie zaangażowane (off/unknown) → brak celu (tryb ręczny).
+    @Test("activeTargetText: żadne źródło aktywne → nil")
+    func activeTargetNoneWhenManual() {
+        #expect(TelemetryDisplay.activeTargetText(
+            gotoState: .off, gotoErrM: 100, gotoBearingDeg10: 900,
+            spotLockState: .unknown, spotLockErrM: 200, spotLockBearingDeg10: 1800) == nil)
+    }
+
+    // Goto w PAUZIE też ma pierwszeństwo i bierze WŁASNE pola — potwierdza, że
+    // errM/bearing nie są mylone między źródłami (spot-lock miałby inne wartości).
+    @Test("activeTargetText: goto w pauzie ma pierwszeństwo, z pól goto")
+    func activeTargetGotoPausedUsesGotoFields() {
+        let text = TelemetryDisplay.activeTargetText(
+            gotoState: .paused, gotoErrM: 55, gotoBearingDeg10: 100,
+            spotLockState: .active, spotLockErrM: 999, spotLockBearingDeg10: 3599)
+        #expect(text == "55 m · 10°")
+    }
 }

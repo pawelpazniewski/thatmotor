@@ -104,7 +104,16 @@ Testy:
 - [ ] Test (E2E): rozłącz link → wartości HUD → „—", nie zamrażają  _(wymaga symulatora — do weryfikacji ręcznej)_
 
 Weryfikacja:
-- [ ] Weryfikacja: HUD renderuje 4 wiersze z żywej telemetrii; myślniki przy stale; tap otwiera arkusz; środek mapy niezasłonięty
+- [ ] Weryfikacja: HUD renderuje 4 wiersze z żywej telemetrii; myślniki przy stale; tap otwiera arkusz; środek mapy niezasłonięty _(logika zweryfikowana statycznie w review; render/tap/staleness na żywo — do ręcznej weryfikacji na symulatorze)_
+
+### Do poprawy po review fazy 4
+
+Review: `review-faza-4.md` — severity gate: ⚠️ ZASTRZEŻENIA (P1=0, P2=1, P3=3). E2E: 3 scenariusze wymagają ręcznej weryfikacji na symulatorze/urządzeniu (natywny iOS, brak przeglądarki) — logika zweryfikowana statycznie jako poprawna. Widok cienki potwierdzony (format w `TelemetryDisplay`), R6 staleness OK, brak force-unwrap/`any`/sekretów, layout bez kolizji.
+
+- [x] 🟠 [important] **HudView.swift:82-92** — `target(_:)` zawiera decyzję wyboru aktywnego źródła (goto>spot-lock), która (a) duplikuje priorytet z `TelemetryDisplay.modeLabel` i (b) siedzi w nietestowalnym targecie. Unit 5 potrzebuje tego samego wyboru → wyciągnąć do `TelemetryDisplay` (czysta funkcja `activeTargetText(...) -> String?` lub enum `ActiveSource`) + host-test z mocą wyroczni (mutacja priorytetu MUSI failować). Domknąć przed/w trakcie Unit 5. — NAPRAWIONE (cykl 1): wyciągnięto `TelemetryDisplay.activeTargetText(...)`; wspólny predykat `isEngaged` z `modeLabel` (jedna reguła priorytetu); `HudView.target` deleguje; +4 host-testy (priorytet goto, fallback spot-lock, nil, pauza-goto z własnych pól).
+- [ ] 🟡 [nit] **HudView.swift:31-32** — `.accessibilityLabel` nadpisuje etykietę z `children:.combine`, więc VoiceOver czyta tylko statyczny string, nie żywe wartości. Dane dostępne przez arkusz (wzorzec przycisk-podsumowanie), więc drobne; rozważyć `.accessibilityValue(...)` z podsumowaniem 4 wierszy. — ŚWIADOMIE POMINIĘTY (cykl 1): dane dostępne przez arkusz.
+- [x] 🟡 [nit] **HudView.swift:15-21** — brak jawnego limitu szerokości panelu; kompaktowość opiera się na krótkich stringach + `lineLimit(1)`. Rozważyć `.frame(maxWidth:)`/`.fixedSize(horizontal:)` dla gwarancji, że długi wiersz trybu nie rozciągnie panelu. — NAPRAWIONE (cykl 1): `.frame(maxWidth: 240, alignment: .leading)` (stała `maxPanelWidth`).
+- [x] 🟡 [nit] **HudView.swift:25-26** — użyto `SunlightTheme.cornerRadius` (16) zamiast `panelRadius` (26) z tekstu planu; kosmetyczne, do świadomej akceptacji. — NAPRAWIONE (cykl 1): `SunlightTheme.panelRadius` (26).
 
 ---
 
