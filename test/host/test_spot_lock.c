@@ -220,29 +220,31 @@ void test_deadband_outside_drives_throttle(void)
     TEST_ASSERT_TRUE(out.throttle_cmd > 0);
 }
 
-void test_heading_gate_blocks_throttle_when_target_off_bow(void)
+void test_off_bow_target_drives_forward_tapered(void)
 {
-    /* Arrange: target is ~10 m to the north (bearing 0) but the bow points to
-     * 280 deg -> bearing error +80 deg, outside the +/-60 gate. */
+    /* Arrange: target ~10 m north (bearing 0), bow at 280 deg -> +80 deg off.
+     * With the old +/-60 gate this yielded ZERO thrust (the deadlock). The
+     * omnidirectional law now drives FORWARD (target still in the front
+     * hemisphere) with a tapered throttle, and steers toward the target. Oracle:
+     * restoring the gate makes throttle 0 and this test fails. */
     spot_lock_params p = make_params();
     spot_lock_inputs in = make_base_inputs();
     in.ch3_edge_on = false;
     in.lat_e7 = REF_LAT_E7 - E7_10M;
-    in.heading_deg10 = 2800; /* 280 deg -> error = 0 - 280 -> +80 deg */
+    in.heading_deg10 = 2800; /* 280 deg -> error +80 deg (front hemisphere) */
     spot_lock_state st = make_active_state();
 
     /* Act */
     spot_lock_outputs out = spot_lock_step(&in, &p, &st);
 
-    /* Assert: no thrust (gate), but the servo steers toward the target. */
-    TEST_ASSERT_EQUAL_INT32(0, out.throttle_cmd);
+    /* Assert: forward thrust (no dead zone) AND the servo steers toward target. */
+    TEST_ASSERT_TRUE(out.throttle_cmd > 0);
     TEST_ASSERT_TRUE(out.servo_cmd != 0);
 }
 
-void test_heading_gate_allows_throttle_when_aligned(void)
+void test_aligned_target_drives_full_forward(void)
 {
-    /* Arrange: same geometry but bow at 350 deg -> error +10 deg, inside the
-     * gate. */
+    /* Arrange: target north, bow at 350 deg -> +10 deg (well aligned). */
     spot_lock_params p = make_params();
     spot_lock_inputs in = make_base_inputs();
     in.ch3_edge_on = false;
@@ -253,8 +255,97 @@ void test_heading_gate_allows_throttle_when_aligned(void)
     /* Act */
     spot_lock_outputs out = spot_lock_step(&in, &p, &st);
 
-    /* Assert: thrust applied when the bow is within the gate. */
+    /* Assert: forward thrust applied when lined up. */
     TEST_ASSERT_TRUE(out.throttle_cmd > 0);
+}
+
+void test_astern_target_drives_reverse(void)
+{
+    /* Arrange: target ~10 m north (bearing 0) but the bow points SOUTH
+     * (180 deg) -> the target is dead astern (+180 deg off). Swinging the whole
+     * hull round is the long way; the omnidirectional law REVERSES straight back
+     * toward the target. Oracle: a forward-only law gives >= 0 here, so asserting
+     * a NEGATIVE (reverse) throttle fails without the reverse path. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_base_inputs();
+    in.ch3_edge_on = false;
+    in.lat_e7 = REF_LAT_E7 - E7_10M;
+    in.heading_deg10 = 1800; /* 180 deg -> error +180 deg (dead astern) */
+    spot_lock_state st = make_active_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: reverse thrust (negative), driving back toward the point. */
+    TEST_ASSERT_TRUE(out.throttle_cmd < 0);
+}
+
+void test_behind_side_reverses_and_steers(void)
+{
+    /* Arrange: target north, bow at 240 deg -> +120 deg off (behind, to one
+     * side). Reverse (rear hemisphere) with the servo steering by the reduced
+     * +/-90 deg error. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_base_inputs();
+    in.ch3_edge_on = false;
+    in.lat_e7 = REF_LAT_E7 - E7_10M;
+    in.heading_deg10 = 2400; /* 240 deg -> error +120 deg */
+    spot_lock_state st = make_active_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: reverse thrust and a non-zero steering command. */
+    TEST_ASSERT_TRUE(out.throttle_cmd < 0);
+    TEST_ASSERT_TRUE(out.servo_cmd != 0);
+}
+
+void test_throttle_tapers_with_misalignment(void)
+{
+    /* Arrange: identical distance (~10 m) and params, one bow aligned (0 deg
+     * off) and one badly misaligned (+80 deg off). The aligned case must drive
+     * HARDER (cos taper). Oracle: without the taper both would hit the same
+     * distance term and be equal. */
+    spot_lock_params p = make_params();
+
+    spot_lock_inputs aligned = make_base_inputs();
+    aligned.ch3_edge_on = false;
+    aligned.lat_e7 = REF_LAT_E7 - E7_10M;
+    aligned.heading_deg10 = 0; /* 0 deg off */
+    spot_lock_state a_st = make_active_state();
+    spot_lock_outputs a = spot_lock_step(&aligned, &p, &a_st);
+
+    spot_lock_inputs off = make_base_inputs();
+    off.ch3_edge_on = false;
+    off.lat_e7 = REF_LAT_E7 - E7_10M;
+    off.heading_deg10 = 2800; /* +80 deg off */
+    spot_lock_state o_st = make_active_state();
+    spot_lock_outputs o = spot_lock_step(&off, &p, &o_st);
+
+    /* Assert: both drive forward, aligned strictly harder than misaligned. */
+    TEST_ASSERT_TRUE(a.throttle_cmd > 0);
+    TEST_ASSERT_TRUE(o.throttle_cmd > 0);
+    TEST_ASSERT_TRUE(a.throttle_cmd > o.throttle_cmd);
+}
+
+void test_no_dead_zone_at_ninety_degrees(void)
+{
+    /* Arrange: target exactly abeam (+90 deg off, bow at 270 deg). cos(90)=0, so
+     * without the alignment FLOOR the throttle would be exactly zero -- a fresh
+     * dead zone right where the old gate failed. The floor keeps thrust alive.
+     * Oracle: removing the floor drops this to 0 and the test fails. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_base_inputs();
+    in.ch3_edge_on = false;
+    in.lat_e7 = REF_LAT_E7 - E7_10M;
+    in.heading_deg10 = 2700; /* 270 deg -> error +90 deg (abeam) */
+    spot_lock_state st = make_active_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: non-zero thrust even exactly abeam (no dead zone). */
+    TEST_ASSERT_TRUE(out.throttle_cmd != 0);
 }
 
 void test_throttle_capped_at_max_for_large_distance(void)
@@ -789,8 +880,12 @@ void run_spot_lock_tests(void)
     RUN_TEST(test_entry_blocked_without_rising_edge);
     RUN_TEST(test_deadband_inside_relaxes_actuators);
     RUN_TEST(test_deadband_outside_drives_throttle);
-    RUN_TEST(test_heading_gate_blocks_throttle_when_target_off_bow);
-    RUN_TEST(test_heading_gate_allows_throttle_when_aligned);
+    RUN_TEST(test_off_bow_target_drives_forward_tapered);
+    RUN_TEST(test_aligned_target_drives_full_forward);
+    RUN_TEST(test_astern_target_drives_reverse);
+    RUN_TEST(test_behind_side_reverses_and_steers);
+    RUN_TEST(test_throttle_tapers_with_misalignment);
+    RUN_TEST(test_no_dead_zone_at_ninety_degrees);
     RUN_TEST(test_throttle_capped_at_max_for_large_distance);
     RUN_TEST(test_pause_on_gps_loss_then_resume_keeps_target);
     RUN_TEST(test_pause_on_imu_loss);

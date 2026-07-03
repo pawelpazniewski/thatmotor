@@ -14,14 +14,18 @@ extern "C" {
  *
  * Spot-lock is a SUB-STATE that lives WITHIN the ARMED control state (it is not
  * a new sm_state). It snapshots "here and now" on CH3 rising edge and keeps the
- * kayak near that point by steering the bow at the target and adding forward
- * thrust proportional to distance. It NEVER drives reverse, NEVER holds a bow
- * heading, and unconditionally yields to RC failsafe (the integration layer
- * only invokes it while sm.state == ARMED).
+ * kayak near that point by driving OMNIDIRECTIONALLY toward the target: it aims
+ * the bow-mounted motor at the target (or, when the target is more than +/-90
+ * deg astern, at the reversed bearing) and applies thrust -- forward OR reverse,
+ * proportional to distance and tapered by heading alignment -- so the hull is
+ * both pulled toward and rotated toward the point. There is NO forward-thrust
+ * gate. It does NOT hold a bow heading for its own sake, and it unconditionally
+ * yields to RC failsafe (the integration layer only invokes it while ARMED).
  *
  * Output commands are NORMALIZED (the same convention the signal chain expects):
  *   - servo_cmd: signed, 0 = center, +/- full-scale = hard over.
- *   - throttle_cmd: forward only, 0 = neutral, up to the configured cap.
+ *   - throttle_cmd: SIGNED, 0 = neutral, positive = forward and negative =
+ *     reverse, magnitude up to the configured cap.
  * The integration layer maps these through ramp/slew -> map_normalized_to_us ->
  * the SI-3 hard clamp; spot-lock itself touches no actuator.
  */
@@ -89,7 +93,7 @@ typedef struct {
 /** Decision outputs for one cycle. */
 typedef struct {
     spot_lock_substate substate; /* resulting sub-state (mirrors state) */
-    int32_t throttle_cmd;        /* normalized forward [0, cap], 0 = neutral */
+    int32_t throttle_cmd;        /* normalized signed, 0 = neutral, +fwd / -rev */
     int32_t servo_cmd;           /* normalized signed, 0 = center */
     uint16_t err_m;              /* position error in metres (telemetry) */
     uint16_t bearing_deg10;      /* bearing to target, deg*10 (telemetry) */
@@ -116,13 +120,16 @@ typedef struct {
  *   - PAUSED when !gps_fresh || !imu_ok || !gps_has_fix (SRC_HOLD/SRC_GOTO): the
  *     SENSOR degradation domain. The app link is NOT a pause input for either
  *     source (R3/R4); target retained, recovers to ACTIVE on sensor return.
- *   - ACTIVE: within deadband -> neutral+center (R6); outside -> steer toward
- *     target and add forward thrust only while the bearing error is within the
- *     +/-60 deg gate (R2). arrived = err_m <= deadband_m. The thrust profile
- *     depends on the source: SRC_HOLD uses the P-throttle (gain x distance,
- *     capped to max_throttle_norm, R7); SRC_GOTO uses a cruise-decel profile
- *     (full goto_cruise_norm beyond goto_slowdown_distance_m, then linear down to
- *     the deadband edge) so the boat cruises out and eases into the waypoint.
+ *   - ACTIVE: within deadband -> neutral+center (R6); outside -> drive
+ *     OMNIDIRECTIONALLY toward the target. The bearing error is reduced to a
+ *     +/-90 deg steering error by choosing forward or reverse (whichever swings
+ *     the hull less), the servo steers by that reduced error, and thrust is
+ *     applied in the chosen direction, tapered by cos(steering error) with a
+ *     floor (no dead zone -- thrust is never fully gated off). arrived = err_m <=
+ *     deadband_m. The magnitude profile depends on the source: SRC_HOLD uses the
+ *     P-throttle (gain x distance, capped to max_throttle_norm, R7); SRC_GOTO
+ *     uses a cruise-decel profile (full goto_cruise_norm beyond
+ *     goto_slowdown_distance_m, then linear down to the deadband edge).
  *
  * @param in  Per-cycle inputs (must be non-NULL).
  * @param p   Regulator parameters (must be non-NULL).

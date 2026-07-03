@@ -5,9 +5,25 @@
 
 #include "geo_math.h"
 
-/* Forward-thrust gate: thrust is applied only while the bow points within
- * +/-60 deg of the target bearing (R2). Expressed in degrees * 10. */
-#define SPOT_LOCK_HEADING_GATE_DEG10 600
+/* Omnidirectional drive (replaces the old +/-60 deg forward-thrust gate). We
+ * ALWAYS thrust toward the target and let the bow-mounted motor both pull and
+ * rotate the hull, so there is no zero-thrust dead zone and the boat can never
+ * stall unable to turn (the deadlock the +/-60 gate caused). Two shaping rules:
+ *
+ * Toward/away split: if the target sits more than +/-90 deg off the bow it is
+ * "behind", so it is shorter to REVERSE toward it than to swing the whole hull
+ * around. Past this split we drive reverse and measure the steering error to the
+ * reversed bow, so the servo never needs more than +/-90 deg of authority. */
+#define SPOT_LOCK_REVERSE_SPLIT_DEG10 900
+
+/* Alignment throttle taper: thrust scales with cos(steering error) so the boat
+ * eases power while still swinging into line and builds to full as it aligns
+ * (adaptive turn). A floor keeps a minimum thrust even at the +/-90 deg edge so
+ * turning authority -- and thus escape from any misalignment -- is never lost. */
+#define SPOT_LOCK_ALIGN_FLOOR 0.2
+
+/* Radians per (degree * 10): 0.1 deg * pi/180. For the cos() alignment taper. */
+#define SPOT_LOCK_DEG10_TO_RAD (3.14159265358979323846 / 1800.0)
 
 #define DEG10_FULL_TURN 3600
 #define DEG10_HALF_TURN 1800
@@ -70,7 +86,8 @@ static int32_t servo_command(int err_deg10, uint16_t gain_per_deg)
                      SPOT_LOCK_CMD_FULL_SCALE);
 }
 
-/** P-throttle: proportional to distance, forward-only, capped to max (R7). */
+/** P-throttle MAGNITUDE: proportional to distance, capped to max (R7). The drive
+ * direction (forward/reverse) and alignment taper are applied by the caller. */
 static int32_t throttle_command(float dist_m, const spot_lock_params *p)
 {
     double cmd = (double)p->throttle_gain_per_m * (double)dist_m;
@@ -96,7 +113,38 @@ static int32_t goto_throttle_command(float dist_m, const spot_lock_params *p)
     return clamp_i32((int32_t)lround((double)cruise * (double)frac), 0, cruise);
 }
 
-/** Full ACTIVE-state regulator: deadband, +/-60 gate, P servo + P throttle. */
+/* Reduce the bow-to-target error to a drive command: choose forward or reverse
+ * (whichever needs the hull to swing less) so the steering error handed to the
+ * servo is always within +/-90 deg. Returns the reduced steering error (deg*10)
+ * and sets *dir to +1 (forward) or -1 (reverse). A target dead astern reverses
+ * straight back (steering error 0). */
+static int reduce_to_drive(int err_deg10, int *dir)
+{
+    if (err_deg10 > SPOT_LOCK_REVERSE_SPLIT_DEG10) {
+        *dir = -1;
+        return err_deg10 - DEG10_HALF_TURN; /* (-900, 0] */
+    }
+    if (err_deg10 < -SPOT_LOCK_REVERSE_SPLIT_DEG10) {
+        *dir = -1;
+        return err_deg10 + DEG10_HALF_TURN; /* [0, 900) */
+    }
+    *dir = 1;
+    return err_deg10;
+}
+
+/* Alignment taper factor in [ALIGN_FLOOR, 1]: cos of the steering error, floored
+ * so thrust never fully vanishes (no dead zone). steer_err_deg10 is within
+ * +/-900 (reduce_to_drive guarantees it), so cos is within [0, 1]. */
+static double align_factor(int steer_err_deg10)
+{
+    double c = cos((double)steer_err_deg10 * SPOT_LOCK_DEG10_TO_RAD);
+    return (c < SPOT_LOCK_ALIGN_FLOOR) ? SPOT_LOCK_ALIGN_FLOOR : c;
+}
+
+/** Full ACTIVE-state regulator: deadband relax, then omnidirectional drive --
+ * P servo toward the (toward/away-reduced) target plus a cos-tapered, signed
+ * (forward/reverse) P throttle. No forward-thrust gate: thrust is always applied
+ * toward the target, so the hull can never stall unable to rotate. */
 static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
                                                const spot_lock_params *p,
                                                const spot_lock_state *st)
@@ -121,16 +169,19 @@ static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
     }
 
     int err_deg10 = heading_error_deg10(out.bearing_deg10, in->heading_deg10);
-    out.servo_cmd = servo_command(err_deg10, p->servo_gain_per_deg);
 
-    /* Forward thrust only inside the +/-60 deg gate (R2); a target astern gets
-     * pure steering and crawls round in one gentle turn. */
-    if (err_deg10 >= -SPOT_LOCK_HEADING_GATE_DEG10 &&
-        err_deg10 <= SPOT_LOCK_HEADING_GATE_DEG10) {
-        out.throttle_cmd = (st->target_source == SPOT_LOCK_SRC_GOTO)
-                               ? goto_throttle_command(dist, p)
-                               : throttle_command(dist, p);
-    }
+    /* Omnidirectional drive: aim the motor at the target (forward) or its reverse
+     * (drive backward) -- whichever swings the hull less -- and always apply
+     * thrust toward the target, tapered by how well we are lined up. */
+    int dir;
+    int steer_err = reduce_to_drive(err_deg10, &dir);
+    out.servo_cmd = servo_command(steer_err, p->servo_gain_per_deg);
+
+    int32_t magnitude = (st->target_source == SPOT_LOCK_SRC_GOTO)
+                            ? goto_throttle_command(dist, p)
+                            : throttle_command(dist, p);
+    out.throttle_cmd = (int32_t)lround((double)dir * (double)magnitude *
+                                       align_factor(steer_err));
     return out;
 }
 
