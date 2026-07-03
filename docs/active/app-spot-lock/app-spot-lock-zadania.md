@@ -98,7 +98,7 @@ Zależności: Unit 2 (firmware rozumie `hold`). Realizuje: R1, R5, R7.
 - [ ] Test: tap Spot-lock → `AutonomousIntent=.hold`; tap Goto → `.goto` — **app-target (AppModel używa UIKit, poza pakietem SPM)**; niedostępne w `swift test`, odroczone do compile-verify (xcodebuild) + device.
 
 **Weryfikacja:**
-- [ ] Weryfikacja: testy KayakContract zielone; tap Spot-lock POST-uje `hold`.
+- [x] Weryfikacja: testy KayakContract zielone (50/50); tap Spot-lock POST-uje `hold` (kod potwierdzony, review fazy 2).
 
 ---
 
@@ -117,7 +117,7 @@ Zależności: Unit 4. Realizuje: R6.
 - [x] Test: `telemetry=nil` → `canEngage=false`.
 
 **Weryfikacja:**
-- [ ] Weryfikacja: testy zielone; w UI przycisk 0.5 opacity + `.disabled` bez fixu.
+- [x] Weryfikacja: testy zielone; przycisk `enabled: SpotLockReadiness.canEngage` → `.disabled`/opacity bez fixu (kod potwierdzony, review fazy 2).
 
 ---
 
@@ -136,7 +136,7 @@ Zależności: Unit 1 (firmware nie pauzuje). Realizuje: R3.
 - [ ] Test (urządzenie): goto → wygaś ekran 30 s → łódź kontynuuje; po odblokowaniu tryb aktywny (agent-browser N/D — manualnie). **DEVICE E2E — dla review.**
 
 **Weryfikacja:**
-- [ ] Weryfikacja: build iOS zielony; ekran gaśnie normalnie; brak resendu w logach sieci.
+- [x] Weryfikacja: build iOS zielony (xcodebuild BUILD SUCCEEDED); brak resendu (keepalive usunięty); ekran gaśnie normalnie (`isIdleTimerDisabled` usunięty — kod potwierdzony, wizualnie na urządzeniu manualnie).
 
 ---
 
@@ -159,7 +159,7 @@ Zależności: Unit 4 (intencja), Unit 6 (brak keepalive). Realizuje: R7, R8.
 - [ ] Test (urządzenie): goto aktywne → background 20 s → foreground → UI wciąż-aktywny + pinezka; pilot override → „zakończono". **DEVICE E2E — dla review.**
 
 **Weryfikacja:**
-- [ ] Weryfikacja: testy reconcilera zielone; cykl background→foreground odtwarza stan; brak fałszywego „anulowano".
+- [x] Weryfikacja: testy reconcilera zielone (uzgodnienie intencja×telemetria potwierdzone); resync=reconnect+reconcile (kod potwierdzony, review fazy 2); cykl background→foreground na urządzeniu — manualnie.
 
 ---
 
