@@ -268,6 +268,13 @@ esp_err_t http_server_start(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 8;
     config.lru_purge_enable = true;
+    /* Socket budget, set explicitly so the telemetry client cap and the httpd
+     * socket cap stay coupled. Binding constraint:
+     *   WS_TELEMETRY_MAX_CLIENTS(4) + HTTP_headroom(3) <= 7 <= CONFIG_LWIP_MAX_SOCKETS(10) - 3
+     * The +3 headroom leaves room for concurrent HTTP requests (panel load,
+     * /api/params) so lru_purge never evicts an active WS telemetry client. If
+     * WS_TELEMETRY_MAX_CLIENTS grows, revisit this number deliberately. */
+    config.max_open_sockets = 7;
     /* The default httpd task stack (4096 B) is too small for our handlers: the
      * POST /api/params path alone puts reqbuf[HTTP_REQ_MAX] + body[HTTP_BODY_MAX]
      * on the stack and then nests params_api's data[PARAMS_JSON_MAX] (~3.7 KB of
