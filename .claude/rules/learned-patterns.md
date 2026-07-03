@@ -2,7 +2,7 @@
 
 Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane przez /dev-compound i /dev-compound-refresh.
 
-<!-- rule-count: 12 -->
+<!-- rule-count: 13 -->
 
 - **Recency/elapsed w jednej domenie licznika, wrap-safe**: Różnicę czasu/licznika licz przez unsigned modular subtraction (`now - last`) w JEDNEJ domenie zegara; trzymaj raw tick i konwertuj na jednostki fizyczne dopiero przy porównaniu. Nie mieszaj `esp_timer_get_time()` z licznikiem capture — daje cicho błędną recency po wrapie. Dodaj host-test wokół granicy 2^N.
   Source: docs/solutions/runtime-errors/2026-06-17-wrap-safe-recency-counter-domain.md
@@ -36,6 +36,9 @@ Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane 
 
 - **Reset przy operacji sieciowej: ustal reset reason ze sprzętu ZANIM założysz przyczynę**: Nie zgaduj „to WDT/brownout". Złap `rst:0xNN (REASON)` z portu (`0xc`=RTC_SW_CPU_RST/panic, `0x0f`=brownout, `0x07/08`=TG WDT) i zdekoduj `Saved PC`/backtrace przez `xtensa-*-addr2line -e build/*.elf`. Błędna diagnoza „Task WDT" naprawiła zły trop (przeniesienie pętli na CPU1), a crash był w tasku httpd. USB-CDC gubi banner panicu — użyj readera z reopen-on-disconnect albo `esp_reset_reason()` w bootlogu.
   Source: docs/solutions/runtime-errors/2026-07-01-httpd-task-stack-overflow-panel-reload.md
+
+- **Odwracasz dostarczony failsafe = chirurgiczny flip JEDNEJ flagi + jawna ochrona ortogonalnych inwariantów; zmiana spec = oracle-rewrite testu, NIE osłabienie**: Gdy współdzielony predykat pełni kilka ról (np. `comms_fresh` = link-failsafe ORAZ bramka re-latchu/anty-null-island), flipnij tylko rolę objętą zmianą i jawnie zachowaj+przetestuj resztę (retencja, sensor-pause, RC-failsafe). Test asertujący stare zachowanie PRZEPISZ na nowe z zachowaniem mocy wyroczni: przywrócenie starego kodu MUSI czynić test czerwonym (potwierdź test-first). To odróżnia legalny oracle-rewrite (przeniesienie wyroczni) od anty-patternu „test weakening" (zdjęcie wyroczni). Nowy sub-feature zwijaj na istniejące źródło (`goto(własny fix)`), a rozróżnienia rób lokalnie u konsumenta, nie w telemetrii; czysty helper kładź w komponencie bez cyklu importów (duplikacja stałych < circular dependency).
+  Source: docs/solutions/testing-issues/2026-07-03-safe-failsafe-inversion-oracle-rewrite-on-spec-change.md
 
 - **Nie zostawiaj domyślnego 4 KB stosu httpd gdy handlery mają duże bufory na stosie**: `HTTPD_DEFAULT_CONFIG().stack_size`=4096 przepełnia się, gdy handler kładzie na stosie bufory JSON (req+body+nested serialize ~kilka KB) + rekursja cJSON → FreeRTOS canary → panic → `RTC_SW_CPU_RST`. Ustaw `config.stack_size` WYPROWADZONY z rozmiaru buforów (np. `2*BODY_MAX + SERIALIZE_MAX + headroom`), żeby rósł razem z liczbą pól i nie zdryfował po cichu.
   Source: docs/solutions/runtime-errors/2026-07-01-httpd-task-stack-overflow-panel-reload.md
