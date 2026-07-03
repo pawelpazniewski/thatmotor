@@ -15,11 +15,12 @@ BUILD_DATE="${1:-20260630}"
 # bbox=minLon,minLat,maxLon,maxLat — Mazowsze (od 51.0N) rozszerzone na północ do
 # 54.3N, żeby objąć krainę Wielkich Jezior Mazurskich (Śniardwy, Mamry, Niegocin,
 # Mikołajki, jeziora giżyckie i ełckie).
-# maxzoom 14: na z13 i niżej Protomaps generalizuje wodę w multipoligony, które
-# earcut MapLibre tesseluje w artefakty ("widma"). Natywny z14 jest czysty, więc
-# woda w apce rysowana jest dopiero od z14 (LakeMapView).
+# maxzoom 13: woda pozostaje czysta dzięki predykatowi NOT(kind IN river/canal/
+# stream) w LakeMapView (to on eliminuje earcut-"widma", nie natywny z14), więc
+# z13 wystarcza i ~150 MB mniej niż z14. Przy większym przybliżeniu MapLibre
+# nadpróbkuje kafle z13.
 BBOX="19.2,51.0,23.2,54.3"
-MAXZOOM="14"
+MAXZOOM="13"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="$SCRIPT_DIR/../KayakMotor/Resources/mazowsze.pmtiles"
