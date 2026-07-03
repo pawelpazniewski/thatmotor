@@ -2,7 +2,7 @@
 
 Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane przez /dev-compound i /dev-compound-refresh.
 
-<!-- rule-count: 13 -->
+<!-- rule-count: 15 -->
 
 - **Recency/elapsed w jednej domenie licznika, wrap-safe**: Różnicę czasu/licznika licz przez unsigned modular subtraction (`now - last`) w JEDNEJ domenie zegara; trzymaj raw tick i konwertuj na jednostki fizyczne dopiero przy porównaniu. Nie mieszaj `esp_timer_get_time()` z licznikiem capture — daje cicho błędną recency po wrapie. Dodaj host-test wokół granicy 2^N.
   Source: docs/solutions/runtime-errors/2026-06-17-wrap-safe-recency-counter-domain.md
@@ -42,3 +42,9 @@ Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane 
 
 - **Nie zostawiaj domyślnego 4 KB stosu httpd gdy handlery mają duże bufory na stosie**: `HTTPD_DEFAULT_CONFIG().stack_size`=4096 przepełnia się, gdy handler kładzie na stosie bufory JSON (req+body+nested serialize ~kilka KB) + rekursja cJSON → FreeRTOS canary → panic → `RTC_SW_CPU_RST`. Ustaw `config.stack_size` WYPROWADZONY z rozmiaru buforów (np. `2*BODY_MAX + SERIALIZE_MAX + headroom`), żeby rósł razem z liczbą pól i nie zdryfował po cichu.
   Source: docs/solutions/runtime-errors/2026-07-01-httpd-task-stack-overflow-panel-reload.md
+
+- **Gdy 0 jest WAŻNĄ wartością domeny, NIE koduj „pusty" jako 0 ani nie polegaj na zero-init**: fd/index/id gdzie `0` to poprawna wartość (fd 0 = stdin, serwer daje niskie fd) — „wolny slot" koduj sentinelem POZA domeną (`-1`) i wymuś jawną inicjalizację przed pierwszym odczytem. Zero-init tablicy (BSS/`static`) zostawia sloty=0 → pusty zbiór wygląda jak N klientów o fd 0 (cichy broadcast na zły socket). Host-test: świeży zbiór ma count==0.
+  Source: docs/solutions/runtime-errors/2026-07-03-ws-client-set-zero-init-sentinel-single-thread-invariant.md
+
+- **Inwariant jednowątkowy zamiast mutexa gdy mutacje da się skanalizować do jednego taska**: Zanim dodasz lock do współdzielonego stanu, sprawdź czy WSZYSTKIE mutacje da się zepchnąć na jeden task (np. `httpd_queue_work` → task httpd), a inne taski (callback timera) tylko czytają/pstrykają atom i kolejkują pracę, NIGDY nie tykają struktury. Jeśli tak — udokumentuj inwariant w nagłówku modułu jako „do not break" (które funkcje/taski wolno, które nie) i pomiń mutex. Taniej i prościej niż lock, ale tylko gdy inwariant jest jawny i pilnowany. Dodatkowo: nie mutuj kolekcji podczas iteracji po indeksie — zbieraj do lokalnego `failed[]` i usuwaj DOPIERO po pętli.
+  Source: docs/solutions/runtime-errors/2026-07-03-ws-client-set-zero-init-sentinel-single-thread-invariant.md
