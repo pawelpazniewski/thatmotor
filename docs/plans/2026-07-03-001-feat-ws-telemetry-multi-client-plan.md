@@ -99,7 +99,7 @@ kolejkuje pracę. Ten inwariant MUSI zostać zachowany (żadnych mutacji listy z
 
 ## Implementation Units
 
-- [ ] **Unit 1: Pure `ws_client_set` (lista fd) + host-testy**
+- [x] **Unit 1: Pure `ws_client_set` (lista fd) + host-testy** — ukończone (commit `50ff4e7`, 7 host-testów)
 
 **Cel:** Czysta, testowalna logika listy klientów (add/remove/contains/count/iteracja).
 
@@ -130,7 +130,7 @@ kolejkuje pracę. Ten inwariant MUSI zostać zachowany (żadnych mutacji listy z
 
 ---
 
-- [ ] **Unit 2: Broadcast w `ws_telemetry.c` (serializacja raz, send do wszystkich, GC per-fd)**
+- [x] **Unit 2: Broadcast w `ws_telemetry.c` (serializacja raz, send do wszystkich, GC per-fd)** — ukończone (commit `fd76522`, idf.py build zielone; device-E2E dla review)
 
 **Cel:** Zamiana pojedynczego slotu na listę; broadcast snapshotu do wszystkich klientów.
 
@@ -169,7 +169,7 @@ równolegle; odłączenie/podłączenie jednego nie ubija drugiego.
 
 ---
 
-- [ ] **Unit 3: Sizing socketów httpd (spójność limitów)**
+- [x] **Unit 3: Sizing socketów httpd (spójność limitów)** — ukończone (commit `dd5fca2`, idf.py build zielone; device-E2E dla review)
 
 **Cel:** Zapewnić, że `WS_TELEMETRY_MAX_CLIENTS` + zapas HTTP mieści się w `max_open_sockets` ≤ LWIP.
 

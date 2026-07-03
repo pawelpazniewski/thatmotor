@@ -3,6 +3,17 @@
 Branch: `feature/ws-telemetry-multi-client`
 Ostatnia aktualizacja: 2026-07-03
 
+## Stan implementacji (Faza 1 — ukończona logika + compile-verify)
+
+- **Unit 1** ✅ `ws_client_set` (pure) + 7 host-testów (moc wyroczni: „add mimo full → FULL, lista nienaruszona", idempotencja duplikatu). Commit `50ff4e7`.
+- **Unit 2** ✅ broadcast w `ws_telemetry.c` (serializacja RAZ, pętla `ws_client_set_at`, GC per-fd po pętli przez zebranie `failed[]`, `register`→`add`/FULL log+ESP_OK, `on_tick`→`s_server==NULL`, `stop`→wyczyść listę, inwariant wątkowości w komentarzu modułu). Zarejestrowano `ws_client_set.c` w `components/web_panel/CMakeLists.txt`. Commit `fd76522`.
+- **Unit 3** ✅ `http_server.c` `config.max_open_sockets = 7` + komentarz wiążący limity. Commit `dd5fca2`.
+- Walidacja: `bash test/host/run.sh` = 449 testów / 0 failures (7 nowych). `idf.py build` (esp32s3, ESP-IDF v5.5) = zielone, bin 37% free.
+- **Pozostaje dla review:** device-E2E (panel+app równolegle, drop/reconnect, obciążenie HTTP bez wypychania WS) — manualne na sprzęcie.
+
+### Nota implementacyjna (GC per-fd)
+`push_work` zbiera fd z nieudanym send do lokalnego `failed[WS_TELEMETRY_MAX_CLIENTS]` i usuwa je z listy DOPIERO po pętli — nie mutuje zbioru w trakcie iteracji po indeksie (`ws_client_set_at`). `s_clients` ma leniwą inicjalizację (`ensure_clients_init` na tasku httpd), bo statyczny zero-init dałby fd==0 (pozornie ważny).
+
 ## Powiązane pliki
 
 ### Do stworzenia
