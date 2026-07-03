@@ -15,8 +15,9 @@ struct BoatRenderState: Equatable {
     }
 }
 
-/// Mapa offline (Unit 5/6): bundlowy blank-style + kontur akwenu z `lake.geojson`,
-/// marker łodzi (`MLNSymbolStyleLayer` z `iconRotation`), pin celu + linia łódź→cel.
+/// Mapa offline: bundlowy `.pmtiles` (Protomaps) + blank-style, marker łodzi
+/// (`MLNSymbolStyleLayer` z `iconRotation`), pin celu + linia łódź→cel. Geofence
+/// „to woda?" liczony wprost z warstwy `basemap-water` przy tapnięciu (bez geojson).
 /// Aktualizacja markerów przez podmianę `MLNShapeSource.shape` (bufor GPU). Zero sieci.
 /// Most między przyciskami SwiftUI a `MLNMapView` do sterowania zoomem. Trzyma
 /// słabą referencję do mapy (ustawianą w `makeUIView`), by nie tworzyć retain cycle.
@@ -46,7 +47,8 @@ struct LakeMapView: UIViewRepresentable {
     var target: CLLocationCoordinate2D?
     var camera: MapCameraController
     var followsBoat: Bool = true
-    var onTap: (CLLocationCoordinate2D) -> Void = { _ in }
+    /// Tap w mapę: (współrzędna, czy punkt leży na wodzie).
+    var onTap: (CLLocationCoordinate2D, Bool) -> Void = { _, _ in }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -86,15 +88,24 @@ struct LakeMapView: UIViewRepresentable {
         private static let routeSourceID = "route-src"
         private static let boatIconName = "boat-icon"
         private static let targetIconName = "target-icon"
+        static let waterLayerID = "basemap-water"
         private var lastCameraMove = Date.distantPast
         private var hasBoatFix = false
         private var hasCenteredOnUser = false
-        var onTap: (CLLocationCoordinate2D) -> Void = { _ in }
+        /// Tap w mapę: (współrzędna, czy punkt leży na wodzie).
+        var onTap: (CLLocationCoordinate2D, Bool) -> Void = { _, _ in }
 
-        @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
+        @MainActor @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard let mapView = recognizer.view as? MLNMapView else { return }
             let point = recognizer.location(in: mapView)
-            onTap(mapView.convert(point, toCoordinateFrom: mapView))
+            let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+            // Geofence „to woda?" liczony WPROST z wyrenderowanej warstwy wody —
+            // te same akweny, które widać (cały bbox: Zegrze, Mazury, każdy zbiornik),
+            // bez osobnego poligonu do utrzymania. Zapytanie ekranowe jest poprawne
+            // dokładnie tutaj, w punkcie tapnięcia (kafel jest wtedy załadowany).
+            let water = mapView.visibleFeatures(at: point,
+                                                styleLayerIdentifiers: [Self.waterLayerID])
+            onTap(coordinate, !water.isEmpty)
         }
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
@@ -155,7 +166,7 @@ struct LakeMapView: UIViewRepresentable {
             // zbiorniki, Wisła jako `water`, stawy). Wykluczamy `river`/`canal`/`stream`:
             // to wydłużone, źle domknięte wielokąty, które earcut MapLibre „rozlewa"
             // w kliny/„widma". `water` tesseluje się czysto na każdym zoomie (zweryfikowane).
-            let water = MLNFillStyleLayer(identifier: "basemap-water", source: source)
+            let water = MLNFillStyleLayer(identifier: Self.waterLayerID, source: source)
             water.sourceLayerIdentifier = "water"
             water.predicate = NSPredicate(format: "NOT (kind IN %@)", ["river", "canal", "stream"])
             water.fillColor = NSExpression(forConstantValue: UIColor(red: 0.42, green: 0.65, blue: 0.82, alpha: 1))

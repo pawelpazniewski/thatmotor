@@ -16,7 +16,7 @@ struct RootView: View {
                 boat: model.telemetry.boat,
                 target: model.target.stagedCoordinate,
                 camera: camera,
-                onTap: { model.handleMapTap($0) }
+                onTap: { coordinate, isOnWater in model.handleMapTap(coordinate, isOnWater: isOnWater) }
             )
             .ignoresSafeArea()
 
