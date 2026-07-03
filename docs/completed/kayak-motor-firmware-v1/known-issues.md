@@ -105,11 +105,12 @@ panelu i są tu odłożone:
 - 🔧 `[HW]` **Realna nawigacja do celu z aplikacji** — ARMED + świeży fix + drążki na zerze +
   komenda `goto` → kajak dopływa do zewnętrznego punktu i utrzymuje go (jazda po linii prostej,
   point-and-shoot). Nastawy ruchu współdzielone ze spot-lockiem, strojone w terenie.
-- 🔧 `[HW]` **Pauza/wznowienie na utratę linku aplikacji** — utrata świeżości linku >
-  `goto_comms_timeout_ms` (~1,5 s) → PAUSED (neutral+center, cel zapamiętany), powrót linku →
-  wznowienie tego samego celu. Dobór `goto_comms_timeout_ms` i realny keepalive (~2 Hz) terenowo.
 - 🔧 `[HW]` **CH3-preempt w terenie** — CH3 ON w trakcie goto → hold „tu i teraz" (SRC_HOLD),
   latch goto skasowany; brak auto-resume. Weryfikacja fizycznym przełącznikiem na wodzie.
+
+> **ZMIANA 2026-07-03 (feature `app-spot-lock`):** własność „PAUSE na utratę linku"
+> (dawniej tu opisana) została **ODWRÓCONA** — patrz §4e. Utrata linku z aplikacją nie
+> pauzuje już goto; pilot RC jest jedynym failsafe.
 - 🔧 `[HW]` **Dryf w pauzie / jazda na ślepo** — brak omijania przeszkód (odpowiedzialność
   operatora); watchdog ogranicza jazdę na ślepo do timeoutu. Obserwacja realnego dryfu.
 - 🖥️ `[E2E]` **Panel goto** — blok „Goto (app nav)" pokazuje off→active po komendzie `goto`,
@@ -118,6 +119,30 @@ panelu i są tu odłożone:
   `snapshot_to_json` (HAL, nie host-testowany) — kontrakt int/bool zweryfikowany przez `idf.py
   build` + host-test populacji `loop_telemetry.goto_*` w `test_loop_step`; sam render w przeglądarce
   wymaga wizualnej weryfikacji (i aplikacji iOS jako drugiego konsumenta tego kontraktu WS).
+
+## 4e. App-spot-lock + latchowany model komend (feature `app-spot-lock`) — luki hardware/E2E `[HW]`/`[E2E]`
+
+Feature `app-spot-lock` (branch `feature/app-spot-lock`, plan
+`docs/plans/2026-07-02-001-feat-app-spot-lock-latched-commands-plan.md`) mapuje przycisk Spot-lock
+aplikacji na komendę `hold` (kotwica = `goto(własny fix)`, jedno `SRC_GOTO`) ORAZ zmienia model
+bezpieczeństwa: utrata linku z aplikacją NIE pauzuje już silnika (pilot RC = jedyny failsafe).
+Cała logika decyzyjna pokryta host-testami (442 firmware Unity: odwrócenie z mocą wyroczni, grab
+fixu; iOS `swift test` 50/50: readiness, reconciler). Pozostałe wymagają realnego sprzętu:
+
+- 🔧 `[HW]` **Persist na utratę linku (ODWRÓCENIE dawnej pauzy)** — ARMED + goto/hold aktywne +
+  utrata linku aplikacji (wygaszenie ekranu / tło / rozłączenie WiFi) → łódź **KONTYNUUJE** do
+  zlatchowanego celu (nie PAUSED). Kill wyłącznie z pilota. Weryfikacja na wodzie: ustaw goto,
+  wygaś ekran, potwierdź kontynuację; potem drążek/CH3/disarm kończy tryb.
+- 🔧 `[HW]` **Kotwica z aplikacji (`hold`)** — ARMED + świeży fix + drążki na zerze + Spot-lock →
+  firmware łapie własny fix i trzyma bieżącą pozycję; brak fixu → brak engage (przycisk w app
+  wyszarzony). Weryfikacja dokładności trzymania i martwej strefy w terenie.
+- 🔧 `[HW]` **CH3-preempt kotwicy z aplikacji** — CH3 ON w trakcie app-hold → SRC_HOLD pilota
+  wygrywa; app-latch skasowany, brak auto-resume. Weryfikacja fizycznym przełącznikiem.
+- 🖥️ `[E2E]` **iOS resync-on-resume** — goto/hold aktywne → tło 20 s → powrót → UI odtwarza tryb
+  z telemetrii (etykieta + pinezka), brak fałszywego „anulowano"; pilot override → „zakończono".
+  Natywny iOS (agent-browser N/D) — weryfikacja manualna na urządzeniu z AP silnika.
+- 🖥️ `[E2E]` **Ekran gaśnie podczas trybu** — po usunięciu `isIdleTimerDisabled` ekran wygasza się
+  normalnie w trakcie goto/hold; łódź działa dalej. Weryfikacja manualna.
 
 ## 4b. Blackbox — resztkowa luka wznowienia po zawinięciu ringu `[HW]`
 

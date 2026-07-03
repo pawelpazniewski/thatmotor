@@ -22,6 +22,19 @@ last_verified: 2026-07-01
 
 # Autonomiczna nawigacja goto: app-override, walidacja celu, retencja w PAUSED
 
+> **Aktualizacja 2026-07-03 (feature `app-spot-lock`, plan
+> `docs/plans/2026-07-02-001-feat-app-spot-lock-latched-commands-plan.md`):**
+> **P1 częściowo ODWRÓCONE.** Model bezpieczeństwa zmieniony na „pilot RC = jedyny
+> failsafe, aplikacja = kanał latchowanych komend". Utrata linku z aplikacją **NIE
+> pauzuje już** `SRC_GOTO` — komendy goto/hold trwają (chirurgiczny flip `comms_gated`
+> na `false` w `hold_or_pause`; parametr i martwa gałąź pauzy usunięte). Use case:
+> „ustaw punkt, wygaś ekran, łódź płynie dalej".
+> **P2 i P3 pozostają w mocy** i były jawnie chronione podczas odwrócenia:
+> `comms_fresh` ZOSTAJE jako bramka re-latchu (ochrona null-island — P3), a walidacja
+> untrusted double przed castem (P2) obowiązuje też dla złapanego własnego fixu przy
+> komendzie `hold`. Predykat sensoryczny (fresh ≠ valid fix) i ścieżka failsafe RC —
+> nietknięte. Szczegóły: sekcja „Symptomy (P1)" niżej opisuje STARE zachowanie.
+
 Feature `goto-waypoint-navigation` (firmware ESP32) dokłada autonomiczną nawigację do
 punktu, reużywając istniejący silnik `spot_lock` (position hold). Źródłem celu staje
 się link sieciowy z aplikacji iOS (nie odbiornik RC). Wprowadzenie nowego źródła

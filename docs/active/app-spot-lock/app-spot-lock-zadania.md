@@ -165,8 +165,8 @@ Zależności: Unit 4 (intencja), Unit 6 (brak keepalive). Realizuje: R7, R8.
 
 ## Faza 3 — Dokumentacja (po wdrożeniu kodu)
 
-- [ ] Zaktualizować `docs/solutions/runtime-errors/2026-07-01-goto-app-override-validation-retention.md` — P1 odwrócone (link do tego planu); P2/P3 obowiązują.
-- [ ] Zaktualizować `docs/completed/kayak-motor-firmware-v1/known-issues.md §4d` — persist + device-E2E (persist po utracie linku, CH3-preempt kotwicy, grab własnego fixu).
+- [x] Zaktualizować `docs/solutions/runtime-errors/2026-07-01-goto-app-override-validation-retention.md` — baner o odwróceniu P1 (link do planu); P2/P3 obowiązują.
+- [x] Zaktualizować `docs/completed/kayak-motor-firmware-v1/known-issues.md` — §4d oznaczone jako odwrócone, nowa §4e (persist na utratę linku, kotwica z app, CH3-preempt kotwicy, resync-on-resume, ekran gaśnie).
 
 ## Źródła
 
