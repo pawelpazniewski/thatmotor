@@ -61,7 +61,10 @@ struct LakeMapView: UIViewRepresentable {
         // uprawnienie i zarządza CLLocationManager. Tryb .none — kamera nadal śledzi
         // łódkę; pozycja telefonu to wyłącznie odniesienie, nie wejście nawigacji.
         mapView.showsUserLocation = true
-        mapView.setCenter(CLLocationCoordinate2D(latitude: 52.02, longitude: 21.02),
+        // Domyślny widok: kraina Wielkich Jezior Mazurskich (Śniardwy/Mikołajki/
+        // Niegocin) — realny obszar pływania. Kamera i tak przeskoczy na łódkę,
+        // gdy tylko pojawi się pozycja z GPS.
+        mapView.setCenter(CLLocationCoordinate2D(latitude: 53.83, longitude: 21.65),
                           zoomLevel: 13, animated: false)
         camera.mapView = mapView
 

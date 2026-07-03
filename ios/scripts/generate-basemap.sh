@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Regeneruje offline vector basemap (Protomaps Basemap v4) dla Mazowsza jako
-# bundlowy plik .pmtiles. Plik jest gitignorowany (188 MB) — odtwórz go tym
-# skryptem po świeżym clonie.
+# Regeneruje offline vector basemap (Protomaps Basemap v4) dla Mazowsza + Mazur
+# (kraina Wielkich Jezior Mazurskich) jako bundlowy plik .pmtiles. Plik jest
+# gitignorowany (~450 MB) — odtwórz go tym skryptem po świeżym clonie.
 #
 # Wymaga: pmtiles CLI (`brew install pmtiles`).
 # Wycinek robiony przez range-requesty z hostowanego planet-builda Protomaps —
@@ -12,11 +12,13 @@ set -euo pipefail
 # podaj aktualną: https://build.protomaps.com/<YYYYMMDD>.pmtiles
 BUILD_DATE="${1:-20260630}"
 
-# bbox=minLon,minLat,maxLon,maxLat — województwo mazowieckie.
+# bbox=minLon,minLat,maxLon,maxLat — Mazowsze (od 51.0N) rozszerzone na północ do
+# 54.3N, żeby objąć krainę Wielkich Jezior Mazurskich (Śniardwy, Mamry, Niegocin,
+# Mikołajki, jeziora giżyckie i ełckie).
 # maxzoom 14: na z13 i niżej Protomaps generalizuje wodę w multipoligony, które
 # earcut MapLibre tesseluje w artefakty ("widma"). Natywny z14 jest czysty, więc
 # woda w apce rysowana jest dopiero od z14 (LakeMapView).
-BBOX="19.2,51.0,23.2,53.5"
+BBOX="19.2,51.0,23.2,54.3"
 MAXZOOM="14"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
