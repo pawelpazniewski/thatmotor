@@ -1,0 +1,77 @@
+import Foundation
+import Testing
+@testable import KayakContract
+
+@Suite("Prezentacja telemetrii — format, staleness, gate trimu")
+struct TelemetryDisplayTests {
+    @Test("stateLabel mapuje stan na etykietę")
+    func stateLabelMapsState() {
+        #expect(TelemetryDisplay.stateLabel(.armed) == "ARMED")
+        #expect(TelemetryDisplay.stateLabel(.failsafe) == "FAILSAFE")
+        #expect(TelemetryDisplay.stateLabel(.disarmed) == "DISARMED")
+    }
+
+    @Test("targetText składa dystans i namiar")
+    func targetTextFormats() {
+        // bearingDeg10 450 → 45.0° ; errM 123
+        #expect(TelemetryDisplay.targetText(errM: 123, bearingDeg10: 450) == "123 m · 45°")
+    }
+
+    // Moc wyroczni: stale MUSI dać myślnik. Bez transformacji (return value)
+    // ten test failuje, bo isFresh:false wciąż zwróciłoby "5.0 m/s".
+    @Test("displayed zwraca myślnik przy stale, wartość przy fresh")
+    func displayedGatesOnFreshness() {
+        #expect(TelemetryDisplay.displayed("5.0 m/s", isFresh: false) == "—")
+        #expect(TelemetryDisplay.displayed("5.0 m/s", isFresh: true) == "5.0 m/s")
+    }
+
+    @Test("modeLabel rozróżnia spot-lock, goto pauzę i off")
+    func modeLabelDistinguishesModes() {
+        let spotLock = TelemetryDisplay.modeLabel(spotLock: .active, goto: .off)
+        let gotoPaused = TelemetryDisplay.modeLabel(spotLock: .off, goto: .paused)
+        let off = TelemetryDisplay.modeLabel(spotLock: .off, goto: .off)
+        // Trzy różne etykiety — żadna para nie może się pokrywać.
+        #expect(spotLock != gotoPaused)
+        #expect(gotoPaused != off)
+        #expect(spotLock != off)
+    }
+
+    // Moc wyroczni: bez sprawdzenia fix funkcja zwróciłaby "0 sat" (mylące).
+    @Test("gpsQualityText bez fixu → brak fix, nie 0 sat")
+    func gpsQualityTextNoFix() {
+        #expect(TelemetryDisplay.gpsQualityText(fix: false, sats: 0) == "brak fix")
+        #expect(TelemetryDisplay.gpsQualityText(fix: true, sats: 12) == "12 sat")
+    }
+
+    // Moc wyroczni: mutacja isTrimEnabled na „zawsze true" MUSI failować
+    // na którymś z pozostałych stanów.
+    @Test("isTrimEnabled tylko dla DISARMED")
+    func trimEnabledOnlyDisarmed() {
+        #expect(TelemetryDisplay.isTrimEnabled(state: .disarmed) == true)
+        for state: SystemState in [.armed, .failsafe, .escCalibration, .deploy, .unknown] {
+            #expect(TelemetryDisplay.isTrimEnabled(state: state) == false)
+        }
+    }
+
+    // Moc wyroczni: fresh tylko dla .connected. Mutacja „zawsze true" failuje
+    // na .stale/.disconnected/.joining.
+    @Test("isFresh tylko dla connected")
+    func isFreshOnlyConnected() {
+        #expect(TelemetryDisplay.isFresh(.connected) == true)
+        for link: LinkState in [.stale, .disconnected, .joining] {
+            #expect(TelemetryDisplay.isFresh(link) == false)
+        }
+    }
+
+    @Test("trimText zachowuje znak")
+    func trimTextKeepsSign() {
+        #expect(TelemetryDisplay.trimText(servoTrimUs: 120) == "+120 µs")
+        #expect(TelemetryDisplay.trimText(servoTrimUs: -140) == "-140 µs")
+    }
+
+    @Test("speedHeadingText składa prędkość i kurs")
+    func speedHeadingTextFormats() {
+        // 150 cm/s → 1.5 m/s ; 1234 deg10 → 123°
+        #expect(TelemetryDisplay.speedHeadingText(speedCms: 150, headingDeg10: 1234) == "1.5 m/s · 123°")
+    }
+}

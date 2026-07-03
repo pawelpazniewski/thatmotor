@@ -21,6 +21,16 @@ Ostatnia aktualizacja: 2026-07-03
   `ApiError` → `lastActionMessage`). 3 nowe testy w `HTTPCommandRequestTests` (trim_left,
   trim_save, brak lat/lon dla całej trójki + `count==1`). `swift test`: 56/56 zielone.
   App target (`KayakMotor.xcodeproj`) buduje się na iphonesimulator (BUILD SUCCEEDED).
+- **Unit 3 (ukończony 2026-07-03):** nowy czysty moduł
+  `ios/KayakKit/Sources/KayakContract/TelemetryDisplay.swift` (enum-namespace, BEZ SwiftUI).
+  Funkcje: `gpsQualityText(fix:sats:)` (brak fixu → „brak fix", nie „0 sat"),
+  `stateLabel(_:)`, `modeLabel(spotLock:goto:)` (goto ma pierwszeństwo, potem spot-lock,
+  potem „Ręczny"), `targetText(errM:bearingDeg10:)` („%d m · %.0f°"),
+  `speedHeadingText(speedCms:headingDeg10:)`, `trimText(servoTrimUs:)` (znak `%+d µs`),
+  `displayed(_:isFresh:)` → myślnik „—" gdy stale, `isFresh(_ link:)` (fresh TYLKO `.connected`),
+  `isTrimEnabled(state:)` (TYLKO `.disarmed`). Test-first: 9 testów w
+  `TelemetryDisplayTests.swift` z mocą wyroczni (stale→myślnik, gpsQuality bez fixu,
+  isTrimEnabled tylko DISARMED, isFresh tylko connected). `swift test`: 65/65 zielone.
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-07-03-ios-telemetry-hud-requirements.md

@@ -45,7 +45,15 @@ Testy (`ios/KayakKit/Tests/KayakContractTests/HTTPCommandRequestTests.swift`):
 - [x] Test: żaden trim-command nie dokłada `lat_e7`/`lon_e7`
 
 Weryfikacja:
-- [ ] Weryfikacja: testy zielone; `AppModel` eksponuje trzy metody trimu
+- [x] Weryfikacja: testy zielone (56/56); `AppModel` eksponuje trzy metody trimu
+
+### Do poprawy po review fazy 2
+
+Review: `review-faza-2.md` — severity gate: ✅ CZYSTE (P1=0, P2=0, P3=2). E2E: N/A (natywny iOS).
+Nazwy komend zweryfikowane 1:1 wobec firmware `command_parse.c`; bramka DISARMED potwierdzona w `control_loop.c` (`apply_trim_events`) — ryzyko R5 zamknięte.
+
+- [ ] 🟡 [nit] **Command.swift / AppModel.swift** — asymetria nazewnicza `.trimSave` (case) vs `saveTrim()` (metoda) przy symetrycznych `trimLeft`/`trimRight`; zgodne z planem, do rozważenia ujednolicenie przy Unit 5.
+- [ ] 🟡 [nit] **AppModel.swift** — `trimLeft()`/`trimRight()`/`saveTrim()` bez testów jednostkowych (spójne z nietestowanym `disarm()`/`stopGoto()`); zachowanie pokryte E2E w Unit 5.
 
 ---
 
@@ -54,19 +62,19 @@ Weryfikacja:
 > Notatka wykonawcza: test-first (moc wyroczni — stale MUSI dać myślnik).
 
 Implementacja (`ios/KayakKit/Sources/KayakContract/TelemetryDisplay.swift`):
-- [ ] `gpsQualityText(fix:sats:)`, `stateLabel(_:)`, `modeLabel(spotLock:goto:)`
-- [ ] `targetText(errM:bearingDeg10:)` (format `"%d m · %.0f°"`), `speedHeadingText(...)`, `trimText(servoTrimUs:)`
-- [ ] `displayed(_ value:isFresh:) -> String` → „—" gdy `!isFresh`
-- [ ] Mapowanie `LinkState` → `isFresh: Bool` (fresh tylko `.connected`)
-- [ ] `isTrimEnabled(state:) -> Bool` (== `.disarmed`)
+- [x] `gpsQualityText(fix:sats:)`, `stateLabel(_:)`, `modeLabel(spotLock:goto:)`
+- [x] `targetText(errM:bearingDeg10:)` (format `"%d m · %.0f°"`), `speedHeadingText(...)`, `trimText(servoTrimUs:)`
+- [x] `displayed(_ value:isFresh:) -> String` → „—" gdy `!isFresh`
+- [x] Mapowanie `LinkState` → `isFresh: Bool` (fresh tylko `.connected`)
+- [x] `isTrimEnabled(state:) -> Bool` (== `.disarmed`)
 
 Testy (`ios/KayakKit/Tests/KayakContractTests/TelemetryDisplayTests.swift`):
-- [ ] Test: `stateLabel(.armed)` → „ARMED"; `.failsafe` → „FAILSAFE"
-- [ ] Test: `targetText(errM:123,bearingDeg10:450)` → „123 m · 45°"
-- [ ] Test: `displayed("5.0 m/s", isFresh:false)` → „—"; `isFresh:true` → „5.0 m/s"
-- [ ] Test: `modeLabel` — spot-lock aktywny vs goto pauza vs off → różne etykiety
-- [ ] Test: `gpsQualityText(fix:false, sats:0)` → „brak fix" (nie mylące „0 sat")
-- [ ] Test: `isTrimEnabled(.disarmed)`==true; pozostałe stany==false (mutacja „zawsze true" failuje)
+- [x] Test: `stateLabel(.armed)` → „ARMED"; `.failsafe` → „FAILSAFE"
+- [x] Test: `targetText(errM:123,bearingDeg10:450)` → „123 m · 45°"
+- [x] Test: `displayed("5.0 m/s", isFresh:false)` → „—"; `isFresh:true` → „5.0 m/s"
+- [x] Test: `modeLabel` — spot-lock aktywny vs goto pauza vs off → różne etykiety
+- [x] Test: `gpsQualityText(fix:false, sats:0)` → „brak fix" (nie mylące „0 sat")
+- [x] Test: `isTrimEnabled(.disarmed)`==true; pozostałe stany==false (mutacja „zawsze true" failuje)
 
 Weryfikacja:
 - [ ] Weryfikacja: testy zielone; widoki mogą składać stringi bez własnej logiki
