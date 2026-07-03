@@ -29,6 +29,7 @@ void run_command_parse_tests(void);
 void run_goto_target_tests(void);
 void run_params_decide_tests(void);
 void run_wifi_ap_config_tests(void);
+void run_ws_client_set_tests(void);
 void run_led_pattern_tests(void);
 void run_nmea_parse_tests(void);
 void run_sensor_freshness_tests(void);
@@ -67,6 +68,7 @@ int main(void)
     run_goto_target_tests();
     run_params_decide_tests();
     run_wifi_ap_config_tests();
+    run_ws_client_set_tests();
     run_led_pattern_tests();
     run_nmea_parse_tests();
     run_sensor_freshness_tests();
