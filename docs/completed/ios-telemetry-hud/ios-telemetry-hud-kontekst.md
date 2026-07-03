@@ -104,6 +104,18 @@ Ostatnia aktualizacja: 2026-07-03 (Unit 5)
   (69→71). Scenariusze [E2E] (tap „+" → wzrost trimu po ~100 ms, ARMED → wyszarzenie+notka,
   stale → myślniki, „Zapisz" → potwierdzenie w `lastActionMessage`) wymagają symulatora —
   pozostawione do weryfikacji ręcznej/review, NIE odznaczone.
+  **Review fazy 5 (2026-07-03):** severity gate ✅ CZYSTE (P1=0, P2=0, P3=3). Wszystkie krytyczne
+  wymagania zweryfikowane STATYCZNIE jako POPRAWNE: R5 gate — `.disabled(!isEnabled)` na `Section`
+  propaguje na przyciski `−/+/Zapisz`, więc przy ARMED akcje `trimLeft/right/save` NIE odpalają;
+  R5 jedno źródło prawdy — `servoTrimUs` czytany z telemetrii bez lokalnej kopii, odświeżany przez
+  `@Observable TelemetryStore`; R4 scope — tylko kurowany zestaw (brak surowych µs/NVS); R6 —
+  każdy wiersz przez `displayed(_,isFresh:)`, brak force-unwrap/`any`/pustego catch; widok cienki
+  (switch/warunki w pure `TelemetryDisplay`, host-testowane). Format współrzędnych spójny z
+  `WaypointListView` (`"%.5f, %.5f"` na `LatLonE7`). Security/Performance CZYSTE. `swift test` 71/71.
+  Nity (P3): (1) gate przycisków na `state` bez `isFresh` — drobna niespójność UX przy stale
+  (bez zagrożenia); (2) „Zapisz" bez jawnego 44 pt; (3) `degreesText` inline zamiast w kontrakcie.
+  E2E (4 scenariusze) — logika OK statycznie, render/interakcja na symulatorze do ręcznego
+  domknięcia. Raport: `review-faza-5.md`.
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-07-03-ios-telemetry-hud-requirements.md

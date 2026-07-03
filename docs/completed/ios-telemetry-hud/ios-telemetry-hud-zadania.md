@@ -135,7 +135,15 @@ Testy:
 - [ ] Test (E2E): „Zapisz" (DISARMED) → brak błędu, potwierdzenie w `lastActionMessage`  _(wymaga symulatora — do weryfikacji ręcznej)_
 
 Weryfikacja:
-- [ ] Weryfikacja: arkusz pokazuje kurowany zestaw; trim działa tylko DISARMED z żywym odczytem; myślniki przy stale; detenty pół/pełna działają
+- [x] Weryfikacja: arkusz pokazuje kurowany zestaw; trim działa tylko DISARMED z żywym odczytem; myślniki przy stale; detenty pół/pełna działają _(logika zweryfikowana STATYCZNIE w review fazy 5 — POPRAWNA: kurowany zestaw R4, gate `.disabled(!isTrimEnabled)` propaguje na przyciski, myślniki przez `displayed(_,isFresh:)`, jedno źródło prawdy `servoTrimUs`; render arkusza/detenty/tap-trim na żywo — nadal wymaga ręcznej weryfikacji na symulatorze)_
+
+### Do poprawy po review fazy 5
+
+Review: `review-faza-5.md` — severity gate: ✅ CZYSTE (P1=0, P2=0, P3=3). Wszystkie krytyczne wymagania (R4 scope, R5 gate DISARMED + jedno źródło prawdy, R6 staleness) POPRAWNE statycznie. `swift test` 71/71. E2E (4 scenariusze) — logika OK statycznie, render/interakcja na symulatorze do ręcznego domknięcia (natywny iOS, brak przeglądarki).
+
+- [ ] 🟡 [nit] **TelemetryDetailView.swift:86** — bramka WŁĄCZENIA przycisków trimu opiera się tylko na `store.latest?.state`, nie na świeżości; przy stale linku (ostatnia ramka `.disarmed`) przyciski aktywne, choć „Neutral serwa" pokazuje „—". Brak zagrożenia (disarmed bezpieczne, firmware ignoruje ARMED, wysyłka przy stale → błąd do `lastActionMessage`), drobna niespójność UX vs „żywym odczytem". Rozważyć `isEnabled && isFresh`.
+- [ ] 🟡 [nit] **TelemetryDetailView.swift:93** — „Zapisz" na domyślnym `.buttonStyle(.bordered)` bez `.frame(height: 44)`; wysokość dotykowa może być < 44 pt (HIG). Przyciski −/+ mają jawne 44×44.
+- [ ] 🟡 [nit] **TelemetryDetailView.swift:139** — `degreesText` inline w widoku zamiast w `TelemetryDisplay`; bezwarunkowy format, spójny z inline-formatem `WaypointListView`, więc akceptowalne — ewentualnie przenieść do kontraktu dla jednolitości.
 
 ---
 

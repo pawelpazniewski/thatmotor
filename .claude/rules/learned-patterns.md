@@ -2,7 +2,7 @@
 
 Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane przez /dev-compound i /dev-compound-refresh.
 
-<!-- rule-count: 15 -->
+<!-- rule-count: 16 -->
 
 - **Recency/elapsed w jednej domenie licznika, wrap-safe**: Różnicę czasu/licznika licz przez unsigned modular subtraction (`now - last`) w JEDNEJ domenie zegara; trzymaj raw tick i konwertuj na jednostki fizyczne dopiero przy porównaniu. Nie mieszaj `esp_timer_get_time()` z licznikiem capture — daje cicho błędną recency po wrapie. Dodaj host-test wokół granicy 2^N.
   Source: docs/solutions/runtime-errors/2026-06-17-wrap-safe-recency-counter-domain.md
@@ -48,3 +48,6 @@ Reguły wyciągnięte z rozwiązanych problemów w docs/solutions/. Zarządzane 
 
 - **Inwariant jednowątkowy zamiast mutexa gdy mutacje da się skanalizować do jednego taska**: Zanim dodasz lock do współdzielonego stanu, sprawdź czy WSZYSTKIE mutacje da się zepchnąć na jeden task (np. `httpd_queue_work` → task httpd), a inne taski (callback timera) tylko czytają/pstrykają atom i kolejkują pracę, NIGDY nie tykają struktury. Jeśli tak — udokumentuj inwariant w nagłówku modułu jako „do not break" (które funkcje/taski wolno, które nie) i pomiń mutex. Taniej i prościej niż lock, ale tylko gdy inwariant jest jawny i pilnowany. Dodatkowo: nie mutuj kolekcji podczas iteracji po indeksie — zbieraj do lokalnego `failed[]` i usuwaj DOPIERO po pętli.
   Source: docs/solutions/runtime-errors/2026-07-03-ws-client-set-zero-init-sentinel-single-thread-invariant.md
+
+- **Klient chce „na żywo", urządzenie ma celowy state-gate → dostosuj UI do gate'u, NIE osłabiaj failsafe i NIE polegaj na błędzie serwera**: Gdy firmware stosuje komendę tylko w bezpiecznym stanie (np. trim tylko DISARMED), a poza nim zwraca 200 OK i cicho ją ignoruje — bramkuj przycisk/sekcję w UI wg stanu z TELEMETRII (`isEnabled(state)`), bo 200 OK ≠ wykonano i nie ma błędu do wykrycia. UI-guard odwzorowuje gate urządzenia, nie zastępuje go (realny gate zostaje w firmware, kod safety-critical nietknięty). Wartość zapisywaną na urządzeniu trzymaj jako jedno źródło prawdy z telemetrii (bez lokalnej kopii/optimistic-UI — opóźnienie ramki rozjeżdża kopie). Logikę decyzji (format, staleness→„—", wybór aktywnego źródła, gate) wypchnij z widoku do czystego modułu bez UI-frameworka (Pure⊥HAL na kliencie) i pokryj host-testami z mocą wyroczni; widok składa gotowe stringi.
+  Source: docs/solutions/testing-issues/2026-07-03-ios-client-mirror-firmware-silent-gate-pure-presentation.md
