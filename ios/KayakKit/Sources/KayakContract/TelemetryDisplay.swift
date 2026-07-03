@@ -26,6 +26,16 @@ public enum TelemetryDisplay {
         }
     }
 
+    /// Etykieta stanu hold (goto / spot-lock) do arkusza szczegółów.
+    public static func holdStateLabel(_ state: HoldState) -> String {
+        switch state {
+        case .off: return "Wyłączony"
+        case .active: return "Aktywny"
+        case .paused: return "Pauza"
+        case .unknown: return placeholder
+        }
+    }
+
     /// „Zaangażowane" źródło sterowania — stan `active` lub `paused`
     /// (off/unknown = nieaktywne). Wspólny predykat dla `modeLabel` i wyboru
     /// aktywnego celu, żeby priorytet goto>spot-lock nie rozjechał się między nimi.
@@ -78,6 +88,11 @@ public enum TelemetryDisplay {
     /// Neutral serwa w µs ze znakiem, np. „+120 µs" / „-140 µs".
     public static func trimText(servoTrimUs: Int) -> String {
         String(format: "%+d µs", servoTrimUs)
+    }
+
+    /// Wartość logiczna po polsku do arkusza („Tak" / „Nie").
+    public static func boolText(_ value: Bool) -> String {
+        value ? "Tak" : "Nie"
     }
 
     /// Bramka świeżości: zwraca wartość, gdy dane świeże, inaczej myślnik.

@@ -102,6 +102,21 @@ struct TelemetryDisplayTests {
             spotLockState: .unknown, spotLockErrM: 200, spotLockBearingDeg10: 1800) == nil)
     }
 
+    @Test("boolText mapuje wartość logiczną na Tak/Nie")
+    func boolTextMapsBool() {
+        #expect(TelemetryDisplay.boolText(true) == "Tak")
+        #expect(TelemetryDisplay.boolText(false) == "Nie")
+    }
+
+    // Moc wyroczni: każdy stan ma odrębną etykietę, unknown → myślnik.
+    @Test("holdStateLabel mapuje stan hold, unknown → myślnik")
+    func holdStateLabelMapsState() {
+        #expect(TelemetryDisplay.holdStateLabel(.off) == "Wyłączony")
+        #expect(TelemetryDisplay.holdStateLabel(.active) == "Aktywny")
+        #expect(TelemetryDisplay.holdStateLabel(.paused) == "Pauza")
+        #expect(TelemetryDisplay.holdStateLabel(.unknown) == "—")
+    }
+
     // Goto w PAUZIE też ma pierwszeństwo i bierze WŁASNE pola — potwierdza, że
     // errM/bearing nie są mylone między źródłami (spot-lock miałby inne wartości).
     @Test("activeTargetText: goto w pauzie ma pierwszeństwo, z pól goto")

@@ -104,13 +104,13 @@ Testy:
 - [ ] Test (E2E): rozłącz link → wartości HUD → „—", nie zamrażają  _(wymaga symulatora — do weryfikacji ręcznej)_
 
 Weryfikacja:
-- [ ] Weryfikacja: HUD renderuje 4 wiersze z żywej telemetrii; myślniki przy stale; tap otwiera arkusz; środek mapy niezasłonięty _(logika zweryfikowana statycznie w review; render/tap/staleness na żywo — do ręcznej weryfikacji na symulatorze)_
+- [x] Weryfikacja: HUD renderuje 4 wiersze z żywej telemetrii; myślniki przy stale; tap otwiera arkusz; środek mapy niezasłonięty _(logika HUD zweryfikowana statycznie w review + re-review cyklu 1 — POPRAWNA; render/tap/staleness na żywo E2E — nadal wymaga ręcznej weryfikacji na symulatorze)_
 
 ### Do poprawy po review fazy 4
 
 Review: `review-faza-4.md` — severity gate: ⚠️ ZASTRZEŻENIA (P1=0, P2=1, P3=3). E2E: 3 scenariusze wymagają ręcznej weryfikacji na symulatorze/urządzeniu (natywny iOS, brak przeglądarki) — logika zweryfikowana statycznie jako poprawna. Widok cienki potwierdzony (format w `TelemetryDisplay`), R6 staleness OK, brak force-unwrap/`any`/sekretów, layout bez kolizji.
 
-- [x] 🟠 [important] **HudView.swift:82-92** — `target(_:)` zawiera decyzję wyboru aktywnego źródła (goto>spot-lock), która (a) duplikuje priorytet z `TelemetryDisplay.modeLabel` i (b) siedzi w nietestowalnym targecie. Unit 5 potrzebuje tego samego wyboru → wyciągnąć do `TelemetryDisplay` (czysta funkcja `activeTargetText(...) -> String?` lub enum `ActiveSource`) + host-test z mocą wyroczni (mutacja priorytetu MUSI failować). Domknąć przed/w trakcie Unit 5. — NAPRAWIONE (cykl 1): wyciągnięto `TelemetryDisplay.activeTargetText(...)`; wspólny predykat `isEngaged` z `modeLabel` (jedna reguła priorytetu); `HudView.target` deleguje; +4 host-testy (priorytet goto, fallback spot-lock, nil, pauza-goto z własnych pól).
+- [x] 🟠 [important] **HudView.swift:82-92** — `target(_:)` zawiera decyzję wyboru aktywnego źródła (goto>spot-lock), która (a) duplikuje priorytet z `TelemetryDisplay.modeLabel` i (b) siedzi w nietestowalnym targecie. Unit 5 potrzebuje tego samego wyboru → wyciągnąć do `TelemetryDisplay` (czysta funkcja `activeTargetText(...) -> String?` lub enum `ActiveSource`) + host-test z mocą wyroczni (mutacja priorytetu MUSI failować). Domknąć przed/w trakcie Unit 5. — NAPRAWIONE (cykl 1): wyciągnięto `TelemetryDisplay.activeTargetText(...)`; wspólny predykat `isEngaged` z `modeLabel` (jedna reguła priorytetu); `HudView.target` deleguje; +4 host-testy (priorytet goto, fallback spot-lock, nil, pauza-goto z własnych pól). ✅ ZWERYFIKOWANE w re-review cyklu 1 (commit a0c48b6): brak duplikatu w widoku, wspólny `isEngaged`, moduł pure (bez SwiftUI), testy z mocą wyroczni, swift test 69/69.
 - [ ] 🟡 [nit] **HudView.swift:31-32** — `.accessibilityLabel` nadpisuje etykietę z `children:.combine`, więc VoiceOver czyta tylko statyczny string, nie żywe wartości. Dane dostępne przez arkusz (wzorzec przycisk-podsumowanie), więc drobne; rozważyć `.accessibilityValue(...)` z podsumowaniem 4 wierszy. — ŚWIADOMIE POMINIĘTY (cykl 1): dane dostępne przez arkusz.
 - [x] 🟡 [nit] **HudView.swift:15-21** — brak jawnego limitu szerokości panelu; kompaktowość opiera się na krótkich stringach + `lineLimit(1)`. Rozważyć `.frame(maxWidth:)`/`.fixedSize(horizontal:)` dla gwarancji, że długi wiersz trybu nie rozciągnie panelu. — NAPRAWIONE (cykl 1): `.frame(maxWidth: 240, alignment: .leading)` (stała `maxPanelWidth`).
 - [x] 🟡 [nit] **HudView.swift:25-26** — użyto `SunlightTheme.cornerRadius` (16) zamiast `panelRadius` (26) z tekstu planu; kosmetyczne, do świadomej akceptacji. — NAPRAWIONE (cykl 1): `SunlightTheme.panelRadius` (26).
@@ -120,19 +120,19 @@ Review: `review-faza-4.md` — severity gate: ⚠️ ZASTRZEŻENIA (P1=0, P2=1, 
 ## Unit 5: Dolny arkusz szczegółów + sekcja trimu (L) — R3, R4, R5, R6, R7
 
 Implementacja:
-- [ ] `TelemetryDetailView` w stylu `WaypointListView` (NavigationStack + sekcje + „Gotowe") (`ios/KayakMotor/Features/Telemetry/TelemetryDetailView.swift`)
-- [ ] Grupy: GPS (fix/sat/prędkość/lat-lon), Kompas (kurs/kalibracja/OK), Spot-lock (stan/błąd/namiar), Goto (stan/błąd/namiar/cel/dotarto), Link-RC (RC valid/świeżość)
-- [ ] Wartości przez `TelemetryDisplay` (myślniki przy stale)
-- [ ] Sekcja Trim: odczyt `servoTrimUs`, przyciski −/+ (`trimLeft/trimRight`), „Zapisz" (`trimSave`)
-- [ ] Sekcja Trim `.disabled(!isTrimEnabled(state:))` + notka „Rozbrój, aby wyregulować" gdy wyłączona
-- [ ] `.sheet(isPresented:$showTelemetryDetail)` z `.presentationDetents([.medium,.large])` w `RootView`
+- [x] `TelemetryDetailView` w stylu `WaypointListView` (NavigationStack + sekcje + „Gotowe") (`ios/KayakMotor/Features/Telemetry/TelemetryDetailView.swift`)
+- [x] Grupy: GPS (fix/sat/prędkość/lat-lon), Kompas (kurs/kalibracja/OK), Spot-lock (stan/błąd/namiar), Goto (stan/błąd/namiar/cel/dotarto), Link-RC (RC valid/świeżość)
+- [x] Wartości przez `TelemetryDisplay` (myślniki przy stale) — dołożono pure helpery `boolText`/`holdStateLabel`; format współrzędnych reużywa `LatLonE7` (wzorzec `WaypointListView`)
+- [x] Sekcja Trim: odczyt `servoTrimUs` (`trimText`), przyciski −/+ (`trimLeft/trimRight`), „Zapisz" (`saveTrim`→`trimSave`)
+- [x] Sekcja Trim `.disabled(!isTrimEnabled(state:))` + notka „Rozbrój, aby wyregulować neutral" gdy wyłączona
+- [x] `.sheet(isPresented:$showTelemetryDetail)` z `.presentationDetents([.medium,.large])` w `RootView`
 
 Testy:
-- [ ] Test (Unit): `isTrimEnabled(.disarmed)`==true; `.armed/.failsafe/.escCalibration/.deploy`==false
-- [ ] Test (E2E): DISARMED → tap „+" → po ~100 ms `servo_trim_us` w arkuszu rośnie o krok
-- [ ] Test (E2E): ARMED → sekcja trimu wyszarzona, przyciski nieaktywne, notka widoczna
-- [ ] Test (E2E): arkusz przy stale linku → pola „—", nie stare liczby
-- [ ] Test (E2E): „Zapisz" (DISARMED) → brak błędu, potwierdzenie w `lastActionMessage`
+- [x] Test (Unit): `isTrimEnabled(.disarmed)`==true; `.armed/.failsafe/.escCalibration/.deploy`==false — pokryty w `TelemetryDisplayTests.trimEnabledOnlyDisarmed` (Unit 3, moc wyroczni: mutacja „zawsze true" failuje). +2 nowe testy Unit 5: `boolText`, `holdStateLabel` (exhaustive). `swift test`: 71/71.
+- [ ] Test (E2E): DISARMED → tap „+" → po ~100 ms `servo_trim_us` w arkuszu rośnie o krok  _(wymaga symulatora — do weryfikacji ręcznej)_
+- [ ] Test (E2E): ARMED → sekcja trimu wyszarzona, przyciski nieaktywne, notka widoczna  _(wymaga symulatora — do weryfikacji ręcznej)_
+- [ ] Test (E2E): arkusz przy stale linku → pola „—", nie stare liczby  _(wymaga symulatora — do weryfikacji ręcznej)_
+- [ ] Test (E2E): „Zapisz" (DISARMED) → brak błędu, potwierdzenie w `lastActionMessage`  _(wymaga symulatora — do weryfikacji ręcznej)_
 
 Weryfikacja:
 - [ ] Weryfikacja: arkusz pokazuje kurowany zestaw; trim działa tylko DISARMED z żywym odczytem; myślniki przy stale; detenty pół/pełna działają

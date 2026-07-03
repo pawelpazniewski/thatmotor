@@ -50,11 +50,7 @@ struct RootView: View {
             )
         }
         .sheet(isPresented: $showTelemetryDetail) {
-            // Placeholder — pełny arkusz szczegółów (TelemetryDetailView) + sekcja
-            // trimu dojdą w Unit 5. Tu tylko podłączamy stan i detenty, by tap był
-            // weryfikowalny.
-            Text("Szczegóły — Unit 5")
-                .font(SunlightTheme.rounded(18, .semibold))
+            TelemetryDetailView(store: model.telemetry, model: model)
                 .presentationDetents([.medium, .large])
         }
         .task {

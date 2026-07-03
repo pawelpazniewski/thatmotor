@@ -1,7 +1,7 @@
 # Kontekst: Telemetria w aplikacji iOS — HUD + arkusz + trim serwa
 
 Branch: `feature/ios-telemetry-hud`
-Ostatnia aktualizacja: 2026-07-03 (Unit 4)
+Ostatnia aktualizacja: 2026-07-03 (Unit 5)
 
 ## Postęp
 - **Unit 1 (ukończony 2026-07-03):** `Telemetry` rozszerzony o `imuCalib`, `spotLockErrM`,
@@ -62,6 +62,48 @@ Ostatnia aktualizacja: 2026-07-03 (Unit 4)
   `swift test` KayakKit: 65/65 zielone (bez zmian — Unit 4 to sam widok). Scenariusze [E2E]
   (HUD w rogu, tap→arkusz, rozłącz→myślniki) wymagają symulatora — pozostawione do
   weryfikacji ręcznej/review, NIE odznaczone.
+  **Review fazy 4 (2026-07-03):** severity gate ⚠️ ZASTRZEŻENIA (P1=0, P2=1, P3=3).
+  E2E: 3 scenariusze wymagają ręcznej weryfikacji na symulatorze (natywny iOS, brak
+  przeglądarki) — logika zweryfikowana STATYCZNIE jako poprawna (hudOverlay `.topLeading`
+  offset 56 pod chipem, brak kolizji z zoom/waypoints, środek mapy czysty; tap→`.sheet`
+  z detentami [.medium,.large]; `isFresh` fresh tylko `.connected` → „—" poza tym).
+  Widok cienki potwierdzony: cały format przez `TelemetryDisplay`, brak duplikacji formatu,
+  brak force-unwrap/`any`/sekretów, R6 staleness OK. Security/Performance CZYSTE.
+  Jedyny P2: `HudView.target()` (wybór aktywnego źródła goto>spot-lock) duplikuje priorytet
+  z `modeLabel` i siedzi w nietestowalnym targecie — Unit 5 potrzebuje tej samej decyzji,
+  więc wyciągnąć do `TelemetryDisplay` jako czystą host-testowalną funkcję przed/w trakcie
+  Unit 5 (inaczej potrójna duplikacja). Nity: accessibilityLabel nadpisuje wartości dla
+  VoiceOver (dane dostępne przez arkusz), brak max-width panelu, cornerRadius vs panelRadius.
+  Raport: `review-faza-4.md`.
+- **Unit 5 (ukończony 2026-07-03):** nowy widok
+  `ios/KayakMotor/Features/Telemetry/TelemetryDetailView.swift` — dolny arkusz szczegółów
+  w stylu `WaypointListView` (`NavigationStack` + `List`/`Section` + toolbar „Gotowe" z
+  `dismiss`), podpięty w `RootView` przez `.sheet(isPresented:$showTelemetryDetail)` z
+  `.presentationDetents([.medium,.large])` (usunięto placeholder „Szczegóły — Unit 5").
+  Arkusz przyjmuje `store: TelemetryStore` (odczyt `latest`/`linkState`) + `model: AppModel`
+  (akcje trimu). Kurowany zestaw pól (R4) w sekcjach: GPS (fix/satelity/prędkość/pozycja),
+  Kompas (kurs/kalibracja IMU 0-3/czujnik OK), Spot-lock (stan/błąd/namiar), Goto
+  (stan/błąd/namiar/cel/dotarto), Łącze-RC (RC poprawny/link świeży). Świadomie POMINIĘTO
+  surowe µs RC, okresy, servo/esc µs, NVS/źródło ustawień (poza scope R4). Widok cienki:
+  każdy wiersz składa surowy string i przepuszcza przez `TelemetryDisplay.displayed(_:isFresh:)`
+  (R6 — myślniki przy nieświeżym łączu/braku ramki, bez zamrażania), `isFresh` = jeden predykat
+  `TelemetryDisplay.isFresh(linkState)`. Do kontraktu dołożono dwa czyste helpery
+  (host-testowalne, bez SwiftUI): `boolText(_:)` („Tak"/„Nie", ~7 użyć) i `holdStateLabel(_:)`
+  (stan hold, unknown→myślnik) — logika switch/warunek poza widokiem. Format liczb/współrzędnych
+  inline w widoku reużywa akcesorów `Telemetry` (`speedMetersPerSecond`, `headingDegrees`,
+  `spotLockBearingDegrees`, `gotoBearingDegrees`, `boatLatLon`) oraz `LatLonE7.latDegrees/lonDegrees`
+  z formatem `"%.5f, %.5f"` (spójnie z `WaypointListView` — zgodnie z podpowiedzią o reużyciu
+  helpera współrzędnych). Sekcja Trim (R5): odczyt `servoTrimUs` przez `trimText` (jedno źródło
+  prawdy z telemetrii — bez lokalnej kopii, nowa wartość przychodzi kolejną ramką ~100 ms),
+  przyciski −/+ (`model.trimLeft()/trimRight()`, `.bordered`, cel dotykowy 44 pt) i „Zapisz"
+  (`model.saveTrim()`); cała sekcja `.disabled(!isTrimEnabled(state:))` — aktywna TYLKO gdy
+  `state==.disarmed`, poza tym wyszarzona z notką „Rozbrój, aby wyregulować neutral". Testy:
+  `isTrimEnabled` pokryty w `TelemetryDisplayTests` (Unit 3, moc wyroczni); +2 nowe testy Unit 5
+  (`boolText`, `holdStateLabel` exhaustive z unknown→myślnik). Walidacja: `xcodegen generate`
+  → app target `xcodebuild ... build` → BUILD SUCCEEDED; `swift test` KayakKit: 71/71 zielone
+  (69→71). Scenariusze [E2E] (tap „+" → wzrost trimu po ~100 ms, ARMED → wyszarzenie+notka,
+  stale → myślniki, „Zapisz" → potwierdzenie w `lastActionMessage`) wymagają symulatora —
+  pozostawione do weryfikacji ręcznej/review, NIE odznaczone.
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-07-03-ios-telemetry-hud-requirements.md
