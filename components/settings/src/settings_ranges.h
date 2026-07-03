@@ -113,3 +113,20 @@
 #define SPOT_LOCK_GAIN_MAX 1000U
 #define SPOT_LOCK_THROTTLE_GAIN_DEFAULT 30U
 #define SPOT_LOCK_SERVO_GAIN_DEFAULT 20U
+
+/* App-driven goto comms-watchdog timeout (ms). The app keeps the link alive by
+ * repeating the goto command (~2 Hz); a link staler than this pauses an active
+ * goto. Default 1500 ms is a gentle compromise: long enough that a brief WiFi
+ * blip does not nuisance-pause the mission, short enough to stop "blind" running
+ * soon after the phone drops. Range 200..5000 ms. */
+#define GOTO_COMMS_TIMEOUT_MS_MIN 200U
+#define GOTO_COMMS_TIMEOUT_MS_MAX 5000U
+#define GOTO_COMMS_TIMEOUT_MS_DEFAULT 1500U
+
+/* Goto cruise-decel slowdown distance (metres). Beyond this the goto cruises at
+ * full forward power; inside it the thrust ramps linearly down to the deadband
+ * edge. Default 15 m gives a gentle, predictable approach without a long crawl;
+ * range 3..200 m keeps it above a tiny deadband yet within useful lake reach. */
+#define GOTO_SLOWDOWN_DISTANCE_M_MIN 3U
+#define GOTO_SLOWDOWN_DISTANCE_M_MAX 200U
+#define GOTO_SLOWDOWN_DISTANCE_M_DEFAULT 15U

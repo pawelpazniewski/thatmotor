@@ -47,6 +47,22 @@ static void test_armed_rejects_new_spot_lock_param_write(void)
     TEST_ASSERT_EQUAL_INT(409, o.http_status);
 }
 
+static void test_armed_rejects_goto_comms_timeout_write(void)
+{
+    /* SI-6 is UNCHANGED by the v7 goto_comms_timeout_ms param: the apply gate is
+     * on control state, not on which field a POST carries. A valid write that sets
+     * the new goto link-watchdog timeout is still rejected with 409 while ARMED,
+     * exactly like every other parameter -- so changing goto_comms_timeout_ms can
+     * never disturb an active goto (ARMED blocks the apply). fields_valid=true
+     * isolates the state gate (oracle: it must reject on state alone). */
+    params_write_outcome o = params_decide_write(SM_STATE_ARMED, true);
+
+    TEST_ASSERT_EQUAL_INT(PARAMS_WRITE_REJECT_NOT_DISARMED, o.decision);
+    TEST_ASSERT_EQUAL_INT(API_ERR_NOT_DISARMED, o.code);
+    TEST_ASSERT_EQUAL_INT(409, o.http_status);
+    TEST_ASSERT_EQUAL_STRING(API_CODE_NOT_DISARMED, api_error_code_str(o.code));
+}
+
 /* --- DISARMED + out-of-range field -> reject invalid (400) --- */
 
 static void test_disarmed_invalid_rejects_validation_failed(void)
@@ -79,6 +95,7 @@ void run_params_decide_tests(void)
     RUN_TEST(test_armed_invalid_still_rejects_not_disarmed);
     RUN_TEST(test_failsafe_rejects_not_disarmed);
     RUN_TEST(test_armed_rejects_new_spot_lock_param_write);
+    RUN_TEST(test_armed_rejects_goto_comms_timeout_write);
     RUN_TEST(test_disarmed_invalid_rejects_validation_failed);
     RUN_TEST(test_disarmed_valid_accepts);
 }

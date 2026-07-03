@@ -1,0 +1,67 @@
+name: KayakMotor
+options:
+  bundleIdPrefix: com.pawel.kayak
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+    GENERATE_INFOPLIST_FILE: YES
+    TARGETED_DEVICE_FAMILY: "1" # iPhone only (MVP)
+packages:
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    from: "6.27.0"
+targets:
+  # Czysta logika kontraktu jako natywny framework (te same źródła co pakiet
+  # SwiftPM KayakKit, który służy do host-testów `swift test`). Framework — bo
+  # build przez -target nie kompiluje lokalnych pakietów źródłowych SwiftPM.
+  KayakContract:
+    type: framework
+    platform: iOS
+    sources:
+      - path: KayakKit/Sources/KayakContract
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pawel.kayak.contract
+  # Produkcyjna aplikacja (Unit 1+). Cienki klient kontraktu firmware.
+  KayakMotor:
+    type: application
+    platform: iOS
+    sources:
+      - path: KayakMotor
+        excludes:
+          - "Resources/**"
+      - path: KayakMotor/Resources
+        buildPhase: resources
+    dependencies:
+      - target: KayakContract
+      - package: MapLibre
+        product: MapLibre
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pawel.kayak.motor
+        DEVELOPMENT_TEAM: "3H77MD6J7M"
+        CODE_SIGN_ENTITLEMENTS: KayakMotor/KayakMotor.entitlements
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Łączy się z silnikiem kajaka (AP kayak-motor) po Wi‑Fi, by wysyłać cel nawigacji i odbierać telemetrię."
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Pokazuje Twoją pozycję na mapie akwenu, byś widział siebie względem łódki i celu."
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+
+  # Unit 0 — bramka de-risk. Throwaway app: dowód łączności iPhone↔192.168.4.1.
+  DeRiskProbe:
+    type: application
+    platform: iOS
+    sources:
+      - path: DeRiskProbe
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pawel.kayak.derisk
+        DEVELOPMENT_TEAM: "3H77MD6J7M"
+        CODE_SIGN_ENTITLEMENTS: DeRiskProbe/DeRiskProbe.entitlements
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Łączy się z silnikiem kajaka (AP kayak-motor) po Wi‑Fi, by wysłać komendę i odbierać telemetrię."
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES

@@ -60,6 +60,19 @@ typedef struct {
     uint8_t spot_lock_state;        /* spot_lock_substate this cycle (0/1/2) */
     uint16_t spot_lock_err_m;       /* position error to target, metres */
     uint16_t spot_lock_bearing_deg10;/* bearing to target, degrees * 10 */
+    /* App-driven goto telemetry (R8). goto_state 0=off, 1=active, 2=paused, and
+     * is non-zero ONLY while SRC_GOTO owns the target (a CH3 hold reads off).
+     * err/bearing/arrived are meaningful while goto active/paused; the target is
+     * the staged external point (RAM only). app_link_fresh mirrors the comms
+     * watchdog. These field names are the stable telemetry contract for the iOS
+     * app (parity with /api WS). */
+    uint8_t goto_state;             /* goto sub-state this cycle (0/1/2) */
+    int32_t goto_target_lat_e7;     /* staged goto target latitude (deg * 1e7) */
+    int32_t goto_target_lon_e7;     /* staged goto target longitude (deg * 1e7) */
+    uint16_t goto_err_m;            /* position error to goto target, metres */
+    uint16_t goto_bearing_deg10;    /* bearing to goto target, degrees * 10 */
+    bool goto_arrived;              /* err <= deadband while goto ACTIVE */
+    bool app_link_fresh;            /* app link freshness (comms watchdog, R5) */
 } control_loop_snapshot;
 
 /**
@@ -77,6 +90,11 @@ typedef struct {
     bool trim_left;            /* servo neutral trim: step one click left */
     bool trim_right;           /* servo neutral trim: step one click right */
     bool trim_save;            /* persist the current servo trim to NVS */
+    bool goto_request;         /* app "Goto": start/refresh nav to goto_lat/lon */
+    bool goto_cancel_request;  /* app "Goto cancel": end the goto mode */
+    bool hold_request;         /* app "Spot-lock": anchor at the boat's own fix */
+    int32_t goto_lat_e7;       /* goto target latitude (deg * 1e7), HTTP-validated */
+    int32_t goto_lon_e7;       /* goto target longitude (deg * 1e7), HTTP-validated */
     calib_event calib_event;   /* discriminated calibration operator event */
 } control_loop_ui_events;
 

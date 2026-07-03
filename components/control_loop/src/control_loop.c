@@ -9,6 +9,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "goto_grab.h"
 #include "gps.h"
 #include "imu.h"
 #include "led_driver.h"
@@ -18,6 +19,7 @@
 #include "pwm_out.h"
 #include "rc_capture.h"
 #include "rc_validity.h"
+#include "sensor_freshness.h"
 #include "signal_chain.h"
 
 static const char *TAG = "control_loop";
@@ -56,6 +58,17 @@ static settings_validation_result s_load_flags;
 /* Latest telemetry snapshot (lossy single slot, newest wins). The loop is the
  * sole writer; panel readers copy the struct best-effort. */
 static control_loop_snapshot s_snapshot;
+
+/* App-driven goto: staged external target + engage latch (single writer = the
+ * loop). s_last_goto_ms stamps each received goto command as the base for the
+ * link comms-watchdog (read each cycle by apply_goto_inputs -> sensor_is_fresh).
+ * The latch is cleared on goto_cancel (apply_goto_events) and on a manual
+ * override / CH3 preempt (loop_step's goto_latch_clear). The target lives in RAM
+ * only (no NVS persistence: goto is a live session). */
+static bool s_goto_engage;
+static int32_t s_goto_lat_e7;
+static int32_t s_goto_lon_e7;
+static uint32_t s_last_goto_ms;
 
 /* Monotonic milliseconds for the commit debounce (esp_timer is monotonic). */
 static uint32_t now_ms(void)
@@ -326,6 +339,38 @@ static void apply_trim_events(const control_loop_ui_events *ev)
     }
 }
 
+/* Stage an app-driven goto command: latch the engage + external target on a goto
+ * request (idempotent keepalive: a repeated goto refreshes the target and the
+ * link stamp), clear the latch on goto_cancel. Every received goto stamps
+ * s_last_goto_ms so the link-freshness re-latch gate stays wrap-safe. A hold
+ * request anchors at the boat's OWN fix: sample the fix ONCE atomically, and only
+ * when it is usable (fresh + real fix + in range, via goto_grab_decide) latch it
+ * as the SRC_GOTO target (anchor = own position, R1/R2/R6). The engage/target are
+ * read into the loop inputs by apply_goto_inputs each cycle. */
+static void apply_goto_events(const control_loop_ui_events *ev)
+{
+    if (ev->goto_request) {
+        s_goto_engage = true;
+        s_goto_lat_e7 = ev->goto_lat_e7;
+        s_goto_lon_e7 = ev->goto_lon_e7;
+        s_last_goto_ms = sensor_freshness_stamp(s_last_goto_ms, now_ms(), true);
+    }
+    if (ev->hold_request) {
+        gps_state g;
+        gps_get_state(&g); /* one atomic sample: lat/lon from the same fix */
+        goto_grab_decision d = goto_grab_decide(g.fresh, g.fix, g.lat_e7, g.lon_e7);
+        if (d.engage) {
+            s_goto_engage = true;
+            s_goto_lat_e7 = d.lat_e7;
+            s_goto_lon_e7 = d.lon_e7;
+            s_last_goto_ms = sensor_freshness_stamp(s_last_goto_ms, now_ms(), true);
+        }
+    }
+    if (ev->goto_cancel_request) {
+        s_goto_engage = false;
+    }
+}
+
 /* Drain the latest staged UI events into the per-cycle inputs (edge semantics:
  * each posted set is consumed once). Absent any post, all events are inert. */
 static void apply_ui_events(loop_inputs *in)
@@ -342,6 +387,7 @@ static void apply_ui_events(loop_inputs *in)
     in->stow_request = ev.stow_request;
     in->calib_event = ev.calib_event;
     apply_trim_events(&ev);
+    apply_goto_events(&ev);
 }
 
 /* Read the GPS + IMU shared state into the per-cycle inputs. Spot-lock control
@@ -362,6 +408,21 @@ static void apply_sensor_inputs(loop_inputs *in)
     in->imu_heading_deg10 = m.heading_deg10;
 }
 
+/* Feed the staged app-driven goto state into this cycle's inputs and compute the
+ * link comms-watchdog each cycle (fresh != valid: re-evaluated every cycle, not
+ * just at engage). The freshness lives in the now_ms() domain (esp_timer/1000,
+ * uint32), matching s_last_goto_ms, so sensor_is_fresh stays wrap-safe. These are
+ * spot-lock control inputs ONLY: consumed by spot_lock_step in the ARMED branch,
+ * NEVER rc_valid / channel_valid / sm_inputs / failsafe. */
+static void apply_goto_inputs(loop_inputs *in)
+{
+    in->goto_engage = s_goto_engage;
+    in->goto_lat_e7 = s_goto_lat_e7;
+    in->goto_lon_e7 = s_goto_lon_e7;
+    in->comms_fresh =
+        sensor_is_fresh(now_ms(), s_last_goto_ms, s_params.goto_comms_timeout_ms);
+}
+
 /* Read the two control channels into the per-cycle input snapshot. */
 static loop_inputs read_inputs(void)
 {
@@ -377,6 +438,7 @@ static loop_inputs read_inputs(void)
      * Consumed by loop_step only in the ARMED branch (Unit 6); never failsafe. */
     apply_ch3_switch(&in);
     apply_sensor_inputs(&in);
+    apply_goto_inputs(&in);
     return in;
 }
 
@@ -430,6 +492,17 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     s_snapshot.spot_lock_state = out->telemetry.spot_lock_substate;
     s_snapshot.spot_lock_err_m = out->telemetry.spot_lock_err_m;
     s_snapshot.spot_lock_bearing_deg10 = out->telemetry.spot_lock_bearing_deg10;
+    /* App-driven goto telemetry: substate/err/bearing/arrived from this cycle's
+     * loop outputs (non-zero only while SRC_GOTO owns the target); the target is
+     * the staged external point; app_link_fresh mirrors the comms watchdog
+     * evaluated this cycle (in->comms_fresh). Ints/bools only. */
+    s_snapshot.goto_state = out->telemetry.goto_substate;
+    s_snapshot.goto_target_lat_e7 = s_goto_lat_e7;
+    s_snapshot.goto_target_lon_e7 = s_goto_lon_e7;
+    s_snapshot.goto_err_m = out->telemetry.goto_err_m;
+    s_snapshot.goto_bearing_deg10 = out->telemetry.goto_bearing_deg10;
+    s_snapshot.goto_arrived = out->telemetry.goto_arrived;
+    s_snapshot.app_link_fresh = in->comms_fresh;
 }
 
 /* Drive the RGB status LED for this cycle from the pure pattern (Unit 11). */
@@ -444,6 +517,13 @@ static void run_one_cycle(void)
 
     loop_inputs in = read_inputs();
     loop_outputs out = loop_step(&in, &s_validity_cfg, &s_params, &s_loop);
+
+    /* Goto latch lifecycle: a manual override or CH3 preempt inside ARMED clears
+     * the engage latch for good (no auto-resume). goto_cancel is handled in
+     * apply_goto_events; a link/GPS pause deliberately leaves the latch set. */
+    if (out.goto_latch_clear) {
+        s_goto_engage = false;
+    }
 
     pwm_out_write_us(PWM_OUT_ESC, out.esc_us);
     pwm_out_write_us(PWM_OUT_SERVO, out.servo_us);

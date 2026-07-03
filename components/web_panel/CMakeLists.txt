@@ -1,8 +1,10 @@
 idf_component_register(
     SRCS "src/api_contract.c"
          "src/command_parse.c"
+         "src/goto_target.c"
          "src/params_decide.c"
          "src/wifi_ap_config.c"
+         "src/ws_client_set.c"
          "src/wifi_ap.c"
          "src/params_json.c"
          "src/params_api.c"

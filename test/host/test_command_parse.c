@@ -102,6 +102,41 @@ static void test_trim_save_maps_to_trim_save(void)
     TEST_ASSERT_FALSE(r.trim_right);
 }
 
+static void test_goto_maps_to_goto_request(void)
+{
+    command_parse_result r = command_parse("goto");
+
+    /* Keyword-only: flag set, lat/lon left for the HTTP layer to inject. */
+    TEST_ASSERT_TRUE(r.ok);
+    TEST_ASSERT_TRUE(r.goto_request);
+    TEST_ASSERT_FALSE(r.goto_cancel_request);
+    TEST_ASSERT_EQUAL_INT32(0, r.goto_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(0, r.goto_lon_e7);
+}
+
+static void test_goto_cancel_maps_to_goto_cancel_request(void)
+{
+    command_parse_result r = command_parse("goto_cancel");
+
+    TEST_ASSERT_TRUE(r.ok);
+    TEST_ASSERT_TRUE(r.goto_cancel_request);
+    TEST_ASSERT_FALSE(r.goto_request);
+}
+
+static void test_hold_maps_to_hold_request(void)
+{
+    command_parse_result r = command_parse("hold");
+
+    /* Keyword-only anchor: hold_request set, no goto flags, no lat/lon payload
+     * (the loop grabs the boat's own fix; nothing is injected here). */
+    TEST_ASSERT_TRUE(r.ok);
+    TEST_ASSERT_TRUE(r.hold_request);
+    TEST_ASSERT_FALSE(r.goto_request);
+    TEST_ASSERT_FALSE(r.goto_cancel_request);
+    TEST_ASSERT_EQUAL_INT32(0, r.goto_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(0, r.goto_lon_e7);
+}
+
 /* --- Unknown / malformed keywords are rejected (no substring match) --- */
 
 static void test_unknown_keyword_is_rejected(void)
@@ -148,6 +183,9 @@ void run_command_parse_tests(void)
     RUN_TEST(test_trim_left_maps_to_trim_left);
     RUN_TEST(test_trim_right_maps_to_trim_right);
     RUN_TEST(test_trim_save_maps_to_trim_save);
+    RUN_TEST(test_goto_maps_to_goto_request);
+    RUN_TEST(test_goto_cancel_maps_to_goto_cancel_request);
+    RUN_TEST(test_hold_maps_to_hold_request);
     RUN_TEST(test_unknown_keyword_is_rejected);
     RUN_TEST(test_substring_of_known_keyword_is_rejected);
     RUN_TEST(test_null_keyword_is_rejected);

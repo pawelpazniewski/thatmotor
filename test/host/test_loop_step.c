@@ -632,6 +632,360 @@ static void test_spot_lock_output_passes_hard_clamp(void)
     TEST_ASSERT_EQUAL_UINT32(2000U, out.esc_us);
 }
 
+/* ---- App-driven goto integration (Unit 4) ---- */
+
+/* Build a goto-ready input set: neutral sticks, CH3 OFF, fresh GPS fix + IMU
+ * heading at the given position, fresh app link, and the external goto target
+ * latched. The goto point is passed explicitly so a test can prove ref tracks
+ * the external target (not a here-and-now snapshot). */
+static loop_inputs goto_inputs_at(int32_t gps_lat, int32_t gps_lon,
+                                  uint16_t heading, int32_t goto_lat,
+                                  int32_t goto_lon)
+{
+    loop_inputs in = make_inputs(1500U, 1500U, false); /* neutral sticks */
+    in.gps_fresh = true;
+    in.gps_has_fix = true;
+    in.imu_ok = true;
+    in.gps_lat_e7 = gps_lat;
+    in.gps_lon_e7 = gps_lon;
+    in.imu_heading_deg10 = heading;
+    in.goto_engage = true;
+    in.goto_lat_e7 = goto_lat;
+    in.goto_lon_e7 = goto_lon;
+    in.comms_fresh = true;
+    return in;
+}
+
+/* Reach ARMED, then engage app goto with the target at the origin (0,0) and the
+ * boat at (gps_lat, 0). Returns with SRC_GOTO ACTIVE, ref latched to the goto
+ * point. */
+static void arm_and_engage_goto(loop_state *state, const loop_validity_cfg *cfg,
+                                const settings_params *params, int32_t gps_lat,
+                                uint16_t heading)
+{
+    arm(state, cfg, params);
+    loop_inputs enter = goto_inputs_at(gps_lat, 0, heading, 0, 0);
+    loop_outputs out = loop_step(&enter, cfg, params, state);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, state->spot_lock.target_source);
+}
+
+static void test_goto_engages_and_computes_throttle(void)
+{
+    /* Arrange: armed, app goto engaged to the origin, boat drifted ~22 m north
+     * with the bow pointing south (toward the target) -> forward thrust. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    /* Act: hold the drifted position for a while. */
+    loop_inputs hold =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    loop_outputs out = {0};
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&hold, &cfg, &params, &state);
+    }
+
+    /* Assert: ARMED + SRC_GOTO ACTIVE, ref is the EXTERNAL goto point (0,0) not a
+     * here-and-now snapshot, ESC computed above neutral (a neutral stick would be
+     * neutral), and the latch is NOT cleared while holding cleanly. */
+    TEST_ASSERT_EQUAL(SM_STATE_ARMED, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, state.spot_lock.target_source);
+    TEST_ASSERT_EQUAL_INT32(0, state.spot_lock.ref_lat_e7);
+    TEST_ASSERT_EQUAL_INT32(0, state.spot_lock.ref_lon_e7);
+    TEST_ASSERT_GREATER_THAN_UINT32(ESC_NEUTRAL_US, out.esc_us);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_err_m > 0U);
+    TEST_ASSERT_FALSE(out.goto_latch_clear);
+}
+
+static void test_goto_rc_loss_failsafe_wins(void)
+{
+    /* Arrange: goto ACTIVE and drifted (it WOULD command forward thrust). */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    uint32_t center = ((uint32_t)params.servo_min_us +
+                       (uint32_t)params.servo_max_us) / 2U;
+
+    /* Act: RC dies (stale edges) while GPS still shows a drifted, fresh, aligned
+     * fix and the app link is fresh. sm_step latches FAILSAFE; goto must NOT run
+     * outside ARMED. */
+    loop_inputs bad =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    bad.ch1 = stale_sample(1500U);
+    bad.ch2 = stale_sample(1500U);
+    loop_outputs out = {0};
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&bad, &cfg, &params, &state);
+    }
+
+    /* Assert: FAILSAFE wins -> ESC neutral + servo center, goto forced OFF. If
+     * the override ran outside ARMED the ESC would be forward (oracle power). */
+    TEST_ASSERT_EQUAL(SM_STATE_FAILSAFE, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
+    TEST_ASSERT_EQUAL_UINT32(center, out.servo_us);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+}
+
+static void test_goto_persists_on_comms_loss_latch_retained(void)
+{
+    /* R3 inversion at the integration level: an app link loss must NOT pause an
+     * app-driven goto. With GPS/IMU fresh and the bow aligned toward the target, a
+     * stale link keeps SRC_GOTO ACTIVE and driving forward (ESC > neutral), the
+     * latch is retained on the same external target, and the boat stays ARMED - the
+     * RC is the sole failsafe. Oracle for the comms-gate flip: were the link still
+     * a pause input, this would be PAUSED with a neutral ESC and this ESC>neutral
+     * assertion would go red. Rewritten from the former pause test - the
+     * PAUSE-on-link-loss functionality is removed per R3, a spec change not a
+     * weakened assertion. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    /* Act: app link goes stale (comms_fresh=false); GPS/IMU still fresh. */
+    loop_inputs stale =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    stale.comms_fresh = false;
+
+    loop_outputs first = loop_step(&stale, &cfg, &params, &state);
+    /* The link loss must NOT clear the goto latch (RC is the only thing that does). */
+    TEST_ASSERT_FALSE(first.goto_latch_clear);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, state.spot_lock.target_source);
+
+    loop_outputs out = {0};
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&stale, &cfg, &params, &state);
+    }
+
+    /* Assert: still ARMED + SRC_GOTO ACTIVE, driving forward on the retained
+     * external target (0,0); the latch survives the stale link. */
+    TEST_ASSERT_EQUAL(SM_STATE_ARMED, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, state.spot_lock.target_source);
+    TEST_ASSERT_EQUAL_INT32(0, state.spot_lock.ref_lat_e7);
+    TEST_ASSERT_GREATER_THAN_UINT32(ESC_NEUTRAL_US, out.esc_us);
+    TEST_ASSERT_FALSE(out.goto_latch_clear);
+}
+
+static void test_goto_pauses_on_gps_loss_latch_retained(void)
+{
+    /* The SRC_GOTO pause on a sensor (not link) loss: losing the fresh GPS fix
+     * pauses goto (neutral+center) but keeps the latch, symmetric to the link
+     * pause. Oracle: PAUSED not OFF, latch not cleared. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    uint32_t center = ((uint32_t)params.servo_min_us +
+                       (uint32_t)params.servo_max_us) / 2U;
+
+    /* Act: GPS freshness lost while the app link stays fresh. */
+    loop_inputs paused =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    paused.gps_fresh = false;
+    loop_outputs out = {0};
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&paused, &cfg, &params, &state);
+    }
+
+    /* Assert: PAUSED, relaxed actuators, latch retained, target kept. */
+    TEST_ASSERT_EQUAL(SM_STATE_ARMED, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_PAUSED, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
+    TEST_ASSERT_EQUAL_UINT32(center, out.servo_us);
+    TEST_ASSERT_FALSE(out.goto_latch_clear);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, state.spot_lock.target_source);
+}
+
+static void test_goto_stick_override_clears_latch(void)
+{
+    /* Arrange: goto ACTIVE and drifted (forward thrust engaged). */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    /* Act: operator nudges the steering stick off-center (throttle neutral). */
+    loop_inputs nudge =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    nudge.ch1 = sample_at(2000U); /* hard steer */
+    loop_outputs out = loop_step(&nudge, &cfg, &params, &state);
+
+    /* Assert: goto aborts to OFF AND the latch is cleared (no auto-resume when
+     * the stick returns to neutral). Oracle: if the latch survived the override,
+     * goto_latch_clear would be false. */
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_TRUE(out.goto_latch_clear);
+}
+
+static void test_goto_ch3_preempt_holds_here_and_clears_latch(void)
+{
+    /* Arrange: goto ACTIVE to the origin while drifted north. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    /* Act: CH3 flicks on (rising edge) -> physical hold "here and now" preempts
+     * goto. */
+    loop_inputs ch3 =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    ch3.spot_lock_switch_on = true;
+    ch3.spot_lock_switch_edge_on = true;
+    loop_outputs out = loop_step(&ch3, &cfg, &params, &state);
+
+    /* Assert: source is now SRC_HOLD snapshotting the CURRENT position (not the
+     * goto target at the origin), and the goto latch is cleared. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_HOLD, state.spot_lock.target_source);
+    TEST_ASSERT_EQUAL_INT32(DRIFT_NORTH_LAT_E7, state.spot_lock.ref_lat_e7);
+    TEST_ASSERT_TRUE(out.goto_latch_clear);
+}
+
+static void test_goto_cancel_returns_off(void)
+{
+    /* Arrange: goto ACTIVE. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    /* Act: goto_cancel clears the engage latch upstream (control_loop's
+     * apply_goto_events), so this cycle goto_engage is false. */
+    loop_inputs cancel =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    cancel.goto_engage = false;
+    loop_outputs out = loop_step(&cancel, &cfg, &params, &state);
+
+    /* Assert: goto drops to OFF (manual stick tracking resumes). Oracle: without
+     * honouring the cleared latch it would stay ACTIVE. */
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+}
+
+static void test_goto_output_passes_hard_clamp(void)
+{
+    /* SI-3 on the integrated goto path: an out-of-band forward endpoint plus a
+     * 100% thrust cap would map a saturated command to 3000 us; the hard clamp
+     * MUST snap the ESC to the 2000 us window ceiling. */
+    settings_params params;
+    settings_load_defaults(&params);
+    params.spot_lock_max_throttle_pct = 100U;
+    params.esc_forward_max_us = 3000U; /* out of the [1000,2000] window */
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, 50000, HEADING_SOUTH_DEG10);
+
+    /* Act: large drift + bow aligned -> command saturates to the cap. */
+    loop_inputs hold =
+        goto_inputs_at(50000, 0, HEADING_SOUTH_DEG10, 0, 0);
+    loop_outputs out = {0};
+    for (int i = 0; i < 800; i++) {
+        out = loop_step(&hold, &cfg, &params, &state);
+    }
+
+    /* Assert: clamped to the hard ceiling, never above it. */
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(2000U, out.esc_us);
+    TEST_ASSERT_EQUAL_UINT32(2000U, out.esc_us);
+}
+
+static void test_goto_telemetry_populates_while_active(void)
+{
+    /* Telemetry contract for the app (R8): while SRC_GOTO ACTIVE the goto view
+     * mirrors the spot-lock outputs -- goto_substate=active, err/bearing non-zero
+     * and equal to the spot_lock_* fields, arrived=false outside the deadband. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    loop_inputs hold =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    loop_outputs out = loop_step(&hold, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.goto_substate);
+    TEST_ASSERT_TRUE(out.telemetry.goto_err_m > 0U);
+    TEST_ASSERT_EQUAL_UINT16(out.telemetry.spot_lock_err_m,
+                             out.telemetry.goto_err_m);
+    TEST_ASSERT_EQUAL_UINT16(out.telemetry.spot_lock_bearing_deg10,
+                             out.telemetry.goto_bearing_deg10);
+    TEST_ASSERT_FALSE(out.telemetry.goto_arrived);
+}
+
+static void test_goto_telemetry_arrived_within_deadband(void)
+{
+    /* Boat sitting on the goto target (0,0): err <= deadband -> arrived=true while
+     * still ACTIVE (dojście = hold). Oracle: a drifted boat reads arrived=false. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, 0, HEADING_SOUTH_DEG10);
+
+    loop_inputs on_target = goto_inputs_at(0, 0, HEADING_SOUTH_DEG10, 0, 0);
+    loop_outputs out = loop_step(&on_target, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.goto_substate);
+    TEST_ASSERT_TRUE(out.telemetry.goto_arrived);
+}
+
+static void test_goto_telemetry_reads_off_under_ch3_hold(void)
+{
+    /* Oracle power: a CH3 hold (SRC_HOLD) drives the SAME spot-lock engine, but the
+     * goto view MUST read off/zero so the app cannot mistake a physical hold for
+     * goto. spot_lock_substate is ACTIVE, goto_substate is OFF and goto_err_m 0. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    loop_inputs ch3 =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    ch3.spot_lock_switch_on = true;
+    ch3.spot_lock_switch_edge_on = true;
+    loop_outputs out = loop_step(&ch3, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_HOLD, state.spot_lock.target_source);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.goto_substate);
+    TEST_ASSERT_EQUAL_UINT16(0U, out.telemetry.goto_err_m);
+    TEST_ASSERT_FALSE(out.telemetry.goto_arrived);
+}
+
 void run_loop_step_tests(void)
 {
     RUN_TEST(test_disarmed_full_throttle_outputs_neutral_esc);
@@ -654,4 +1008,15 @@ void run_loop_step_tests(void)
     RUN_TEST(test_spot_lock_stick_aborts_immediately);
     RUN_TEST(test_spot_lock_pauses_on_gps_loss);
     RUN_TEST(test_spot_lock_output_passes_hard_clamp);
+    RUN_TEST(test_goto_engages_and_computes_throttle);
+    RUN_TEST(test_goto_rc_loss_failsafe_wins);
+    RUN_TEST(test_goto_persists_on_comms_loss_latch_retained);
+    RUN_TEST(test_goto_pauses_on_gps_loss_latch_retained);
+    RUN_TEST(test_goto_stick_override_clears_latch);
+    RUN_TEST(test_goto_ch3_preempt_holds_here_and_clears_latch);
+    RUN_TEST(test_goto_cancel_returns_off);
+    RUN_TEST(test_goto_output_passes_hard_clamp);
+    RUN_TEST(test_goto_telemetry_populates_while_active);
+    RUN_TEST(test_goto_telemetry_arrived_within_deadband);
+    RUN_TEST(test_goto_telemetry_reads_off_under_ch3_hold);
 }

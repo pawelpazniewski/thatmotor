@@ -1,0 +1,15 @@
+# Generowany przez XcodeGen z project.yml — regenerowalny, nie commitujemy
+KayakMotor.xcodeproj/
+
+# Artefakty budowania
+build/
+DerivedData/
+*.xcuserstate
+
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Offline vector basemap (188 MB) — regenerowalny przez scripts/generate-basemap.sh
+KayakMotor/Resources/*.pmtiles

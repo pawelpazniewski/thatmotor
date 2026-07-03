@@ -33,6 +33,7 @@ static spot_lock_outputs make_idle_output(spot_lock_substate substate)
         .servo_cmd = 0,
         .err_m = 0,
         .bearing_deg10 = 0,
+        .arrived = false,
     };
     return out;
 }
@@ -76,6 +77,25 @@ static int32_t throttle_command(float dist_m, const spot_lock_params *p)
     return clamp_i32((int32_t)lround(cmd), 0, (int32_t)p->max_throttle_norm);
 }
 
+/* goto cruise-decel: full goto_cruise_norm beyond the slowdown distance, then
+ * linear down to the deadband edge. Chain bypasses its power limit for
+ * spot-lock/goto, so the cap is applied here (goto_cruise_norm = max_throttle_fwd_pct). */
+static int32_t goto_throttle_command(float dist_m, const spot_lock_params *p)
+{
+    int32_t cruise = (int32_t)p->goto_cruise_norm;
+    float deadband = (float)p->deadband_m;
+    float slowdown = (float)p->goto_slowdown_distance_m;
+    if (dist_m >= slowdown) {
+        return cruise;
+    }
+    float span = slowdown - deadband;
+    if (span <= 0.0f) {          /* misconfig: slowdown <= deadband -> no ramp zone */
+        return cruise;
+    }
+    float frac = (dist_m - deadband) / span;   /* 0 at deadband edge, 1 at slowdown */
+    return clamp_i32((int32_t)lround((double)cruise * (double)frac), 0, cruise);
+}
+
 /** Full ACTIVE-state regulator: deadband, +/-60 gate, P servo + P throttle. */
 static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
                                                const spot_lock_params *p,
@@ -91,7 +111,9 @@ static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
         .servo_cmd = 0,
         .err_m = dist_to_err_m(dist),
         .bearing_deg10 = geo_bearing_deg10(off),
+        .arrived = false,
     };
+    out.arrived = (out.err_m <= p->deadband_m);
 
     /* Deadband: inside the hold radius we relax (no heading hold, R6). */
     if (dist <= (float)p->deadband_m) {
@@ -105,41 +127,98 @@ static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
      * pure steering and crawls round in one gentle turn. */
     if (err_deg10 >= -SPOT_LOCK_HEADING_GATE_DEG10 &&
         err_deg10 <= SPOT_LOCK_HEADING_GATE_DEG10) {
-        out.throttle_cmd = throttle_command(dist, p);
+        out.throttle_cmd = (st->target_source == SPOT_LOCK_SRC_GOTO)
+                               ? goto_throttle_command(dist, p)
+                               : throttle_command(dist, p);
     }
     return out;
+}
+
+/** Force the OFF sub-state with no engaged source. */
+static spot_lock_outputs make_off(spot_lock_state *st)
+{
+    st->substate = SPOT_LOCK_OFF;
+    st->target_source = SPOT_LOCK_SRC_NONE;
+    return make_idle_output(SPOT_LOCK_OFF);
+}
+
+/**
+ * Pause-or-run for an engaged source with the target already set in st.
+ * The fix is re-validated each cycle: a stale fix can still be inside the
+ * freshness window (seed-fresh), so holding on a lost fix is unsafe. Pausing is
+ * driven SOLELY by the SENSOR degradation domain (GPS/IMU): the app link never
+ * pauses a latched intent (R3/R4), the RC (stick override / CH3 preempt / disarm)
+ * is the sole failsafe.
+ */
+static spot_lock_outputs hold_or_pause(const spot_lock_inputs *in,
+                                       const spot_lock_params *p,
+                                       spot_lock_state *st)
+{
+    bool sensors_lost = !in->gps_fresh || !in->imu_ok || !in->gps_has_fix;
+    if (sensors_lost) {
+        st->substate = SPOT_LOCK_PAUSED;
+        return make_idle_output(SPOT_LOCK_PAUSED);
+    }
+    st->substate = SPOT_LOCK_ACTIVE;
+    return compute_active_output(in, p, st);
+}
+
+/**
+ * CH3 hold branch (SRC_HOLD). On transition into hold - a fresh CH3 request or
+ * preempting a running goto - snapshot "here and now" as the target; this
+ * requires a rising edge and a real, fresh fix. A held CH3 keeps its existing
+ * snapshot. Link freshness never gates SRC_HOLD.
+ */
+static spot_lock_outputs run_ch3_hold(const spot_lock_inputs *in,
+                                      const spot_lock_params *p,
+                                      spot_lock_state *st)
+{
+    if (st->target_source != SPOT_LOCK_SRC_HOLD) {
+        if (!in->ch3_edge_on || !in->gps_fresh || !in->gps_has_fix) {
+            return make_off(st);
+        }
+        st->ref_lat_e7 = in->lat_e7;
+        st->ref_lon_e7 = in->lon_e7;
+        st->target_source = SPOT_LOCK_SRC_HOLD;
+    }
+    return hold_or_pause(in, p, st);
 }
 
 spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
                                  const spot_lock_params *p,
                                  spot_lock_state *st)
 {
-    /* 1. Abort to OFF from any sub-state: disarm, CH3 off, or stick moved (R4). */
-    if (!in->armed || !in->ch3_on || !in->sticks_neutral) {
-        st->substate = SPOT_LOCK_OFF;
-        return make_idle_output(SPOT_LOCK_OFF);
+    /* 1. Manual override / disarm wins unconditionally (R4/R6). */
+    if (!in->armed || !in->sticks_neutral) {
+        return make_off(st);
     }
 
-    /* 2. Entry OFF -> ACTIVE: rising edge with a real, fresh fix (R1/R3). The
-     * real-fix gate prevents the seed-fresh window from arming without a fix. */
-    if (st->substate == SPOT_LOCK_OFF) {
-        if (!in->ch3_edge_on || !in->gps_fresh || !in->gps_has_fix) {
-            return make_idle_output(SPOT_LOCK_OFF);
+    /* 2. CH3 physically preempts goto: hold "here and now" (R4). */
+    if (in->ch3_on) {
+        return run_ch3_hold(in, p, st);
+    }
+
+    /* 3. App-driven goto: a latched external target that PERSISTS across app-link
+     * loss (R3/R4) - a stale link never pauses it (hold_or_pause has no link gate);
+     * the RC (stick override / CH3 preempt / disarm) is the sole failsafe. comms_fresh
+     * is NOT a link failsafe here: it is the retarget-in-flight / re-latch gate.
+     * The reference is (re)latched from the input ONLY on entry into SRC_GOTO or
+     * while the link is fresh (R1: a fresh link tracks a newly commanded goto
+     * point). While the link is stale (comms_fresh == false) the core RETAINS the
+     * last good target and does NOT overwrite ref_* from the input - so retention
+     * across a link gap is a property of this pure core, not an implicit contract
+     * on the upstream latch (guards null-island if the loop zeroes goto_* on link
+     * loss). Only the SENSOR domain (GPS/IMU, in hold_or_pause) pauses goto. */
+    if (in->goto_engage) {
+        bool is_entering_goto = st->target_source != SPOT_LOCK_SRC_GOTO;
+        if (is_entering_goto || in->comms_fresh) {
+            st->ref_lat_e7 = in->goto_lat_e7;
+            st->ref_lon_e7 = in->goto_lon_e7;
         }
-        st->ref_lat_e7 = in->lat_e7;
-        st->ref_lon_e7 = in->lon_e7;
-        st->substate = SPOT_LOCK_ACTIVE;
+        st->target_source = SPOT_LOCK_SRC_GOTO;
+        return hold_or_pause(in, p, st);
     }
 
-    /* 3. Pause on sensor loss; retain the target and relax actuators (R5). The
-     * fix is re-validated each cycle: a stale fix can still be inside the
-     * freshness window (seed-fresh), so holding on a lost fix is unsafe. */
-    if (!in->gps_fresh || !in->imu_ok || !in->gps_has_fix) {
-        st->substate = SPOT_LOCK_PAUSED;
-        return make_idle_output(SPOT_LOCK_PAUSED);
-    }
-
-    /* 4. Hold position. */
-    st->substate = SPOT_LOCK_ACTIVE;
-    return compute_active_output(in, p, st);
+    /* 4. No source engaged. */
+    return make_off(st);
 }

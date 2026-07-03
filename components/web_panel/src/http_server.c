@@ -8,6 +8,7 @@
 #include "control_loop.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "goto_target.h"
 #include "params_api.h"
 #include "params_json.h"
 #include "ws_telemetry.h"
@@ -149,6 +150,28 @@ static bool extract_command(const char *body, char *out, size_t out_size)
     return ok;
 }
 
+/* Extract the goto target (lat_e7, lon_e7) from a {"cmd":"goto",...} body via
+ * cJSON. Both fields must be present as numbers; returns true and fills out on
+ * success, false on any shape failure OR an out-of-range/non-finite value. This
+ * is a thin cJSON adapter: the accept/reject + narrow-to-int32 decision is the
+ * pure, host-tested goto_target_from_double, which validates in the double
+ * domain BEFORE casting (guards against INF/NaN UB and modulo-2^32 wrap bypass
+ * on values outside int32). */
+static bool extract_goto_target(const char *body, int32_t *lat_e7, int32_t *lon_e7)
+{
+    cJSON *root = cJSON_Parse(body);
+    if (root == NULL) {
+        return false;
+    }
+    const cJSON *lat = cJSON_GetObjectItemCaseSensitive(root, "lat_e7");
+    const cJSON *lon = cJSON_GetObjectItemCaseSensitive(root, "lon_e7");
+    bool ok = cJSON_IsNumber(lat) && cJSON_IsNumber(lon) &&
+              goto_target_from_double(lat->valuedouble, lon->valuedouble, lat_e7,
+                                      lon_e7);
+    cJSON_Delete(root);
+    return ok;
+}
+
 /* Convert the pure parser's fields into the loop's UI event struct. */
 static control_loop_ui_events to_ui_events(const command_parse_result *parsed)
 {
@@ -162,6 +185,11 @@ static control_loop_ui_events to_ui_events(const command_parse_result *parsed)
         .trim_left = parsed->trim_left,
         .trim_right = parsed->trim_right,
         .trim_save = parsed->trim_save,
+        .goto_request = parsed->goto_request,
+        .goto_cancel_request = parsed->goto_cancel_request,
+        .hold_request = parsed->hold_request,
+        .goto_lat_e7 = parsed->goto_lat_e7,
+        .goto_lon_e7 = parsed->goto_lon_e7,
         .calib_event = parsed->calib_event,
     };
     return ev;
@@ -187,6 +215,14 @@ static esp_err_t post_command(httpd_req_t *req)
     command_parse_result parsed = command_parse(cmd);
     if (!parsed.ok) {
         return send_command_error(req, API_ERR_VALIDATION_FAILED);
+    }
+    /* goto carries a lat/lon payload: extract it and reject an out-of-range or
+     * malformed target at the boundary (400), before it reaches the loop. */
+    if (parsed.goto_request) {
+        if (!extract_goto_target(reqbuf, &parsed.goto_lat_e7, &parsed.goto_lon_e7) ||
+            !goto_target_valid(parsed.goto_lat_e7, parsed.goto_lon_e7)) {
+            return send_command_error(req, API_ERR_VALIDATION_FAILED);
+        }
     }
     control_loop_ui_events ev = to_ui_events(&parsed);
     control_loop_post_ui_events(&ev);
@@ -232,6 +268,22 @@ esp_err_t http_server_start(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 8;
     config.lru_purge_enable = true;
+    /* Socket budget, set explicitly so the telemetry client cap and the httpd
+     * socket cap stay coupled. Binding constraint:
+     *   WS_TELEMETRY_MAX_CLIENTS(4) + HTTP_headroom(3) <= 7 <= CONFIG_LWIP_MAX_SOCKETS(10) - 3
+     * The +3 headroom leaves room for concurrent HTTP requests (panel load,
+     * /api/params) so lru_purge never evicts an active WS telemetry client. If
+     * WS_TELEMETRY_MAX_CLIENTS grows, revisit this number deliberately. */
+    config.max_open_sockets = 7;
+    /* The default httpd task stack (4096 B) is too small for our handlers: the
+     * POST /api/params path alone puts reqbuf[HTTP_REQ_MAX] + body[HTTP_BODY_MAX]
+     * on the stack and then nests params_api's data[PARAMS_JSON_MAX] (~3.7 KB of
+     * buffers together), on top of the httpd framework frames and cJSON parse/
+     * print recursion. That overflowed the 4 KB stack -> FreeRTOS canary abort ->
+     * RTC_SW_CPU_RST on every panel reload (the motor disarmed on the reboot).
+     * Size the task to hold the worst-case handler buffers plus headroom so the
+     * bound grows automatically as PARAMS_JSON_SERIALIZE_MAX gains fields. */
+    config.stack_size = 2U * HTTP_BODY_MAX + PARAMS_JSON_SERIALIZE_MAX + 4096U;
 
     esp_err_t err = httpd_start(&server, &config);
     if (err != ESP_OK) {

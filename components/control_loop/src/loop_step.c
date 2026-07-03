@@ -45,6 +45,7 @@ void loop_state_init(loop_state *state, const settings_params *params,
     state->servo_slew = servo_center_us(params);
     state->calib_step = CALIB_STEP_NEUTRAL;
     state->spot_lock.substate = SPOT_LOCK_OFF;
+    state->spot_lock.target_source = SPOT_LOCK_SRC_NONE;
     state->spot_lock.ref_lat_e7 = 0;
     state->spot_lock.ref_lon_e7 = 0;
 }
@@ -210,6 +211,10 @@ static spot_lock_inputs build_spot_lock_inputs(const loop_inputs *in,
         .lat_e7 = in->gps_lat_e7,
         .lon_e7 = in->gps_lon_e7,
         .heading_deg10 = in->imu_heading_deg10,
+        .goto_engage = in->goto_engage,
+        .goto_lat_e7 = in->goto_lat_e7,
+        .goto_lon_e7 = in->goto_lon_e7,
+        .comms_fresh = in->comms_fresh,
     };
     return sli;
 }
@@ -226,6 +231,10 @@ static spot_lock_params build_spot_lock_params(const settings_params *params)
                        SPOT_LOCK_PERCENT_FULL),
         .throttle_gain_per_m = params->spot_lock_throttle_gain,
         .servo_gain_per_deg = params->spot_lock_servo_gain,
+        .goto_slowdown_distance_m = params->goto_slowdown_distance_m,
+        .goto_cruise_norm = (uint16_t)((int32_t)SPOT_LOCK_CMD_FULL_SCALE *
+                            (int32_t)params->max_throttle_fwd_pct /
+                            SPOT_LOCK_PERCENT_FULL),
     };
     return slp;
 }
@@ -256,6 +265,23 @@ static bool spot_lock_drives(spot_lock_substate s)
     return s == SPOT_LOCK_ACTIVE || s == SPOT_LOCK_PAUSED;
 }
 
+/* Whether the goto engage latch must be permanently cleared this cycle. Only
+ * a manual stick override (!sticks_neutral) or a physical CH3 preempt (ch3_on)
+ * ends goto for good: neither may auto-resume when the condition clears (a fresh
+ * app goto command is required, R4/R6). A link/GPS/IMU pause deliberately does
+ * NOT clear the latch, so a transient loss resumes the same target. Evaluated
+ * ONLY in the ARMED branch (goto never runs outside ARMED), so a FAILSAFE never
+ * clears the latch through this path. */
+static bool goto_latch_should_clear(const loop_inputs *in,
+                                    const settings_params *params,
+                                    sm_state resolved_state)
+{
+    if (resolved_state != SM_STATE_ARMED || !in->goto_engage) {
+        return false;
+    }
+    return !sticks_within_neutral(in, params) || in->spot_lock_switch_on;
+}
+
 loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
                        const settings_params *params, loop_state *state)
 {
@@ -268,6 +294,7 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
      * (or any non-ARMED) result bypasses it entirely and failsafe always wins. */
     spot_lock_outputs sl = resolve_spot_lock(in, params, sm.state,
                                              &state->spot_lock);
+    bool goto_latch_clear = goto_latch_should_clear(in, params, sm.state);
     bool drive_spot_lock = spot_lock_drives(sl.substate);
     throttle_target_mode throttle_mode =
         drive_spot_lock ? THROTTLE_TARGET_SPOT_LOCK : sm.throttle_target;
@@ -281,6 +308,13 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
                                          sl.servo_cmd, params, &state->servo_slew);
     state->state = next_state;
 
+    /* Goto-specific telemetry: report the spot-lock outputs under the goto view
+     * ONLY when SRC_GOTO owns the target this cycle. A CH3 hold (SRC_HOLD) or OFF
+     * reads goto as off/zero, so the app cannot mistake a physical hold for goto.
+     * spot_lock_step keeps target_source current in state->spot_lock. */
+    bool goto_owns_target =
+        state->spot_lock.target_source == SPOT_LOCK_SRC_GOTO;
+
     loop_outputs out = {
         .esc_us = esc_us,
         .servo_us = servo_us,
@@ -293,7 +327,13 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
             .spot_lock_substate = (uint8_t)sl.substate,
             .spot_lock_err_m = sl.err_m,
             .spot_lock_bearing_deg10 = sl.bearing_deg10,
+            .goto_substate =
+                goto_owns_target ? (uint8_t)sl.substate : (uint8_t)SPOT_LOCK_OFF,
+            .goto_err_m = goto_owns_target ? sl.err_m : 0U,
+            .goto_bearing_deg10 = goto_owns_target ? sl.bearing_deg10 : 0U,
+            .goto_arrived = goto_owns_target && sl.arrived,
         },
+        .goto_latch_clear = goto_latch_clear,
     };
     return out;
 }
