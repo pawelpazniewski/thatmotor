@@ -43,6 +43,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/web_panel/src/params_decide.c
     ${REPO_ROOT}/components/web_panel/src/wifi_ap_config.c
     ${REPO_ROOT}/components/web_panel/src/ws_client_set.c
+    ${REPO_ROOT}/components/web_panel/src/telemetry_json.c
     ${REPO_ROOT}/components/led_status/src/led_pattern.c
     ${REPO_ROOT}/components/gps/src/nmea_parse.c
     ${REPO_ROOT}/components/gps/src/sensor_freshness.c
@@ -101,6 +102,7 @@ set(TEST_SOURCES
     test_params_decide.c
     test_wifi_ap_config.c
     test_ws_client_set.c
+    test_telemetry_json.c
     test_led_pattern.c
     test_nmea_parse.c
     test_sensor_freshness.c
