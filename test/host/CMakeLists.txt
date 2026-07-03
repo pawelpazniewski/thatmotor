@@ -51,6 +51,7 @@ set(PURE_SOURCES
     ${REPO_ROOT}/components/blackbox/src/blackbox_record.c
     ${REPO_ROOT}/components/blackbox/src/blackbox_ring.c
     ${REPO_ROOT}/components/blackbox/src/blackbox_sampler.c
+    ${REPO_ROOT}/components/blackbox/src/blackbox_reason.c
     ${REPO_ROOT}/components/blackbox/src/blackbox_resume.c
     ${REPO_ROOT}/components/blackbox/src/blackbox_csv.c
     ${REPO_ROOT}/components/blackbox/src/params_cmd.c
@@ -110,6 +111,7 @@ set(TEST_SOURCES
     test_blackbox_record.c
     test_blackbox_ring.c
     test_blackbox_sampler.c
+    test_blackbox_reason.c
     test_blackbox_resume.c
     test_blackbox_csv.c
     test_params_cmd.c

@@ -25,6 +25,10 @@ static blackbox_sample make_sample(void)
     blackbox_sample s;
     s.t_ms = 1234567U;
     s.substate = 1U; /* active */
+    s.sm_state = 2U; /* e.g. ARMED */
+    s.source = 2U;   /* SRC_GOTO */
+    s.end_reason = 0U;
+    s.arm_reason = 3U;
     s.err_m = 42U;
     s.bearing_deg10 = 1800U;
     s.heading_deg10 = 2705U;
@@ -32,12 +36,20 @@ static blackbox_sample make_sample(void)
     s.esc_us = 1555U;
     s.ch1_us = 1490U;
     s.ch2_us = 1510U;
+    s.ch3_us = 1900U;
+    s.ch4_us = 1100U;
     s.lat_e7 = -524987654; /* negative (southern) to exercise signed round-trip */
     s.lon_e7 = 213456789;
     s.sats = 11U;
     s.speed_cms = 275U;
+    s.imu_calib = 3U;
     s.gps_fix = true;
     s.imu_ok = true;
+    s.rc_valid = true;
+    s.gps_fresh = true;
+    s.link_fresh = true;
+    s.goto_owns = true;
+    s.arrived = false;
     return s;
 }
 
@@ -75,6 +87,10 @@ static void test_sample_round_trip_preserves_every_field(void)
     TEST_ASSERT_EQUAL_INT(BLACKBOX_REC_OK, decoded);
     TEST_ASSERT_EQUAL_UINT32(in.t_ms, out.t_ms);
     TEST_ASSERT_EQUAL_UINT8(in.substate, out.substate);
+    TEST_ASSERT_EQUAL_UINT8(in.sm_state, out.sm_state);
+    TEST_ASSERT_EQUAL_UINT8(in.source, out.source);
+    TEST_ASSERT_EQUAL_UINT8(in.end_reason, out.end_reason);
+    TEST_ASSERT_EQUAL_UINT8(in.arm_reason, out.arm_reason);
     TEST_ASSERT_EQUAL_UINT16(in.err_m, out.err_m);
     TEST_ASSERT_EQUAL_UINT16(in.bearing_deg10, out.bearing_deg10);
     TEST_ASSERT_EQUAL_UINT16(in.heading_deg10, out.heading_deg10);
@@ -82,20 +98,33 @@ static void test_sample_round_trip_preserves_every_field(void)
     TEST_ASSERT_EQUAL_UINT16(in.esc_us, out.esc_us);
     TEST_ASSERT_EQUAL_UINT16(in.ch1_us, out.ch1_us);
     TEST_ASSERT_EQUAL_UINT16(in.ch2_us, out.ch2_us);
+    TEST_ASSERT_EQUAL_UINT16(in.ch3_us, out.ch3_us);
+    TEST_ASSERT_EQUAL_UINT16(in.ch4_us, out.ch4_us);
     TEST_ASSERT_EQUAL_INT32(in.lat_e7, out.lat_e7);
     TEST_ASSERT_EQUAL_INT32(in.lon_e7, out.lon_e7);
     TEST_ASSERT_EQUAL_UINT8(in.sats, out.sats);
     TEST_ASSERT_EQUAL_UINT16(in.speed_cms, out.speed_cms);
+    TEST_ASSERT_EQUAL_UINT8(in.imu_calib, out.imu_calib);
     TEST_ASSERT_EQUAL_INT(in.gps_fix, out.gps_fix);
     TEST_ASSERT_EQUAL_INT(in.imu_ok, out.imu_ok);
+    TEST_ASSERT_EQUAL_INT(in.rc_valid, out.rc_valid);
+    TEST_ASSERT_EQUAL_INT(in.gps_fresh, out.gps_fresh);
+    TEST_ASSERT_EQUAL_INT(in.link_fresh, out.link_fresh);
+    TEST_ASSERT_EQUAL_INT(in.goto_owns, out.goto_owns);
+    TEST_ASSERT_EQUAL_INT(in.arrived, out.arrived);
 }
 
 static void test_sample_flags_false_round_trip(void)
 {
-    /* Arrange: both flag bits clear must decode back to false, not true. */
+    /* Arrange: every packed flag clear must decode back to false, not true. */
     blackbox_sample in = make_sample();
     in.gps_fix = false;
     in.imu_ok = false;
+    in.rc_valid = false;
+    in.gps_fresh = false;
+    in.link_fresh = false;
+    in.goto_owns = false;
+    in.arrived = false;
     uint8_t buf[BLACKBOX_RECORD_SIZE];
 
     /* Act */
@@ -106,6 +135,11 @@ static void test_sample_flags_false_round_trip(void)
     /* Assert */
     TEST_ASSERT_FALSE(out.gps_fix);
     TEST_ASSERT_FALSE(out.imu_ok);
+    TEST_ASSERT_FALSE(out.rc_valid);
+    TEST_ASSERT_FALSE(out.gps_fresh);
+    TEST_ASSERT_FALSE(out.link_fresh);
+    TEST_ASSERT_FALSE(out.goto_owns);
+    TEST_ASSERT_FALSE(out.arrived);
 }
 
 static void test_header_round_trip_preserves_every_field(void)

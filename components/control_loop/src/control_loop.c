@@ -477,6 +477,7 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     gps_state g;
     gps_get_state(&g);
     s_snapshot.gps_fix = g.fix;
+    s_snapshot.gps_fresh = g.fresh;
     s_snapshot.gps_sats = g.sats;
     s_snapshot.gps_lat_e7 = g.lat_e7;
     s_snapshot.gps_lon_e7 = g.lon_e7;

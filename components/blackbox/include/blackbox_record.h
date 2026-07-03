@@ -36,18 +36,48 @@ extern "C" {
  * record, and a zeroed slot (0x0000) is not either. */
 #define BLACKBOX_RECORD_MAGIC 0xB10CU
 
-/* Wire schema version of the record layout. Bump on any field/layout change. */
-#define BLACKBOX_RECORD_SCHEMA 1U
+/* Wire schema version of the record layout. Bump on any field/layout change.
+ * v2 (rich logging): adds sm_state, source, end_reason, arm_reason, ch3/ch4,
+ * imu_calib and extra flag bits to the sample; the CSV reader depends on it. */
+#define BLACKBOX_RECORD_SCHEMA 2U
 
 /* Sample flag bits packed into the sample `flags` byte. */
 #define BLACKBOX_FLAG_GPS_FIX 0x01U
 #define BLACKBOX_FLAG_IMU_OK 0x02U
+#define BLACKBOX_FLAG_RC_VALID 0x04U   /* debounced RC validity this cycle */
+#define BLACKBOX_FLAG_GPS_FRESH 0x08U  /* GPS freshness window still open */
+#define BLACKBOX_FLAG_LINK_FRESH 0x10U /* app/comms link fresh (goto watchdog) */
+#define BLACKBOX_FLAG_GOTO_OWNS 0x20U  /* SRC_GOTO owns the target this cycle */
+#define BLACKBOX_FLAG_ARRIVED 0x40U    /* within the deadband (arrived) */
 
 /** Record discriminator stored in the `type` framing byte. */
 typedef enum {
     BLACKBOX_TYPE_SAMPLE = 1, /* per-cycle spot-lock telemetry sample */
     BLACKBOX_TYPE_HEADER = 2, /* session header (id + target + settings) */
 } blackbox_record_type;
+
+/**
+ * Why the recorded session left non-OFF, stored in a sample's `end_reason`.
+ * BLACKBOX_END_NONE on every normal in-session sample; a specific reason is set
+ * on the tail samples the recorder writes just after spot-lock/goto drops to
+ * OFF, so a drift after the operator takes over is attributable in the log.
+ */
+typedef enum {
+    BLACKBOX_END_NONE = 0,        /* normal in-session sample (still holding) */
+    BLACKBOX_END_DISARM = 1,      /* operator disarmed */
+    BLACKBOX_END_STICK = 2,       /* manual stick override (either stick moved) */
+    BLACKBOX_END_CH3 = 3,         /* CH3 preempt / spot-lock switch off */
+    BLACKBOX_END_GOTO_CANCEL = 4, /* app cancelled goto */
+    BLACKBOX_END_FAILSAFE = 5,    /* RC-loss failsafe */
+    BLACKBOX_END_OTHER = 6,       /* dropped to OFF for an undetermined reason */
+} blackbox_end_reason;
+
+/** Which source owned the hold target for this sample. */
+typedef enum {
+    BLACKBOX_SRC_NONE = 0, /* nothing engaged */
+    BLACKBOX_SRC_HOLD = 1, /* CH3 "here and now" hold (RC-owned) */
+    BLACKBOX_SRC_GOTO = 2, /* app goto target */
+} blackbox_source;
 
 /**
  * Decode / classify outcome. Distinguishes the failure modes so the reader can
@@ -69,6 +99,10 @@ typedef enum {
 typedef struct {
     uint32_t t_ms;             /* milliseconds since session start */
     uint8_t substate;          /* spot_lock_substate (0=off,1=active,2=paused) */
+    uint8_t sm_state;          /* control state (sm_state enum: DISARMED/ARMED/…) */
+    uint8_t source;            /* blackbox_source: who owns the target */
+    uint8_t end_reason;        /* blackbox_end_reason; NONE while the session runs */
+    uint8_t arm_reason;        /* sm_arm_reason: why arming is blocked */
     uint16_t err_m;            /* position error to target, metres */
     uint16_t bearing_deg10;    /* bearing to target, degrees * 10 */
     uint16_t heading_deg10;    /* boat heading, degrees * 10 */
@@ -76,12 +110,20 @@ typedef struct {
     uint16_t esc_us;           /* commanded ESC pulse, microseconds */
     uint16_t ch1_us;           /* steering stick raw pulse, microseconds */
     uint16_t ch2_us;           /* throttle stick raw pulse, microseconds */
+    uint16_t ch3_us;           /* CH3 spot-lock switch raw pulse, microseconds */
+    uint16_t ch4_us;           /* CH4 mode switch raw pulse, microseconds */
     int32_t lat_e7;            /* latitude, degrees * 1e7 (negative for S) */
     int32_t lon_e7;            /* longitude, degrees * 1e7 (negative for W) */
     uint8_t sats;              /* satellites used in the fix */
     uint16_t speed_cms;        /* ground speed, cm/s */
+    uint8_t imu_calib;         /* compass calibration status, 0..3 */
     bool gps_fix;              /* GPS has a usable fix (packed into flags) */
     bool imu_ok;               /* fresh IMU heading is flowing (packed) */
+    bool rc_valid;             /* debounced RC validity (packed) */
+    bool gps_fresh;            /* GPS freshness window open (packed) */
+    bool link_fresh;           /* app/comms link fresh (packed) */
+    bool goto_owns;            /* SRC_GOTO owns the target this cycle (packed) */
+    bool arrived;              /* within the deadband (packed) */
 } blackbox_sample;
 
 /** Session header: id, hold target and the active regulator settings. */

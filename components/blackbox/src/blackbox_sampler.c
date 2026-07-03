@@ -7,20 +7,58 @@ static bool is_off(uint8_t substate)
     return substate == BLACKBOX_SPOT_LOCK_OFF;
 }
 
-blackbox_sampler_action blackbox_sampler_decide(uint8_t prev_substate,
-                                                uint8_t cur_substate)
+/* |a - b| >= thr without signed intermediates (both are uint16 telemetry). */
+static bool abs_diff_ge(uint16_t a, uint16_t b, uint16_t thr)
 {
-    bool prev_off = is_off(prev_substate);
-    bool cur_off = is_off(cur_substate);
+    uint16_t d = (a > b) ? (uint16_t)(a - b) : (uint16_t)(b - a);
+    return d >= thr;
+}
 
-    if (prev_off && !cur_off) {
-        return BLACKBOX_ACTION_START_SESSION;
-    }
+/* Inside a running session, write a sample only when something changed: a
+ * discrete event, the error moved by at least the delta, or the idle heartbeat
+ * elapsed. Otherwise skip this tick (adaptive rate). */
+static bool sample_due(const blackbox_sampler_in *in)
+{
+    return in->event ||
+           abs_diff_ge(in->err_m, in->last_err_m, BLACKBOX_ERR_DELTA_M) ||
+           in->ms_since_sample >= BLACKBOX_HEARTBEAT_MS;
+}
+
+blackbox_sampler_out blackbox_sampler_step(const blackbox_sampler_in *in)
+{
+    blackbox_sampler_out out = {BLACKBOX_ACTION_IDLE, in->off_tail_left};
+    bool prev_off = is_off(in->prev_substate);
+    bool cur_off = is_off(in->cur_substate);
+
     if (!prev_off && !cur_off) {
-        return BLACKBOX_ACTION_SAMPLE;
+        /* Running session: adaptive-rate in-session sample. A substate change
+         * within the session (ACTIVE<->PAUSED) is always worth a sample,
+         * independent of whatever event flag the recorder passed. */
+        bool substate_changed = in->prev_substate != in->cur_substate;
+        out.action = (substate_changed || sample_due(in))
+                         ? BLACKBOX_ACTION_SAMPLE
+                         : BLACKBOX_ACTION_IDLE;
+        return out;
+    }
+    if (prev_off && !cur_off) {
+        /* Leading edge of a session: header + first sample. Clear any stale
+         * tail owed from a previous session that never fully drained. */
+        out.action = BLACKBOX_ACTION_START_SESSION;
+        out.off_tail_left = 0U;
+        return out;
     }
     if (!prev_off && cur_off) {
-        return BLACKBOX_ACTION_CLOSE_SESSION;
+        /* The hold just dropped to OFF: record the drop plus a bounded tail so
+         * the post-override drift and its reason are captured. This tick spends
+         * one of the tail budget. */
+        out.action = BLACKBOX_ACTION_SAMPLE_TAIL;
+        out.off_tail_left = BLACKBOX_OFF_TAIL_SAMPLES - 1U;
+        return out;
     }
-    return BLACKBOX_ACTION_IDLE;
+    /* OFF -> OFF: keep draining the tail budget, then fall silent. */
+    if (in->off_tail_left > 0U) {
+        out.action = BLACKBOX_ACTION_SAMPLE_TAIL;
+        out.off_tail_left = (uint16_t)(in->off_tail_left - 1U);
+    }
+    return out;
 }

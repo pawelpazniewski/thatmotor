@@ -46,6 +46,7 @@ typedef struct {
     /* GPS (diagnostic, OUTSIDE failsafe): copied from the GPS task's shared
      * state for the panel. Never feeds rc_valid/loop_step/sm_inputs. */
     bool gps_fix;              /* GPS has a usable fix */
+    bool gps_fresh;            /* GPS freshness window still open (fresh != fix) */
     uint8_t gps_sats;          /* satellites used in the fix */
     int32_t gps_lat_e7;        /* latitude in degrees * 1e7 (negative for S) */
     int32_t gps_lon_e7;        /* longitude in degrees * 1e7 (negative for W) */

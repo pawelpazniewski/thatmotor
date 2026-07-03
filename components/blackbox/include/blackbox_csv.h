@@ -19,18 +19,20 @@ extern "C" {
  * the analysis side keys off them. Changing either is a schema change.
  *
  * Column order (header == row):
- *   session_id, t_ms, substate, err_m, bearing_deg10, heading_deg10, servo_us,
- *   esc_us, ch1_us, ch2_us, lat_e7, lon_e7, sats, speed_cms, gps_fix, imu_ok,
- *   target_lat_e7, target_lon_e7, deadband_m, max_throttle_pct, throttle_gain,
- *   servo_gain
+ *   session_id, t_ms, substate, sm_state, source, end_reason, arm_reason, err_m,
+ *   bearing_deg10, heading_deg10, servo_us, esc_us, ch1_us, ch2_us, ch3_us,
+ *   ch4_us, lat_e7, lon_e7, sats, speed_cms, imu_calib, gps_fix, imu_ok,
+ *   rc_valid, gps_fresh, link_fresh, goto_owns, arrived, target_lat_e7,
+ *   target_lon_e7, deadband_m, max_throttle_pct, throttle_gain, servo_gain
  */
 
 /* Number of CSV columns emitted (header fields == row fields). */
-#define BLACKBOX_CSV_COLUMN_COUNT 22U
+#define BLACKBOX_CSV_COLUMN_COUNT 34U
 
-/* Safe minimum buffer size for one header or data line (excluding newline). A
- * fully-populated row of the 22 columns above fits comfortably under this. */
-#define BLACKBOX_CSV_LINE_MAX 224U
+/* Safe minimum buffer size for one header or data line (excluding newline). The
+ * header names line is the longest; a fully-populated 34-column row fits well
+ * under this. Grows with the column set -- re-check when adding columns. */
+#define BLACKBOX_CSV_LINE_MAX 512U
 
 /**
  * Write the fixed CSV header line (no trailing newline) into out.
