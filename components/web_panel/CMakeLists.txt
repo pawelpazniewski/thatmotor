@@ -5,6 +5,7 @@ idf_component_register(
          "src/params_decide.c"
          "src/wifi_ap_config.c"
          "src/ws_client_set.c"
+         "src/telemetry_json.c"
          "src/wifi_ap.c"
          "src/params_json.c"
          "src/params_api.c"
