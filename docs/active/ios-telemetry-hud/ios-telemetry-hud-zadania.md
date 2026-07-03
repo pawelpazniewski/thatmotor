@@ -77,22 +77,31 @@ Testy (`ios/KayakKit/Tests/KayakContractTests/TelemetryDisplayTests.swift`):
 - [x] Test: `isTrimEnabled(.disarmed)`==true; pozostałe stany==false (mutacja „zawsze true" failuje)
 
 Weryfikacja:
-- [ ] Weryfikacja: testy zielone; widoki mogą składać stringi bez własnej logiki
+- [x] Weryfikacja: testy zielone (65/65); widoki mogą składać stringi bez własnej logiki
+
+### Do poprawy po review fazy 3
+
+Review: `review-faza-3.md` — severity gate: ✅ CZYSTE (P1=0, P2=0, P3=3). E2E: N/A (czyste funkcje, brak UI/przeglądarki).
+Format `"%d m · %.0f°"` zweryfikowany 1:1 z `ControlBarView.swift:41`; brak importu SwiftUI (Pure⊥HAL); wszystkie case'y `SystemState`/`LinkState` pokryte w switchach; moc wyroczni testów potwierdzona (mutacje bramek/konwersji failują). Nity opcjonalne — do rozważenia przy Unit 4/5.
+
+- [ ] 🟡 [nit] **TelemetryDisplayTests.swift** — `modeLabel` nie asertuje priorytetu goto>spot-lock przy OBU aktywnych; mutacja odwracająca priorytet nie zostałaby złapana. Dodać case `modeLabel(spotLock:.active, goto:.active) == "Goto"`.
+- [ ] 🟡 [nit] **TelemetryDisplayTests.swift** — `stateLabel` pokrywa 3/6 stanów; brak asercji dla `.escCalibration`/`.deploy`/`.unknown`→"—". Domknąć pętlą jak w `trimEnabledOnlyDisarmed`.
+- [ ] 🟡 [nit] **TelemetryDisplay.swift** — literały konwersji `10.0`/`100.0` inline w `targetText`/`speedHeadingText` (spójne z `Telemetry.swift`); ewentualne nazwanie stałej jeśli powtórzy się w widokach Unit 4/5.
 
 ---
 
 ## Unit 4: Kompaktowy HUD w lewym górnym rogu (M) — R1, R2, R3, R6, R7
 
 Implementacja:
-- [ ] `HudView` czyta `TelemetryStore`, składa 4 wiersze przez `TelemetryDisplay` (`ios/KayakMotor/Features/Telemetry/HudView.swift`)
-- [ ] Styl panelu: `panelBackground` + `hairline` + shadow + `rounded(...).monospacedDigit()`
-- [ ] Dodaj nakładkę do ZStack w `RootView` z `.frame(..., alignment:.topLeading)` + padding; offset pod chipem połączenia
-- [ ] `onTapGesture` HUD → `showTelemetryDetail = true`; respektuj reduced-motion
+- [x] `HudView` czyta `TelemetryStore`, składa 4 wiersze przez `TelemetryDisplay` (`ios/KayakMotor/Features/Telemetry/HudView.swift`)
+- [x] Styl panelu: `panelBackground` + `hairline` + shadow + `rounded(...).monospacedDigit()`
+- [x] Dodaj nakładkę do ZStack w `RootView` z `.frame(..., alignment:.topLeading)` + padding; offset pod chipem połączenia
+- [x] `onTapGesture` HUD → `showTelemetryDetail = true`; respektuj reduced-motion (placeholder `.sheet` z detentami [.medium,.large] — treść w Unit 5)
 
 Testy:
-- [ ] Test (E2E): start → HUD w lewym górnym rogu; środek mapy czysty; brak kolizji z zoom/waypoints
-- [ ] Test (E2E): tap HUD → wysuwa się dolny arkusz; swipe w dół → chowa
-- [ ] Test (E2E): rozłącz link → wartości HUD → „—", nie zamrażają
+- [ ] Test (E2E): start → HUD w lewym górnym rogu; środek mapy czysty; brak kolizji z zoom/waypoints  _(wymaga symulatora — do weryfikacji ręcznej)_
+- [ ] Test (E2E): tap HUD → wysuwa się dolny arkusz; swipe w dół → chowa  _(wymaga symulatora — do weryfikacji ręcznej)_
+- [ ] Test (E2E): rozłącz link → wartości HUD → „—", nie zamrażają  _(wymaga symulatora — do weryfikacji ręcznej)_
 
 Weryfikacja:
 - [ ] Weryfikacja: HUD renderuje 4 wiersze z żywej telemetrii; myślniki przy stale; tap otwiera arkusz; środek mapy niezasłonięty

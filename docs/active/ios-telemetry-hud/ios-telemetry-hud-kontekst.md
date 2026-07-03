@@ -1,7 +1,7 @@
 # Kontekst: Telemetria w aplikacji iOS — HUD + arkusz + trim serwa
 
 Branch: `feature/ios-telemetry-hud`
-Ostatnia aktualizacja: 2026-07-03
+Ostatnia aktualizacja: 2026-07-03 (Unit 4)
 
 ## Postęp
 - **Unit 1 (ukończony 2026-07-03):** `Telemetry` rozszerzony o `imuCalib`, `spotLockErrM`,
@@ -31,6 +31,37 @@ Ostatnia aktualizacja: 2026-07-03
   `isTrimEnabled(state:)` (TYLKO `.disarmed`). Test-first: 9 testów w
   `TelemetryDisplayTests.swift` z mocą wyroczni (stale→myślnik, gpsQuality bez fixu,
   isTrimEnabled tylko DISARMED, isFresh tylko connected). `swift test`: 65/65 zielone.
+  **Review fazy 3 (2026-07-03):** severity gate ✅ CZYSTE (P1=0, P2=0, P3=3). E2E N/A
+  (czyste funkcje, brak UI). Format `"%d m · %.0f°"` potwierdzony 1:1 z `ControlBarView.swift:41`;
+  brak importu SwiftUI (Pure⊥HAL); switche wyczerpujące dla `SystemState`(6) i `LinkState`(4);
+  priorytet `modeLabel` goto>spot-lock>off poprawny. Moc wyroczni testów zweryfikowana —
+  mutacje bramek staleness/trim/fresh oraz konwersji deg10/cm-s failują (wejścia POZA wyjściem,
+  450≠45, 150≠1.5). Trzy nity opcjonalne: (1) test priorytetu modeLabel przy obu aktywnych,
+  (2) domknięcie stateLabel na wszystkie stany, (3) inline literały konwersji. Ryzyka R1/R4/R6
+  domknięte na poziomie logiki prezentacji. Raport: `review-faza-3.md`.
+- **Unit 4 (ukończony 2026-07-03):** nowy widok
+  `ios/KayakMotor/Features/Telemetry/HudView.swift` — kompaktowy HUD (lewy górny róg).
+  Bierze `TelemetryStore` (`latest`/`linkState`) i składa 4 wiersze WYŁĄCZNIE przez
+  `TelemetryDisplay` (widok cienki, zero logiki formatu): (1) jakość GPS, (2) stan systemu,
+  (3) tryb + dystans/namiar z aktywnego źródła (goto gdy `gotoState` ≠ off/unknown, inaczej
+  spot-lock, inaczej sam tryb bez celu), (4) prędkość + kurs. Staleness (R6): jeden predykat
+  `isFresh = TelemetryDisplay.isFresh(linkState)`; każdy wiersz guardowany na `latest != nil`
+  i przepuszczony przez `displayed(_:isFresh:)` → myślnik przy stale/braku ramki (bez
+  zamrażania). Styl reużyty z SunlightTheme: `panelBackground` w
+  `RoundedRectangle(cornerRadius: cornerRadius)`, border `hairline`, shadow `.black.opacity(0.25)`,
+  `rounded(14,.semibold).monospacedDigit()`; ikony w kolorze `brand`. Cały panel tapowalny
+  (`contentShape(Rectangle())` + `onTapGesture`), `accessibilityElement(.combine)` +
+  `.isButton`. Brak animacji wartości (reduced-motion respektowany biernie). W `RootView`:
+  nowy `@State showTelemetryDetail`, osobna nakładka ZStack `hudOverlay`
+  (`.frame(maxWidth/maxHeight:.infinity, alignment:.topLeading)` + `.padding(.horizontal,14)`
+  + `.padding(.top,56)` — poniżej chipu połączenia, nie koliduje z waypointami/zoomem),
+  oraz placeholder `.sheet(isPresented:$showTelemetryDetail)` z `Text("Szczegóły — Unit 5")`
+  i `.presentationDetents([.medium,.large])` (pełny arkusz + trim dojdą w Unit 5).
+  Walidacja: app target `xcodebuild ... build` → BUILD SUCCEEDED (po `xcodegen generate` —
+  nowy plik wchodzi do targetu przez glob; `.xcodeproj` jest gitignore, nie commitowany);
+  `swift test` KayakKit: 65/65 zielone (bez zmian — Unit 4 to sam widok). Scenariusze [E2E]
+  (HUD w rogu, tap→arkusz, rozłącz→myślniki) wymagają symulatora — pozostawione do
+  weryfikacji ręcznej/review, NIE odznaczone.
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-07-03-ios-telemetry-hud-requirements.md
