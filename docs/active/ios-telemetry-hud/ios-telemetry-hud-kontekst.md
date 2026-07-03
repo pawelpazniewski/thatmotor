@@ -9,6 +9,18 @@ Ostatnia aktualizacja: 2026-07-03
   `spot_lock_bearing_deg10`, `servo_trim_us`, dekodowane `decodeIfPresent(...) ?? 0`).
   Dodano computed `spotLockBearingDegrees`. 3 nowe testy dekodowania (pełna ramka,
   brak pól = 0, ujemny trim). `swift test` w KayakKit: 53/53 zielone.
+  **Review fazy 1 (2026-07-03):** severity gate ✅ CZYSTE (P1=0, P2=0, P3=1). E2E N/A
+  (natywny iOS, brak UI w Unit 1). Klucze JSON zweryfikowane 1:1 wobec firmware
+  `components/web_panel/src/telemetry_json.c`; `servo_trim_us` emitowane `%d` (ze znakiem)
+  — dekodowanie do `Int` poprawne. Ryzyko R1 (rozjazd kluczy) zamknięte. Jedyny nit:
+  brak testu granicznego bearing 3600. Raport: `review-faza-1.md`.
+- **Unit 2 (ukończony 2026-07-03):** `Command` rozszerzony o `.trimLeft/.trimRight/.trimSave`
+  (mapowanie `cmdName` → `trim_left/trim_right/trim_save`); `httpBody()` niezmieniony —
+  lat/lon bramkowane wyłącznie w gałęzi `.goto`, więc trim serializuje samo `{"cmd":...}`.
+  W `AppModel` dodano `trimLeft()/trimRight()/saveTrim()` wzorcem `disarm()` (try/catch z
+  `ApiError` → `lastActionMessage`). 3 nowe testy w `HTTPCommandRequestTests` (trim_left,
+  trim_save, brak lat/lon dla całej trójki + `count==1`). `swift test`: 56/56 zielone.
+  App target (`KayakMotor.xcodeproj`) buduje się na iphonesimulator (BUILD SUCCEEDED).
 
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-07-03-ios-telemetry-hud-requirements.md

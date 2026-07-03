@@ -8,6 +8,9 @@ public enum Command: Equatable, Sendable {
     case gotoCancel
     case disarm
     case hold
+    case trimLeft
+    case trimRight
+    case trimSave
 
     private var cmdName: String {
         switch self {
@@ -15,6 +18,9 @@ public enum Command: Equatable, Sendable {
         case .gotoCancel: return "goto_cancel"
         case .disarm: return "disarm"
         case .hold: return "hold"
+        case .trimLeft: return "trim_left"
+        case .trimRight: return "trim_right"
+        case .trimSave: return "trim_save"
         }
     }
 

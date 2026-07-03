@@ -145,6 +145,35 @@ final class AppModel {
         }
     }
 
+    // MARK: - Trim serwa (R5) — regulacja neutrala, firmware honoruje tylko DISARMED
+
+    /// Przesuń neutral serwa w lewo o krok firmware (`trim_left`).
+    func trimLeft() {
+        Task {
+            do { try await commands.send(.trimLeft); lastActionMessage = "Trim w lewo" }
+            catch let apiError as ApiError { lastActionMessage = apiError.message }
+            catch { lastActionMessage = "Trim: błąd wysłania" }
+        }
+    }
+
+    /// Przesuń neutral serwa w prawo o krok firmware (`trim_right`).
+    func trimRight() {
+        Task {
+            do { try await commands.send(.trimRight); lastActionMessage = "Trim w prawo" }
+            catch let apiError as ApiError { lastActionMessage = apiError.message }
+            catch { lastActionMessage = "Trim: błąd wysłania" }
+        }
+    }
+
+    /// Zapisz bieżący neutral serwa do NVS (`trim_save`) — przeżywa restart.
+    func saveTrim() {
+        Task {
+            do { try await commands.send(.trimSave); lastActionMessage = "Trim zapisany" }
+            catch let apiError as ApiError { lastActionMessage = apiError.message }
+            catch { lastActionMessage = "Zapis trimu: błąd wysłania" }
+        }
+    }
+
     /// Spot-lock — kotwica w bieżącej pozycji łodzi. Wysyła `hold`; firmware łapie
     /// własny fix i latchuje `SRC_GOTO`. Intencję zapamiętujemy lokalnie (etykieta).
     func requestSpotLock() {

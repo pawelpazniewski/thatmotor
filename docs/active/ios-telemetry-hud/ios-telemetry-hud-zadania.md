@@ -21,21 +21,28 @@ Testy (`ios/KayakKit/Tests/KayakContractTests/TelemetryDecodingTests.swift`):
 - [x] Test: `servo_trim_us` ujemny (−140) → znak zachowany
 
 Weryfikacja:
-- [ ] Weryfikacja: `swift test` w KayakKit zielony; nowe pola dostępne na `Telemetry`
+- [x] Weryfikacja: `swift test` w KayakKit zielony (53/53); nowe pola dostępne na `Telemetry`
+
+### Do poprawy po review fazy 1
+
+Review: `review-faza-1.md` — severity gate: ✅ CZYSTE (P1=0, P2=0, P3=1). E2E: N/A (natywny iOS).
+Klucze JSON zweryfikowane 1:1 wobec firmware `telemetry_json.c`, znak `servo_trim_us` OK.
+
+- [ ] 🟡 [nit] **TelemetryDecodingTests.swift** — brak testu granicznego dla `spot_lock_bearing_deg10` na krawędzi zakresu (3600 → 360.0°/0); opcjonalne, do rozważenia przy Unit 3.
 
 ---
 
 ## Unit 2: Słownik komend trimu + AppModel (S) — R5
 
 Implementacja:
-- [ ] Dodaj `case trimLeft, trimRight, trimSave` do `Command` + mapowanie `cmdName` (`ios/KayakKit/Sources/KayakContract/Command.swift`)
-- [ ] `httpBody()` dla trimu bez `lat_e7`/`lon_e7`
-- [ ] Metody `trimLeft()/trimRight()/saveTrim()` w `AppModel` wzorcem `disarm()` (`ios/KayakMotor/App/AppModel.swift`)
+- [x] Dodaj `case trimLeft, trimRight, trimSave` do `Command` + mapowanie `cmdName` (`ios/KayakKit/Sources/KayakContract/Command.swift`)
+- [x] `httpBody()` dla trimu bez `lat_e7`/`lon_e7`
+- [x] Metody `trimLeft()/trimRight()/saveTrim()` w `AppModel` wzorcem `disarm()` (`ios/KayakMotor/App/AppModel.swift`)
 
 Testy (`ios/KayakKit/Tests/KayakContractTests/HTTPCommandRequestTests.swift`):
-- [ ] Test: `Command.trimLeft.httpBody()` → `{"cmd":"trim_left"}`
-- [ ] Test: `Command.trimSave.httpBody()` → `{"cmd":"trim_save"}`
-- [ ] Test: żaden trim-command nie dokłada `lat_e7`/`lon_e7`
+- [x] Test: `Command.trimLeft.httpBody()` → `{"cmd":"trim_left"}`
+- [x] Test: `Command.trimSave.httpBody()` → `{"cmd":"trim_save"}`
+- [x] Test: żaden trim-command nie dokłada `lat_e7`/`lon_e7`
 
 Weryfikacja:
 - [ ] Weryfikacja: testy zielone; `AppModel` eksponuje trzy metody trimu
