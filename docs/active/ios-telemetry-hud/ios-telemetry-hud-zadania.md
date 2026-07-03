@@ -10,15 +10,15 @@ Legenda: `Test:` = scenariusz testowy, `Weryfikacja:` = kryterium ukończenia. N
 ## Unit 1: Rozszerz kontrakt telemetrii (S) — R1, R4, R5
 
 Implementacja:
-- [ ] Dodaj pola `imuCalib`, `spotLockErrM`, `spotLockBearingDeg10`, `servoTrimUs` do `Telemetry` (`ios/KayakKit/Sources/KayakContract/Telemetry.swift`)
-- [ ] Dodaj klucze `imu_calib`, `spot_lock_err_m`, `spot_lock_bearing_deg10`, `servo_trim_us` do `CodingKeys`
-- [ ] W `init(from:)` dekoduj nowe pola przez `decodeIfPresent(...) ?? 0`
-- [ ] Dodaj computed `spotLockBearingDegrees` (i ew. `servoTrimMicroseconds`)
+- [x] Dodaj pola `imuCalib`, `spotLockErrM`, `spotLockBearingDeg10`, `servoTrimUs` do `Telemetry` (`ios/KayakKit/Sources/KayakContract/Telemetry.swift`)
+- [x] Dodaj klucze `imu_calib`, `spot_lock_err_m`, `spot_lock_bearing_deg10`, `servo_trim_us` do `CodingKeys`
+- [x] W `init(from:)` dekoduj nowe pola przez `decodeIfPresent(...) ?? 0`
+- [x] Dodaj computed `spotLockBearingDegrees` (i ew. `servoTrimMicroseconds`)
 
 Testy (`ios/KayakKit/Tests/KayakContractTests/TelemetryDecodingTests.swift`):
-- [ ] Test: pełna ramka z nowymi polami → wszystkie zdekodowane (wartości ≠ 0)
-- [ ] Test: ramka BEZ nowych pól (stary firmware) → dekoder nie rzuca, nowe pola = 0
-- [ ] Test: `servo_trim_us` ujemny (−140) → znak zachowany
+- [x] Test: pełna ramka z nowymi polami → wszystkie zdekodowane (wartości ≠ 0)
+- [x] Test: ramka BEZ nowych pól (stary firmware) → dekoder nie rzuca, nowe pola = 0
+- [x] Test: `servo_trim_us` ujemny (−140) → znak zachowany
 
 Weryfikacja:
 - [ ] Weryfikacja: `swift test` w KayakKit zielony; nowe pola dostępne na `Telemetry`

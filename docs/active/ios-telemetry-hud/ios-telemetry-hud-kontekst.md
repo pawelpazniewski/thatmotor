@@ -3,6 +3,13 @@
 Branch: `feature/ios-telemetry-hud`
 Ostatnia aktualizacja: 2026-07-03
 
+## Postęp
+- **Unit 1 (ukończony 2026-07-03):** `Telemetry` rozszerzony o `imuCalib`, `spotLockErrM`,
+  `spotLockBearingDeg10`, `servoTrimUs` (klucze `imu_calib`, `spot_lock_err_m`,
+  `spot_lock_bearing_deg10`, `servo_trim_us`, dekodowane `decodeIfPresent(...) ?? 0`).
+  Dodano computed `spotLockBearingDegrees`. 3 nowe testy dekodowania (pełna ramka,
+  brak pól = 0, ujemny trim). `swift test` w KayakKit: 53/53 zielone.
+
 ## Źródła
 - Requirements doc: docs/dev-brainstorms/2026-07-03-ios-telemetry-hud-requirements.md
 - Plan techniczny: docs/plans/2026-07-03-002-feat-ios-telemetry-hud-plan.md
