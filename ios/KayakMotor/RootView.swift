@@ -6,6 +6,7 @@ import KayakContract
 struct RootView: View {
     @State private var model = AppModel()
     @State private var showWaypoints = false
+    @State private var showTelemetryDetail = false
     @State private var camera = MapCameraController()
     @State private var showSplash = true
     @Environment(\.scenePhase) private var scenePhase
@@ -21,6 +22,7 @@ struct RootView: View {
             .ignoresSafeArea()
 
             topBar
+            hudOverlay
             zoomControls
             console
 
@@ -46,6 +48,10 @@ struct RootView: View {
                 onSelect: { model.selectWaypoint($0) },
                 onDelete: { model.deleteWaypoint($0) }
             )
+        }
+        .sheet(isPresented: $showTelemetryDetail) {
+            TelemetryDetailView(store: model.telemetry, model: model)
+                .presentationDetents([.medium, .large])
         }
         .task {
             model.start()
@@ -96,6 +102,18 @@ struct RootView: View {
         .background(SunlightTheme.panelBackground, in: Capsule())
         .overlay(Capsule().strokeBorder(SunlightTheme.hairline))
         .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+    }
+
+    // MARK: - HUD telemetrii (lewy górny róg)
+
+    /// Osobna nakładka ZStack `.topLeading` PONIŻEJ chipu połączenia (górny środek),
+    /// żeby nie kolidowała z chipem, waypointami (góra-prawo) ani zoomem (prawa
+    /// krawędź). Środek mapy pozostaje czysty. Tap → dolny arkusz szczegółów.
+    private var hudOverlay: some View {
+        HudView(store: model.telemetry) { showTelemetryDetail = true }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.horizontal, 14)
+            .padding(.top, 56)
     }
 
     // MARK: - Kontrolki mapy (prawa krawędź)

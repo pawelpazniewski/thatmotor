@@ -21,4 +21,30 @@ struct HTTPCommandRequestTests {
         let req = try HTTPCommandRequest.make(.gotoCancel, baseURL: URL(string: "http://127.0.0.1:8080")!)
         #expect(req.url?.absoluteString == "http://127.0.0.1:8080/api/command")
     }
+
+    @Test("trim_left → body {\"cmd\":\"trim_left\"}, bez lat/lon")
+    func trimLeftBody() throws {
+        let body = try Command.trimLeft.httpBody()
+        let obj = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+        #expect(obj["cmd"] as? String == "trim_left")
+        #expect(obj["lat_e7"] == nil)
+        #expect(obj["lon_e7"] == nil)
+    }
+
+    @Test("trim_save → body {\"cmd\":\"trim_save\"}")
+    func trimSaveBody() throws {
+        let body = try Command.trimSave.httpBody()
+        let obj = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+        #expect(obj["cmd"] as? String == "trim_save")
+    }
+
+    @Test("żaden trim-command nie dokłada lat_e7/lon_e7")
+    func trimCommandsCarryNoCoordinates() throws {
+        for command in [Command.trimLeft, .trimRight, .trimSave] {
+            let obj = try JSONSerialization.jsonObject(with: command.httpBody()) as! [String: Any]
+            #expect(obj["lat_e7"] == nil)
+            #expect(obj["lon_e7"] == nil)
+            #expect(obj.count == 1)
+        }
+    }
 }

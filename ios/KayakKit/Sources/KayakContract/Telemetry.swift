@@ -50,6 +50,10 @@ public struct Telemetry: Decodable, Sendable {
     public let gotoArrived: Bool
     public let appLinkFresh: Bool
     public let spotLockState: HoldState
+    public let imuCalib: Int
+    public let spotLockErrM: Int
+    public let spotLockBearingDeg10: Int
+    public let servoTrimUs: Int
 
     private enum CodingKeys: String, CodingKey {
         case state, arm_reason, rc_valid, gps_fix, gps_sats
@@ -58,6 +62,7 @@ public struct Telemetry: Decodable, Sendable {
         case goto_state, goto_target_lat_e7, goto_target_lon_e7
         case goto_err_m, goto_bearing_deg10, goto_arrived
         case app_link_fresh, spot_lock_state
+        case imu_calib, spot_lock_err_m, spot_lock_bearing_deg10, servo_trim_us
     }
 
     public init(from decoder: Decoder) throws {
@@ -80,6 +85,11 @@ public struct Telemetry: Decodable, Sendable {
         gotoArrived = try c.decode(Bool.self, forKey: .goto_arrived)
         appLinkFresh = try c.decode(Bool.self, forKey: .app_link_fresh)
         spotLockState = HoldState(rawValue: try c.decode(Int.self, forKey: .spot_lock_state)) ?? .unknown
+        // Nowe pola tolerują starszy firmware (brak klucza → 0).
+        imuCalib = try c.decodeIfPresent(Int.self, forKey: .imu_calib) ?? 0
+        spotLockErrM = try c.decodeIfPresent(Int.self, forKey: .spot_lock_err_m) ?? 0
+        spotLockBearingDeg10 = try c.decodeIfPresent(Int.self, forKey: .spot_lock_bearing_deg10) ?? 0
+        servoTrimUs = try c.decodeIfPresent(Int.self, forKey: .servo_trim_us) ?? 0
     }
 
     /// Kurs dzioba w stopniach (z `imu_heading_deg10`).
@@ -90,6 +100,9 @@ public struct Telemetry: Decodable, Sendable {
 
     /// Namiar do celu goto w stopniach (z `goto_bearing_deg10`).
     public var gotoBearingDegrees: Double { Double(gotoBearingDeg10) / 10.0 }
+
+    /// Namiar spot-lock w stopniach (z `spot_lock_bearing_deg10`).
+    public var spotLockBearingDegrees: Double { Double(spotLockBearingDeg10) / 10.0 }
 
     /// Pozycja łódki jako para stopni (z `gps_*_e7`).
     public var boatLatLon: LatLonE7 { LatLonE7(latE7: gpsLatE7, lonE7: gpsLonE7) }

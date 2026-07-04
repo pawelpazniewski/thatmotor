@@ -51,6 +51,47 @@ struct TelemetryDecodingTests {
         #expect(t.gotoState == .unknown)
     }
 
+    @Test("pełna ramka z nowymi polami → wszystkie zdekodowane (≠ 0)")
+    func decodesNewFields() throws {
+        let t = try decode("""
+        {"state":1,"arm_reason":0,"rc_valid":true,"gps_fix":true,"gps_sats":9,
+        "gps_lat_e7":522297000,"gps_lon_e7":210122000,"gps_speed_cms":150,
+        "imu_ok":true,"imu_heading_deg10":1234,"spot_lock_state":1,
+        "goto_state":0,"goto_target_lat_e7":0,"goto_target_lon_e7":0,
+        "goto_err_m":0,"goto_bearing_deg10":0,"goto_arrived":false,
+        "app_link_fresh":true,"imu_calib":3,"spot_lock_err_m":7,
+        "spot_lock_bearing_deg10":905,"servo_trim_us":120}
+        """)
+        #expect(t.imuCalib == 3)
+        #expect(t.spotLockErrM == 7)
+        #expect(t.spotLockBearingDeg10 == 905)
+        #expect(t.servoTrimUs == 120)
+        #expect(abs(t.spotLockBearingDegrees - 90.5) < 1e-9)   // deg10 → deg
+    }
+
+    @Test("ramka bez nowych pól (stary firmware) → dekoder nie rzuca, pola = 0")
+    func toleratesMissingNewFields() throws {
+        // armedFrame nie zawiera imu_calib/spot_lock_*/servo_trim_us
+        let t = try decode(armedFrame)
+        #expect(t.imuCalib == 0)
+        #expect(t.spotLockErrM == 0)
+        #expect(t.spotLockBearingDeg10 == 0)
+        #expect(t.servoTrimUs == 0)
+    }
+
+    @Test("servo_trim_us ujemny → znak zachowany")
+    func negativeServoTrimPreservesSign() throws {
+        let t = try decode("""
+        {"state":0,"arm_reason":1,"rc_valid":false,"gps_fix":false,"gps_sats":0,
+        "gps_lat_e7":0,"gps_lon_e7":0,"gps_speed_cms":0,"imu_ok":false,
+        "imu_heading_deg10":0,"goto_state":0,"goto_target_lat_e7":0,
+        "goto_target_lon_e7":0,"goto_err_m":0,"goto_bearing_deg10":0,
+        "goto_arrived":false,"app_link_fresh":false,"spot_lock_state":0,
+        "servo_trim_us":-140}
+        """)
+        #expect(t.servoTrimUs == -140)
+    }
+
     @Test("negatywne e7 (półkula S/W) dekodują się poprawnie")
     func negativeHemispheres() throws {
         let t = try decode("""
