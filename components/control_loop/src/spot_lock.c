@@ -25,6 +25,16 @@
 /* Radians per (degree * 10): 0.1 deg * pi/180. For the cos() alignment taper. */
 #define SPOT_LOCK_DEG10_TO_RAD (3.14159265358979323846 / 1800.0)
 
+/* GOTO drive is FORWARD-ONLY and "turn the bow first, then go" -- reverse is
+ * unsafe while travelling (you cannot see your track). This DIVERGES from the
+ * omnidirectional HOLD (spot-lock) law above, which may reverse for short holds.
+ * Outside the +/-cone the bow is badly off target: thrust drops to a small
+ * forward creep (a bow-mounted motor cannot pivot the hull with zero thrust) so
+ * the boat turns toward the target; inside the cone thrust ramps up to full as
+ * the bow lines up. Servo steers the SHORTEST way to face the target. */
+#define SPOT_LOCK_GOTO_ALIGN_CONE_DEG10 300 /* +/-30 deg go-forward cone */
+#define SPOT_LOCK_GOTO_TURN_CREEP 0.15      /* min forward thrust while turning */
+
 #define DEG10_FULL_TURN 3600
 #define DEG10_HALF_TURN 1800
 #define DEG10_PER_DEG 10.0
@@ -141,10 +151,51 @@ static double align_factor(int steer_err_deg10)
     return (c < SPOT_LOCK_ALIGN_FLOOR) ? SPOT_LOCK_ALIGN_FLOOR : c;
 }
 
-/** Full ACTIVE-state regulator: deadband relax, then omnidirectional drive --
- * P servo toward the (toward/away-reduced) target plus a cos-tapered, signed
- * (forward/reverse) P throttle. No forward-thrust gate: thrust is always applied
- * toward the target, so the hull can never stall unable to rotate. */
+/* GOTO forward-only alignment factor, always >= 0 (GOTO never reverses). Outside
+ * the +/-cone: a small creep so the boat pivots the bow toward the target without
+ * driving forward hard; inside the cone: linear ramp from that creep up to 1.0 as
+ * the bow lines up. err_deg10 is within +/-1800 (full-turn error). */
+static double goto_align_factor(int err_deg10)
+{
+    int a = (err_deg10 < 0) ? -err_deg10 : err_deg10;
+    if (a >= SPOT_LOCK_GOTO_ALIGN_CONE_DEG10) {
+        return SPOT_LOCK_GOTO_TURN_CREEP;
+    }
+    double frac = 1.0 - (double)a / (double)SPOT_LOCK_GOTO_ALIGN_CONE_DEG10;
+    return SPOT_LOCK_GOTO_TURN_CREEP + (1.0 - SPOT_LOCK_GOTO_TURN_CREEP) * frac;
+}
+
+/* GOTO drive: forward-only, turn the bow to the target first, then go. Servo
+ * steers by the full bearing error (shortest way to face the target); throttle
+ * is the goto cruise profile scaled by goto_align_factor -- never reverse. */
+static void apply_goto_drive(spot_lock_outputs *out, int err_deg10, float dist,
+                             const spot_lock_params *p)
+{
+    out->servo_cmd = servo_command(err_deg10, p->servo_gain_per_deg);
+    int32_t magnitude = goto_throttle_command(dist, p);
+    out->throttle_cmd = (int32_t)lround((double)magnitude *
+                                        goto_align_factor(err_deg10));
+}
+
+/* HOLD (spot-lock) drive: omnidirectional -- forward or reverse, whichever swings
+ * the hull less -- with a cos alignment taper. Reverse is acceptable for short
+ * holding corrections (NOT for GOTO). */
+static void apply_hold_drive(spot_lock_outputs *out, int err_deg10, float dist,
+                             const spot_lock_params *p)
+{
+    int dir;
+    int steer_err = reduce_to_drive(err_deg10, &dir);
+    out->servo_cmd = servo_command(steer_err, p->servo_gain_per_deg);
+    int32_t magnitude = throttle_command(dist, p);
+    out->throttle_cmd = (int32_t)lround((double)dir * (double)magnitude *
+                                        align_factor(steer_err));
+}
+
+/** Full ACTIVE-state regulator: deadband relax, then drive toward the target.
+ * The drive law depends on the source: GOTO turns the bow to the target and
+ * drives FORWARD only (never reverse -- see apply_goto_drive); HOLD (spot-lock)
+ * is omnidirectional and may reverse for short holds (apply_hold_drive). No
+ * forward-thrust gate either way, so the hull can never stall unable to rotate. */
 static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
                                                const spot_lock_params *p,
                                                const spot_lock_state *st)
@@ -170,18 +221,13 @@ static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
 
     int err_deg10 = heading_error_deg10(out.bearing_deg10, in->heading_deg10);
 
-    /* Omnidirectional drive: aim the motor at the target (forward) or its reverse
-     * (drive backward) -- whichever swings the hull less -- and always apply
-     * thrust toward the target, tapered by how well we are lined up. */
-    int dir;
-    int steer_err = reduce_to_drive(err_deg10, &dir);
-    out.servo_cmd = servo_command(steer_err, p->servo_gain_per_deg);
-
-    int32_t magnitude = (st->target_source == SPOT_LOCK_SRC_GOTO)
-                            ? goto_throttle_command(dist, p)
-                            : throttle_command(dist, p);
-    out.throttle_cmd = (int32_t)lround((double)dir * (double)magnitude *
-                                       align_factor(steer_err));
+    /* Drive law by source: GOTO turns-then-goes forward only; HOLD is
+     * omnidirectional (may reverse). Both steer toward the target, no gate. */
+    if (st->target_source == SPOT_LOCK_SRC_GOTO) {
+        apply_goto_drive(&out, err_deg10, dist, p);
+    } else {
+        apply_hold_drive(&out, err_deg10, dist, p);
+    }
     return out;
 }
 

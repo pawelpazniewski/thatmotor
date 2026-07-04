@@ -871,6 +871,101 @@ void test_goto_and_hold_differ_at_same_distance(void)
     TEST_ASSERT_TRUE(goto_out.throttle_cmd != hold_out.throttle_cmd);
 }
 
+/* --- Goto turn-then-go: FORWARD-ONLY, never reverse (safety) --- */
+
+void test_goto_astern_drives_forward_not_reverse(void)
+{
+    /* Arrange: GOTO with the target dead astern (bow south, target north). Unlike
+     * HOLD (which reverses straight back), GOTO must NOT reverse -- you cannot see
+     * your track going backward. It steers hard to swing the bow around and only
+     * creeps forward. Oracle: the omnidirectional/reverse law gives a NEGATIVE
+     * throttle here, so asserting a POSITIVE (forward) throttle fails without the
+     * dedicated forward-only goto branch. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_to_ref_inputs();
+    in.lat_e7 = REF_LAT_E7 - E7_10M; /* target north */
+    in.heading_deg10 = 1800;         /* bow south -> target +180 deg (dead astern) */
+    spot_lock_state st = make_goto_to_ref_state();
+
+    /* Act */
+    spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: forward (not reverse) thrust, and the servo steers to turn the bow. */
+    TEST_ASSERT_TRUE(out.throttle_cmd > 0);
+    TEST_ASSERT_TRUE(out.servo_cmd != 0);
+}
+
+void test_goto_never_reverses_across_headings(void)
+{
+    /* Arrange: sweep headings that put the target behind the bow (90..300 deg off).
+     * GOTO throttle must be forward (>= 0) at EVERY heading. Oracle: the reverse
+     * split (reduce_to_drive) yields negative throttle for any error past +/-90 deg,
+     * so any reverse leak makes one of these assertions fail. */
+    spot_lock_params p = make_params();
+    int headings[] = {900, 1200, 1800, 2400, 2700, 3000};
+
+    for (unsigned i = 0; i < sizeof(headings) / sizeof(headings[0]); i++) {
+        spot_lock_inputs in = make_goto_to_ref_inputs();
+        in.lat_e7 = REF_LAT_E7 - E7_10M; /* target north */
+        in.heading_deg10 = (uint16_t)headings[i];
+        spot_lock_state st = make_goto_to_ref_state();
+
+        spot_lock_outputs out = spot_lock_step(&in, &p, &st);
+
+        TEST_ASSERT_TRUE(out.throttle_cmd >= 0);
+    }
+}
+
+void test_goto_creeps_when_misaligned_full_when_aligned(void)
+{
+    /* Arrange: same 10 m distance, one aligned (0 deg) and one dead astern (180
+     * deg). Turn-then-go: aligned drives at full cruise, astern only creeps. Both
+     * forward. Oracle: without goto_align_factor both would use the same cruise
+     * term and be equal (and the astern one would actually reverse). */
+    spot_lock_params p = make_params();
+
+    spot_lock_inputs aligned = make_goto_to_ref_inputs();
+    aligned.lat_e7 = REF_LAT_E7 - E7_10M;
+    aligned.heading_deg10 = 0; /* aligned */
+    spot_lock_state a_st = make_goto_to_ref_state();
+    spot_lock_outputs a = spot_lock_step(&aligned, &p, &a_st);
+
+    spot_lock_inputs astern = make_goto_to_ref_inputs();
+    astern.lat_e7 = REF_LAT_E7 - E7_10M;
+    astern.heading_deg10 = 1800; /* dead astern */
+    spot_lock_state s_st = make_goto_to_ref_state();
+    spot_lock_outputs s = spot_lock_step(&astern, &p, &s_st);
+
+    /* Assert: both forward, aligned strictly harder than the astern creep. */
+    TEST_ASSERT_TRUE(s.throttle_cmd > 0);
+    TEST_ASSERT_TRUE(a.throttle_cmd > s.throttle_cmd);
+}
+
+void test_goto_thrust_ramps_up_entering_align_cone(void)
+{
+    /* Arrange: same distance, one just OUTSIDE the +/-30 deg cone (45 deg off ->
+     * creep floor) and one INSIDE it (15 deg off -> ramping up). Inside must drive
+     * harder than outside. Oracle: a constant factor (no cone ramp) makes them
+     * equal; removing the forward-only branch reverses the 45 deg case. */
+    spot_lock_params p = make_params();
+
+    spot_lock_inputs outside = make_goto_to_ref_inputs();
+    outside.lat_e7 = REF_LAT_E7 - E7_10M;
+    outside.heading_deg10 = 450; /* 45 deg off -> outside the cone */
+    spot_lock_state o_st = make_goto_to_ref_state();
+    spot_lock_outputs o = spot_lock_step(&outside, &p, &o_st);
+
+    spot_lock_inputs inside = make_goto_to_ref_inputs();
+    inside.lat_e7 = REF_LAT_E7 - E7_10M;
+    inside.heading_deg10 = 150; /* 15 deg off -> inside the cone */
+    spot_lock_state i_st = make_goto_to_ref_state();
+    spot_lock_outputs i = spot_lock_step(&inside, &p, &i_st);
+
+    /* Assert: both forward, inside-cone strictly harder than outside. */
+    TEST_ASSERT_TRUE(o.throttle_cmd > 0);
+    TEST_ASSERT_TRUE(i.throttle_cmd > o.throttle_cmd);
+}
+
 void run_spot_lock_tests(void)
 {
     RUN_TEST(test_entry_on_edge_arms_active_and_snapshots_target);
@@ -907,4 +1002,8 @@ void run_spot_lock_tests(void)
     RUN_TEST(test_goto_throttle_small_just_above_deadband);
     RUN_TEST(test_goto_relaxes_inside_deadband);
     RUN_TEST(test_goto_and_hold_differ_at_same_distance);
+    RUN_TEST(test_goto_astern_drives_forward_not_reverse);
+    RUN_TEST(test_goto_never_reverses_across_headings);
+    RUN_TEST(test_goto_creeps_when_misaligned_full_when_aligned);
+    RUN_TEST(test_goto_thrust_ramps_up_entering_align_cone);
 }
