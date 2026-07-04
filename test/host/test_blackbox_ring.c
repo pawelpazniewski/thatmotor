@@ -116,7 +116,9 @@ static void test_real_geometry_constants_are_consistent(void)
 {
     /* Capacity = region / record; records-per-sector = sector / record; both
      * divide evenly so no record straddles a sector. */
-    TEST_ASSERT_EQUAL_UINT32(16384U, BLACKBOX_CAPACITY_RECORDS);
+    TEST_ASSERT_EQUAL_UINT32(BLACKBOX_REGION_SIZE / BLACKBOX_RECORD_SIZE,
+                             BLACKBOX_CAPACITY_RECORDS);
+    TEST_ASSERT_EQUAL_UINT32(65536U, BLACKBOX_CAPACITY_RECORDS); /* 4 MiB / 64 B */
     TEST_ASSERT_EQUAL_UINT32(64U, BLACKBOX_RECORDS_PER_SECTOR);
     TEST_ASSERT_EQUAL_UINT32(0U, BLACKBOX_SECTOR_SIZE % BLACKBOX_RECORD_SIZE);
     TEST_ASSERT_EQUAL_UINT32(0U, BLACKBOX_REGION_SIZE % BLACKBOX_SECTOR_SIZE);

@@ -36,8 +36,11 @@ extern "C" {
  * sector boundary. */
 #define BLACKBOX_RECORD_SIZE 64U
 
-/* Total region size reserved on flash: 1 MiB (matches the partitions.csv size). */
-#define BLACKBOX_REGION_SIZE 0x100000U
+/* Total region size reserved on flash: 4 MiB (matches the partitions.csv size).
+ * ~9 h of continuous 2 Hz logging; with adaptive-rate recording (dense on
+ * events, sparse when idle) this spans many outings. Sits in otherwise-unused
+ * flash (16 MiB chip, <3 MiB used elsewhere). */
+#define BLACKBOX_REGION_SIZE 0x400000U
 
 /* Records per erasable sector: 4096 / 64 = 64. */
 #define BLACKBOX_RECORDS_PER_SECTOR (BLACKBOX_SECTOR_SIZE / BLACKBOX_RECORD_SIZE)

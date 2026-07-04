@@ -6,11 +6,12 @@ idf_component_register(
     SRCS "src/blackbox_record.c"
          "src/blackbox_ring.c"
          "src/blackbox_sampler.c"
+         "src/blackbox_reason.c"
          "src/blackbox_resume.c"
          "src/blackbox.c"
          "src/blackbox_recorder.c"
          "src/blackbox_csv.c"
          "src/params_cmd.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_partition spi_flash control_loop settings state_machine freertos esp_timer
+    REQUIRES esp_partition spi_flash control_loop settings state_machine signal_chain freertos esp_timer
 )

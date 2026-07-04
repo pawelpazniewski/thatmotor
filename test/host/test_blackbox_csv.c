@@ -11,6 +11,10 @@ static blackbox_sample make_sample(void)
     blackbox_sample s = {
         .t_ms = 12345U,
         .substate = 1U,
+        .sm_state = 1U,
+        .source = 2U,
+        .end_reason = 0U,
+        .arm_reason = 0U,
         .err_m = 7U,
         .bearing_deg10 = 1801U,
         .heading_deg10 = 900U,
@@ -18,12 +22,20 @@ static blackbox_sample make_sample(void)
         .esc_us = 1600U,
         .ch1_us = 1490U,
         .ch2_us = 1510U,
+        .ch3_us = 1900U,
+        .ch4_us = 1100U,
         .lat_e7 = -123456789,
         .lon_e7 = 987654321,
         .sats = 9U,
         .speed_cms = 42U,
+        .imu_calib = 3U,
         .gps_fix = true,
         .imu_ok = false,
+        .rc_valid = true,
+        .gps_fresh = true,
+        .link_fresh = false,
+        .goto_owns = true,
+        .arrived = false,
     };
     return s;
 }
@@ -56,8 +68,8 @@ static void test_row_exact_column_order_and_values(void)
     /* Full-string oracle: session_id, then the sample columns in order, then the
      * session target + settings tail. gps_fix=1, imu_ok=0. */
     const char *expected =
-        "4,12345,1,7,1801,900,1500,1600,1490,1510,"
-        "-123456789,987654321,9,42,1,0,"
+        "4,12345,1,1,2,0,0,7,1801,900,1500,1600,1490,1510,1900,1100,"
+        "-123456789,987654321,9,42,3,1,0,1,1,0,1,0,"
         "111111111,-222222222,3,35,30,20";
     TEST_ASSERT_EQUAL_STRING(expected, row);
     TEST_ASSERT_EQUAL_UINT(strlen(expected), n);
@@ -82,10 +94,11 @@ static void test_header_matches_field_order(void)
     size_t n = blackbox_csv_header(hdr, sizeof(hdr));
 
     const char *expected =
-        "session_id,t_ms,substate,err_m,bearing_deg10,heading_deg10,servo_us,"
-        "esc_us,ch1_us,ch2_us,lat_e7,lon_e7,sats,speed_cms,gps_fix,imu_ok,"
-        "target_lat_e7,target_lon_e7,deadband_m,max_throttle_pct,throttle_gain,"
-        "servo_gain";
+        "session_id,t_ms,substate,sm_state,source,end_reason,arm_reason,err_m,"
+        "bearing_deg10,heading_deg10,servo_us,esc_us,ch1_us,ch2_us,ch3_us,ch4_us,"
+        "lat_e7,lon_e7,sats,speed_cms,imu_calib,gps_fix,imu_ok,rc_valid,gps_fresh,"
+        "link_fresh,goto_owns,arrived,target_lat_e7,target_lon_e7,deadband_m,"
+        "max_throttle_pct,throttle_gain,servo_gain";
     TEST_ASSERT_EQUAL_STRING(expected, hdr);
     TEST_ASSERT_EQUAL_UINT(strlen(expected), n);
 }

@@ -15,6 +15,13 @@ static uint32_t s_seq;
  * session counter from this so a post-reboot session never reuses an id. */
 static uint32_t s_resume_session_seq;
 
+/* Sector-sized scratch for full-region scans (resume + dump). Reading a whole
+ * 4 KB sector per esp_partition_read (64 records) instead of one 64-byte record
+ * cuts a 4 MiB scan from ~65k reads to ~1k -- keeps boot latency low. Static (not
+ * stack) because the main task stack is small; safe because the two scanners
+ * (init resume, on-demand dump) never run concurrently (single-writer HAL). */
+static uint8_t s_scan_sector[BLACKBOX_SECTOR_SIZE];
+
 /* Map a raw esp_partition error onto the domain status. Bad-argument/size
  * failures are argument errors; everything else is treated as flash I/O. */
 static blackbox_status map_err(esp_err_t err)
@@ -50,6 +57,40 @@ static void scan_slot(const uint8_t *record, bool *is_valid, bool *is_header,
     }
 }
 
+/* Per-slot visitor for a full-region scan. Receives the ascending slot index and
+ * a pointer to that slot's BLACKBOX_RECORD_SIZE bytes inside the sector buffer. */
+typedef void (*blackbox_slot_fn)(uint32_t slot, const uint8_t *record, void *ctx);
+
+/* Walk every slot of the region in ascending order, one sector-sized read at a
+ * time, invoking fn per slot. The single point where the whole region is read. */
+static blackbox_status scan_region(blackbox_slot_fn fn, void *ctx)
+{
+    for (uint32_t sector = 0U; sector < BLACKBOX_SECTOR_COUNT; ++sector) {
+        uint32_t base = sector * BLACKBOX_SECTOR_SIZE;
+        esp_err_t read = esp_partition_read(s_part, base, s_scan_sector,
+                                            BLACKBOX_SECTOR_SIZE);
+        if (read != ESP_OK) {
+            return map_err(read);
+        }
+        for (uint32_t i = 0U; i < BLACKBOX_RECORDS_PER_SECTOR; ++i) {
+            uint32_t slot = sector * BLACKBOX_RECORDS_PER_SECTOR + i;
+            fn(slot, s_scan_sector + i * BLACKBOX_RECORD_SIZE, ctx);
+        }
+    }
+    return BLACKBOX_OK;
+}
+
+/* scan_region visitor: fold one slot into the resume scan aggregate. */
+static void resume_fold_slot(uint32_t slot, const uint8_t *record, void *ctx)
+{
+    blackbox_resume_scan *scan = (blackbox_resume_scan *)ctx;
+    bool is_valid;
+    bool is_header;
+    uint32_t session_seq;
+    scan_slot(record, &is_valid, &is_header, &session_seq);
+    blackbox_resume_scan_slot(scan, slot, is_valid, is_header, session_seq);
+}
+
 /* Scan the whole region once and fold it into the resume seeds: where to place
  * the write cursor and which session id to continue from. Keeps the raw reads in
  * the HAL and the seeding decision in the pure core. */
@@ -58,19 +99,9 @@ static blackbox_status resume_from_flash(void)
     blackbox_resume_scan scan;
     blackbox_resume_scan_init(&scan);
 
-    uint8_t record[BLACKBOX_RECORD_SIZE];
-    for (uint32_t slot = 0U; slot < BLACKBOX_CAPACITY_RECORDS; ++slot) {
-        uint32_t offset = slot * BLACKBOX_RECORD_SIZE;
-        esp_err_t read =
-            esp_partition_read(s_part, offset, record, sizeof(record));
-        if (read != ESP_OK) {
-            return map_err(read);
-        }
-        bool is_valid;
-        bool is_header;
-        uint32_t session_seq;
-        scan_slot(record, &is_valid, &is_header, &session_seq);
-        blackbox_resume_scan_slot(&scan, slot, is_valid, is_header, session_seq);
+    blackbox_status status = scan_region(resume_fold_slot, &scan);
+    if (status != BLACKBOX_OK) {
+        return status;
     }
 
     blackbox_resume_seed seed = blackbox_resume_decide(&scan);
@@ -127,6 +158,19 @@ blackbox_status blackbox_append(const uint8_t *record, size_t len)
     return BLACKBOX_OK;
 }
 
+/* scan_region visitor: forward each slot's raw bytes to the caller's callback. */
+typedef struct {
+    blackbox_record_cb cb;
+    void *ctx;
+} read_all_ctx;
+
+static void read_all_slot(uint32_t slot, const uint8_t *record, void *ctx)
+{
+    (void)slot;
+    read_all_ctx *rc = (read_all_ctx *)ctx;
+    rc->cb(record, BLACKBOX_RECORD_SIZE, rc->ctx);
+}
+
 blackbox_status blackbox_read_all(blackbox_record_cb cb, void *ctx)
 {
     if (cb == NULL) {
@@ -136,15 +180,6 @@ blackbox_status blackbox_read_all(blackbox_record_cb cb, void *ctx)
         return BLACKBOX_ERR_STATE;
     }
 
-    uint8_t record[BLACKBOX_RECORD_SIZE];
-    for (uint32_t slot = 0U; slot < BLACKBOX_CAPACITY_RECORDS; ++slot) {
-        uint32_t offset = slot * BLACKBOX_RECORD_SIZE;
-        esp_err_t read = esp_partition_read(s_part, offset, record,
-                                            sizeof(record));
-        if (read != ESP_OK) {
-            return map_err(read);
-        }
-        cb(record, sizeof(record), ctx);
-    }
-    return BLACKBOX_OK;
+    read_all_ctx rc = {.cb = cb, .ctx = ctx};
+    return scan_region(read_all_slot, &rc);
 }

@@ -127,6 +127,10 @@ static void write_sample(const blackbox_sample *s, uint8_t *out, size_t *pos)
 {
     put_u32(out, pos, s->t_ms);
     put_u8(out, pos, s->substate);
+    put_u8(out, pos, s->sm_state);
+    put_u8(out, pos, s->source);
+    put_u8(out, pos, s->end_reason);
+    put_u8(out, pos, s->arm_reason);
     put_u16(out, pos, s->err_m);
     put_u16(out, pos, s->bearing_deg10);
     put_u16(out, pos, s->heading_deg10);
@@ -134,13 +138,21 @@ static void write_sample(const blackbox_sample *s, uint8_t *out, size_t *pos)
     put_u16(out, pos, s->esc_us);
     put_u16(out, pos, s->ch1_us);
     put_u16(out, pos, s->ch2_us);
+    put_u16(out, pos, s->ch3_us);
+    put_u16(out, pos, s->ch4_us);
     put_i32(out, pos, s->lat_e7);
     put_i32(out, pos, s->lon_e7);
     put_u8(out, pos, s->sats);
     put_u16(out, pos, s->speed_cms);
+    put_u8(out, pos, s->imu_calib);
     uint8_t flags = 0;
     flags |= s->gps_fix ? BLACKBOX_FLAG_GPS_FIX : 0U;
     flags |= s->imu_ok ? BLACKBOX_FLAG_IMU_OK : 0U;
+    flags |= s->rc_valid ? BLACKBOX_FLAG_RC_VALID : 0U;
+    flags |= s->gps_fresh ? BLACKBOX_FLAG_GPS_FRESH : 0U;
+    flags |= s->link_fresh ? BLACKBOX_FLAG_LINK_FRESH : 0U;
+    flags |= s->goto_owns ? BLACKBOX_FLAG_GOTO_OWNS : 0U;
+    flags |= s->arrived ? BLACKBOX_FLAG_ARRIVED : 0U;
     put_u8(out, pos, flags);
 }
 
@@ -163,6 +175,10 @@ static void read_sample(const uint8_t *buf, size_t *pos, blackbox_sample *s)
 {
     s->t_ms = get_u32(buf, pos);
     s->substate = get_u8(buf, pos);
+    s->sm_state = get_u8(buf, pos);
+    s->source = get_u8(buf, pos);
+    s->end_reason = get_u8(buf, pos);
+    s->arm_reason = get_u8(buf, pos);
     s->err_m = get_u16(buf, pos);
     s->bearing_deg10 = get_u16(buf, pos);
     s->heading_deg10 = get_u16(buf, pos);
@@ -170,13 +186,21 @@ static void read_sample(const uint8_t *buf, size_t *pos, blackbox_sample *s)
     s->esc_us = get_u16(buf, pos);
     s->ch1_us = get_u16(buf, pos);
     s->ch2_us = get_u16(buf, pos);
+    s->ch3_us = get_u16(buf, pos);
+    s->ch4_us = get_u16(buf, pos);
     s->lat_e7 = get_i32(buf, pos);
     s->lon_e7 = get_i32(buf, pos);
     s->sats = get_u8(buf, pos);
     s->speed_cms = get_u16(buf, pos);
+    s->imu_calib = get_u8(buf, pos);
     uint8_t flags = get_u8(buf, pos);
     s->gps_fix = (flags & BLACKBOX_FLAG_GPS_FIX) != 0U;
     s->imu_ok = (flags & BLACKBOX_FLAG_IMU_OK) != 0U;
+    s->rc_valid = (flags & BLACKBOX_FLAG_RC_VALID) != 0U;
+    s->gps_fresh = (flags & BLACKBOX_FLAG_GPS_FRESH) != 0U;
+    s->link_fresh = (flags & BLACKBOX_FLAG_LINK_FRESH) != 0U;
+    s->goto_owns = (flags & BLACKBOX_FLAG_GOTO_OWNS) != 0U;
+    s->arrived = (flags & BLACKBOX_FLAG_ARRIVED) != 0U;
 }
 
 static void read_header(const uint8_t *buf, size_t *pos,

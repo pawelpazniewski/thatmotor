@@ -38,6 +38,7 @@ void run_quat_to_yaw_tests(void);
 void run_blackbox_record_tests(void);
 void run_blackbox_ring_tests(void);
 void run_blackbox_sampler_tests(void);
+void run_blackbox_reason_tests(void);
 void run_blackbox_resume_tests(void);
 void run_blackbox_csv_tests(void);
 void run_params_cmd_tests(void);
@@ -78,6 +79,7 @@ int main(void)
     run_blackbox_record_tests();
     run_blackbox_ring_tests();
     run_blackbox_sampler_tests();
+    run_blackbox_reason_tests();
     run_blackbox_resume_tests();
     run_blackbox_csv_tests();
     run_params_cmd_tests();
