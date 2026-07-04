@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Stała atrybucja OSM (ODbL wymaga widocznego kredytu — bundlowy GeoJSON nie
-/// wypełnia wbudowanego ⓘ MapLibre, więc pokazujemy własny overlay).
+/// Stała atrybucja OSM (ODbL wymaga widocznego kredytu — bundlowy `.pmtiles`
+/// (dane z OSM) nie wypełnia wbudowanego ⓘ MapLibre, więc pokazujemy własny overlay).
 struct AttributionOverlay: View {
     var body: some View {
         Text("© OpenStreetMap contributors")

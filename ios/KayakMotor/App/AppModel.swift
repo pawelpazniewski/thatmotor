@@ -27,15 +27,16 @@ final class AppModel {
 
     private let waypoints: WaypointStore
     private let commands: any CommandSending
-    private let lakePolygon: [GeoPoint]
     private var pendingGeofencedTarget: LatLonE7?
+    /// Czy ostatnio wystawiony cel leży na wodzie — liczone w widoku z warstwy wody
+    /// mapy w chwili tapnięcia. Cele z waypointu/telemetrii traktujemy jak „na wodzie".
+    private var stagedOnWater = true
 
     init(commands: any CommandSending = CommandClient(),
          telemetry: TelemetryStore = TelemetryStore()) {
         self.commands = commands
         self.telemetry = telemetry
         self.waypoints = WaypointStore(fileURL: Self.waypointStoreURL())
-        self.lakePolygon = Self.loadLakePolygon()
         self.waypointList = waypoints.waypoints
     }
 
@@ -84,20 +85,22 @@ final class AppModel {
         guard target.staged == nil,
               let t = telemetry.latest, t.gotoState != .off else { return }
         target.stage(target: LatLonE7(latE7: t.gotoTargetLatE7, lonE7: t.gotoTargetLonE7))
+        stagedOnWater = true
     }
 
     // MARK: - Tap-to-goto
 
-    func handleMapTap(_ coordinate: CLLocationCoordinate2D) {
+    func handleMapTap(_ coordinate: CLLocationCoordinate2D, isOnWater: Bool) {
         target.stage(coordinate: coordinate)
+        stagedOnWater = isOnWater
     }
 
-    /// „Płyń do punktu" — sprawdza miękką barierę geofence, potem wysyła.
+    /// „Płyń do punktu" — miękka bariera geofence, potem wysyła. Ostrzegamy tylko,
+    /// gdy tap trafił poza wodę (wg warstwy wody mapy); waypoint/telemetria nie ostrzega.
     func requestGoto() {
-        guard let staged = target.staged, let coordinate = target.stagedCoordinate else { return }
+        guard let staged = target.staged else { return }
         autonomousIntent = .goto
-        let point = GeoPoint(latDegrees: coordinate.latitude, lonDegrees: coordinate.longitude)
-        if !lakePolygon.isEmpty && !WaterGeofence.contains(point, polygon: lakePolygon) {
+        if !stagedOnWater {
             pendingGeofencedTarget = staged
             showGeofenceWarning = true
             return
@@ -183,6 +186,7 @@ final class AppModel {
 
     func selectWaypoint(_ waypoint: Waypoint) {
         target.stage(target: waypoint.target)
+        stagedOnWater = true
     }
 
     func deleteWaypoint(_ waypoint: Waypoint) {
@@ -191,15 +195,6 @@ final class AppModel {
     }
 
     // MARK: - Zasoby
-
-    private static func loadLakePolygon() -> [GeoPoint] {
-        guard let url = Bundle.main.url(forResource: "lake", withExtension: "geojson"),
-              let data = try? Data(contentsOf: url),
-              let polygon = try? LakeContour.polygon(fromGeoJSON: data) else {
-            return []
-        }
-        return polygon
-    }
 
     private static func waypointStoreURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
