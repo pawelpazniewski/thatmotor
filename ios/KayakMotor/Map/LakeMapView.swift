@@ -16,7 +16,8 @@ struct BoatRenderState: Equatable {
 }
 
 /// Mapa offline: bundlowy `.pmtiles` (Protomaps) + blank-style, marker łodzi
-/// (`MLNSymbolStyleLayer` z `iconRotation`), pin celu + linia łódź→cel. Geofence
+/// (`MLNSymbolStyleLayer` z `iconRotation`), pin celu + etykieta dystansu (łódka→
+/// cel) pod pinezką + linia łódź→cel. Geofence
 /// „to woda?" liczony wprost z warstwy `basemap-water` przy tapnięciu (bez geojson).
 /// Aktualizacja markerów przez podmianę `MLNShapeSource.shape` (bufor GPU). Zero sieci.
 /// Most między przyciskami SwiftUI a `MLNMapView` do sterowania zoomem. Trzyma
@@ -88,10 +89,18 @@ struct LakeMapView: UIViewRepresentable {
         private static let routeSourceID = "route-src"
         private static let boatIconName = "boat-icon"
         private static let targetIconName = "target-icon"
+        private static let targetLabelSourceID = "target-label-src"
+        private static let targetLabelIconName = "target-label-icon"
         static let waterLayerID = "basemap-water"
         private var lastCameraMove = Date.distantPast
         private var hasBoatFix = false
         private var hasCenteredOnUser = false
+        /* Ostatnia łódka/cel i tekst etykiety dystansu — dystans zależy od pozycji
+         * łódki (aktualizowanej ~10 Hz), więc odświeżamy etykietę i przy ruchu celu,
+         * i przy ruchu łódki; obrazek re-rasteryzujemy tylko gdy tekst się zmieni. */
+        private var labelTargetCoord: CLLocationCoordinate2D?
+        private var labelBoatCoord: CLLocationCoordinate2D?
+        private var lastDistanceText: String?
         /// Tap w mapę: (współrzędna, czy punkt leży na wodzie).
         var onTap: (CLLocationCoordinate2D, Bool) -> Void = { _, _ in }
 
@@ -214,6 +223,19 @@ struct LakeMapView: UIViewRepresentable {
             layer.iconImageName = NSExpression(forConstantValue: Self.targetIconName)
             layer.iconAllowsOverlap = NSExpression(forConstantValue: true)
             style.addLayer(layer)
+
+            // Etykieta dystansu — osobny symbol tuż pod pinezką. Tekst renderujemy do
+            // obrazka (brak glyphs/fontów w bundlu), więc MapLibre pozycjonuje ją sam
+            // przy przesuwaniu mapy. Zakotwiczona górą + offset w dół, by minąć pinezkę.
+            style.setImage(Self.distanceLabelImage("—"), forName: Self.targetLabelIconName)
+            let labelSource = MLNShapeSource(identifier: Self.targetLabelSourceID, shape: nil, options: nil)
+            style.addSource(labelSource)
+            let labelLayer = MLNSymbolStyleLayer(identifier: "target-label-sym", source: labelSource)
+            labelLayer.iconImageName = NSExpression(forConstantValue: Self.targetLabelIconName)
+            labelLayer.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            labelLayer.iconAnchor = NSExpression(forConstantValue: "top")
+            labelLayer.iconOffset = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 0, dy: 16)))
+            style.addLayer(labelLayer)
         }
 
         func updateBoat(_ boat: BoatRenderState, on mapView: MLNMapView, follow: Bool) {
@@ -225,6 +247,9 @@ struct LakeMapView: UIViewRepresentable {
             feature.coordinate = coordinate
             feature.attributes = ["heading": boat.headingDegrees]
             source.shape = feature
+
+            labelBoatCoord = coordinate
+            refreshDistanceLabel(on: mapView)
 
             if follow, Date().timeIntervalSince(lastCameraMove) > 1.0 {
                 lastCameraMove = Date()
@@ -242,6 +267,8 @@ struct LakeMapView: UIViewRepresentable {
             guard let target else {
                 targetSource.shape = nil
                 routeSource.shape = nil
+                labelTargetCoord = nil
+                refreshDistanceLabel(on: mapView)
                 return
             }
             let pin = MLNPointFeature()
@@ -251,8 +278,54 @@ struct LakeMapView: UIViewRepresentable {
             if let boat {
                 var coords = [boat, target]
                 routeSource.shape = MLNPolylineFeature(coordinates: &coords, count: 2)
+                labelBoatCoord = boat
             } else {
                 routeSource.shape = nil
+            }
+            labelTargetCoord = target
+            refreshDistanceLabel(on: mapView)
+        }
+
+        /// Odświeża etykietę dystansu przy pinezce (łódka→cel, haversine). Obrazek
+        /// re-rasteryzujemy tylko przy zmianie tekstu; ukrywamy etykietę bez celu
+        /// lub bez pozycji łódki (nie da się policzyć). MapLibre pozycjonuje symbol.
+        private func refreshDistanceLabel(on mapView: MLNMapView) {
+            guard let style = mapView.style,
+                  let labelSource = style.source(withIdentifier: Self.targetLabelSourceID) as? MLNShapeSource else {
+                return
+            }
+            guard let target = labelTargetCoord, let boat = labelBoatCoord else {
+                labelSource.shape = nil
+                lastDistanceText = nil
+                return
+            }
+            let metres = GeoDistance.metres(fromLat: boat.latitude, fromLon: boat.longitude,
+                                            toLat: target.latitude, toLon: target.longitude)
+            let text = GeoDistance.shortLabel(metres: metres)
+            if text != lastDistanceText {
+                style.setImage(Self.distanceLabelImage(text), forName: Self.targetLabelIconName)
+                lastDistanceText = text
+            }
+            let feature = MLNPointFeature()
+            feature.coordinate = target
+            labelSource.shape = feature
+        }
+
+        /// Renderuje dystans jako pigułkę (biały tekst na ciemnym tle) — brak
+        /// wbudowanych fontów, więc tekst rasteryzujemy do obrazka symbolu.
+        private static func distanceLabelImage(_ text: String) -> UIImage {
+            let font = UIFont.systemFont(ofSize: 13, weight: .bold)
+            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.white]
+            let textSize = (text as NSString).size(withAttributes: attrs)
+            let padH: CGFloat = 9, padV: CGFloat = 4
+            let size = CGSize(width: ceil(textSize.width) + padH * 2,
+                              height: ceil(textSize.height) + padV * 2)
+            let renderer = UIGraphicsImageRenderer(size: size)
+            return renderer.image { _ in
+                let rect = CGRect(origin: .zero, size: size)
+                UIColor(red: 0.05, green: 0.13, blue: 0.21, alpha: 0.9).setFill()
+                UIBezierPath(roundedRect: rect, cornerRadius: size.height / 2).fill()
+                (text as NSString).draw(at: CGPoint(x: padH, y: padV), withAttributes: attrs)
             }
         }
 
