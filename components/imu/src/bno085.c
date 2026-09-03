@@ -161,7 +161,7 @@ static void sensor_cb(void *cookie, sh2_SensorEvent_t *event)
     int16_t qj = (int16_t)lroundf(value.un.rotationVector.j * IMU_Q14_SCALE);
     int16_t qk = (int16_t)lroundf(value.un.rotationVector.k * IMU_Q14_SCALE);
     int16_t qr = (int16_t)lroundf(value.un.rotationVector.real * IMU_Q14_SCALE);
-    uint16_t heading = quat_to_yaw_deg10(qi, qj, qk, qr);
+    uint16_t heading = yaw_to_compass_heading_deg10(quat_to_yaw_deg10(qi, qj, qk, qr));
     store_state(true, heading, value.status & IMU_ACCURACY_MASK);
     s_last_report_ms = now_ms();
 }
