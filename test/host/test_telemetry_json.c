@@ -13,6 +13,11 @@ static control_loop_snapshot max_width_snapshot(void)
 {
     control_loop_snapshot s;
     memset(&s, 0, sizeof(s));
+    /* Fill fw_version to its full 31-char capacity (the field is fixed-size,
+     * NUL-terminated) -- an empty/zeroed string would understate the true
+     * worst case this test exists to guard. */
+    memset(s.fw_version, 'X', sizeof(s.fw_version) - 1);
+    s.fw_version[sizeof(s.fw_version) - 1] = '\0';
     s.state = (sm_state)9;
     s.arm_reason = (sm_arm_reason)99;
     s.rc_valid = false;

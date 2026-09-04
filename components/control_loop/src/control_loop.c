@@ -1,8 +1,11 @@
 #include "control_loop.h"
 
+#include <string.h>
+
 #include "switch_debounce.h"
 #include "click_counter.h"
 #include "commit_debounce.h"
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
 #include "esp_timer.h"
@@ -216,6 +219,13 @@ esp_err_t control_loop_init(const settings_params *initial,
     }
     s_params = *initial;
     s_load_flags = *load_result;
+    /* Set once: the running app's version never changes at runtime, so there is
+     * no need to re-copy it every 50 Hz cycle like the sensor-derived fields
+     * below. esp_app_get_description() always describes the CURRENTLY RUNNING
+     * image, so this can never drift from what is actually flashed. */
+    const esp_app_desc_t *app_desc = esp_app_get_description();
+    strncpy(s_snapshot.fw_version, app_desc->version, sizeof(s_snapshot.fw_version) - 1);
+    s_snapshot.fw_version[sizeof(s_snapshot.fw_version) - 1] = '\0';
     rebuild_validity_cfg(&s_params);
     loop_state_init(&s_loop, &s_params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
     switch_debounce_init(&s_ch4_switch);

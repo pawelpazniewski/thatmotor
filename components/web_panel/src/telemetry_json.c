@@ -5,7 +5,8 @@
 int telemetry_json_format(const control_loop_snapshot *s, char *buf, size_t n)
 {
     return snprintf(buf, n,
-        "{\"state\":%d,\"arm_reason\":%u,\"rc_valid\":%s,\"ch1_us\":%u,"
+        "{\"fw_version\":\"%s\","
+        "\"state\":%d,\"arm_reason\":%u,\"rc_valid\":%s,\"ch1_us\":%u,"
         "\"ch2_us\":%u,\"ch4_us\":%u,\"ch3_us\":%u,\"ch1_period_us\":%u,"
         "\"ch2_period_us\":%u,"
         "\"ch1_valid\":%s,\"ch2_valid\":%s,\"servo_us\":%u,\"esc_us\":%u,"
@@ -20,6 +21,7 @@ int telemetry_json_format(const control_loop_snapshot *s, char *buf, size_t n)
         "\"goto_state\":%u,\"goto_target_lat_e7\":%d,\"goto_target_lon_e7\":%d,"
         "\"goto_err_m\":%u,\"goto_bearing_deg10\":%u,\"goto_arrived\":%s,"
         "\"app_link_fresh\":%s}",
+        s->fw_version,
         (int)s->state, (unsigned)s->arm_reason, s->rc_valid ? "true" : "false",
         (unsigned)s->ch1_us, (unsigned)s->ch2_us, (unsigned)s->ch4_us,
         (unsigned)s->ch3_us,

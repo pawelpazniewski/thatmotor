@@ -225,6 +225,7 @@ static int cmd_status(int argc, char **argv)
     control_loop_snapshot snap;
     control_loop_get_snapshot(&snap);
 
+    printf("fw_version=%s\n", snap.fw_version);
     printf("heading_deg=%u.%u\n", (unsigned)(snap.imu_heading_deg10 / 10U),
           (unsigned)(snap.imu_heading_deg10 % 10U));
     printf("raw_yaw_deg=%u.%u\n", (unsigned)(snap.imu_raw_yaw_deg10 / 10U),

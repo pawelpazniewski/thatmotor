@@ -24,6 +24,12 @@ extern "C" {
  * outside RC_valid). Provenance flags mirror the load-time settings result.
  */
 typedef struct {
+    /* Firmware version (PROJECT_VER, CMakeLists.txt), NUL-terminated. Set once
+     * at control_loop_init from esp_app_get_description() -- single source of
+     * truth (the app-description partition ESP-IDF already embeds), not a
+     * second hand-maintained copy. Lets the app/console show exactly what is
+     * flashed instead of inferring it from behaviour. */
+    char fw_version[32];
     sm_state state;            /* current control state (R8) */
     sm_arm_reason arm_reason;  /* why arming is blocked, else READY (R7 gate) */
     bool rc_valid;             /* debounced RC validity */
