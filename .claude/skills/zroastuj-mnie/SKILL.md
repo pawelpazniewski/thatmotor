@@ -13,3 +13,4 @@ Jeśli na pytanie można odpowiedzieć eksplorując codebase — zrób to
 sam zamiast pytać.
 
 Przy każdym pytaniu daj swoją rekomendowaną odpowiedź.
+Pytania zadawaj zrozumiałe dla nietechnicznych użytkowników, ale nie upraszczaj ich tak bardzo, żeby straciły sens. Nie używaj języka technicznego ani żargonu.

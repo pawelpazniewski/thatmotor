@@ -7,6 +7,7 @@ import SwiftUI
 @main
 struct DeRiskProbeApp: App {
     var body: some Scene {
+        
         WindowGroup {
             ContentView()
         }
