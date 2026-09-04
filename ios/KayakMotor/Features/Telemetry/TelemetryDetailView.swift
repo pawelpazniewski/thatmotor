@@ -6,8 +6,8 @@ import KayakContract
 /// (trim, R5). Widok cienki — stringi składa `TelemetryDisplay` i akcesory
 /// `Telemetry`, a staleness (R6) bramkuje `displayed(_:isFresh:)`: gdy łącze nie
 /// jest świeże LUB brak ramki, każdy wiersz pokazuje myślnik zamiast zamrożonej
-/// liczby. Trim aktywny TYLKO w DISARMED — firmware honoruje regulację neutrala
-/// wyłącznie po rozbrojeniu.
+/// liczby. Trim aktywny w DISARMED i ARMED — firmware honoruje regulację
+/// neutrala w obu tych stanach (ARMED: korekta na bieżąco w trakcie pływania).
 struct TelemetryDetailView: View {
     let store: TelemetryStore
     let model: AppModel
@@ -80,7 +80,7 @@ struct TelemetryDetailView: View {
         }
     }
 
-    // MARK: - Trim serwa (R5) — aktywny tylko DISARMED
+    // MARK: - Trim serwa (R5) — aktywny w DISARMED i ARMED
 
     private var trimSection: some View {
         let isEnabled = TelemetryDisplay.isTrimEnabled(state: store.latest?.state ?? .unknown)
@@ -95,7 +95,7 @@ struct TelemetryDetailView: View {
                     .tint(SunlightTheme.brand)
             }
             if !isEnabled {
-                Text("Rozbrój, aby wyregulować neutral")
+                Text("Rozbrój lub uzbrój, aby wyregulować neutral")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -98,7 +98,8 @@ final class AppModel {
     /// „Płyń do punktu" — miękka bariera geofence, potem wysyła. Ostrzegamy tylko,
     /// gdy tap trafił poza wodę (wg warstwy wody mapy); waypoint/telemetria nie ostrzega.
     func requestGoto() {
-        guard let staged = target.staged else { return }
+        guard let staged = target.staged,
+              SpotLockReadiness.blockReason(telemetry.latest) == nil else { return }
         autonomousIntent = .goto
         if !stagedOnWater {
             pendingGeofencedTarget = staged
@@ -148,7 +149,7 @@ final class AppModel {
         }
     }
 
-    // MARK: - Trim serwa (R5) — regulacja neutrala, firmware honoruje tylko DISARMED
+    // MARK: - Trim serwa (R5) — regulacja neutrala, firmware honoruje DISARMED i ARMED
 
     /// Przesuń neutral serwa w lewo o krok firmware (`trim_left`).
     func trimLeft() {

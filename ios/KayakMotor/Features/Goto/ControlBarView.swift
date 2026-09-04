@@ -3,7 +3,9 @@ import KayakContract
 
 /// Dolny pasek sterowania: 4 przyciski ikonowe inline — Goto, STOP, Rozbrój,
 /// Spot-lock (kotwica). Nad nimi kompaktowy status (dystans/namiar albo powód
-/// blokady), pokazywany tylko gdy istotny. Spot-lock wyszarzony bez ARMED+fixu (R6).
+/// blokady), pokazywany tylko gdy istotny. Goto i Spot-lock wyszarzone bez
+/// ARMED+fixu (R6) -- inaczej firmware zatrzaskuje cel na DISARMED i odpala
+/// goto natychmiast po następnym uzbrojeniu, zaskakując operatora.
 struct ControlBarView: View {
     let hasTarget: Bool
     let sendState: GotoTargetController.SendState
@@ -17,18 +19,19 @@ struct ControlBarView: View {
     private let buttonSize: CGFloat = 64
 
     var body: some View {
+        let spotLockReady = SpotLockReadiness.blockReason(telemetry) == nil
         VStack(spacing: 10) {
             statusLine
             HStack(spacing: 18) {
                 iconButton("location.north.line.fill",
                            tint: hasTarget ? SunlightTheme.gotoColor : Color.gray,
                            label: "Płyń do punktu",
-                           enabled: hasTarget && sendState != .sending,
+                           enabled: hasTarget && sendState != .sending && spotLockReady,
                            action: onGoto)
                 iconButton("stop.fill", tint: SunlightTheme.stopColor, label: "STOP", action: onStop)
                 iconButton("bolt.slash.fill", tint: SunlightTheme.disarmColor, label: "Rozbrój", action: onDisarm)
                 iconButton("anchor", tint: SunlightTheme.brand, label: "Spot-lock (kotwica)",
-                           enabled: SpotLockReadiness.canEngage(telemetry),
+                           enabled: spotLockReady,
                            action: onSpotLock)
             }
         }
