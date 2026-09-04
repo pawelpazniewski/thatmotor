@@ -29,7 +29,9 @@ extern "C" {
  */
 typedef struct {
     bool ok;                /* true while fresh rotation-vector data is flowing */
-    uint16_t heading_deg10; /* yaw / heading in degrees * 10, [0, 3599] */
+    uint16_t heading_deg10; /* compass heading, degrees * 10, [0, 3599] */
+    uint16_t raw_yaw_deg10; /* pre-conversion quat_to_yaw_deg10() output, for
+                              * mounting-offset calibration diagnostics */
     uint8_t calib;          /* SH-2 accuracy / calibration status, 0..3 */
 } imu_state;
 

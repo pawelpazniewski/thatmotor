@@ -213,6 +213,43 @@ static esp_err_t register_params(void)
     return esp_console_cmd_register(&cmd);
 }
 
+/* `status`: one-shot live snapshot, on demand, with no active spot-lock/goto
+ * session required (unlike `spotlog dump`, which only has data while a session
+ * is running). Print heading first and as a whole degree: this exists mainly
+ * to correlate the IMU heading against a real compass reading during bench
+ * calibration checks. */
+static int cmd_status(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    control_loop_snapshot snap;
+    control_loop_get_snapshot(&snap);
+
+    printf("heading_deg=%u.%u\n", (unsigned)(snap.imu_heading_deg10 / 10U),
+          (unsigned)(snap.imu_heading_deg10 % 10U));
+    printf("raw_yaw_deg=%u.%u\n", (unsigned)(snap.imu_raw_yaw_deg10 / 10U),
+          (unsigned)(snap.imu_raw_yaw_deg10 % 10U));
+    printf("imu_ok=%u imu_calib=%u\n", (unsigned)(snap.imu_ok ? 1U : 0U),
+          (unsigned)snap.imu_calib);
+    printf("gps_fix=%u gps_fresh=%u sats=%u\n",
+          (unsigned)(snap.gps_fix ? 1U : 0U), (unsigned)(snap.gps_fresh ? 1U : 0U),
+          (unsigned)snap.gps_sats);
+    printf("state=%u rc_valid=%u\n", (unsigned)snap.state,
+          (unsigned)(snap.rc_valid ? 1U : 0U));
+    return 0;
+}
+
+static esp_err_t register_status(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "status",
+        .help = "One-shot live snapshot (heading/imu/gps/state), no session needed: status",
+        .hint = NULL,
+        .func = &cmd_status,
+    };
+    return esp_console_cmd_register(&cmd);
+}
+
 esp_err_t usb_console_start(void)
 {
     esp_console_repl_t *repl = NULL;
@@ -238,7 +275,12 @@ esp_err_t usb_console_start(void)
     if (err != ESP_OK) {
         return err;
     }
-    ESP_LOGI(TAG, "USB console up (prio %d): spotlog dump, params get/set",
+    err = register_status();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    ESP_LOGI(TAG, "USB console up (prio %d): spotlog dump, params get/set, status",
              USB_CONSOLE_TASK_PRIO);
     return esp_console_start_repl(repl);
 }

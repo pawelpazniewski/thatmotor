@@ -43,13 +43,43 @@ uint16_t quat_to_yaw_deg10(int16_t q_i, int16_t q_j, int16_t q_k,
 
 /* Reflection axis, degrees * 10: yaw_math is measured CCW from the world X
  * axis (East, per the BNO085/Android Rotation Vector ENU convention: X=East,
- * Y=North). Compass heading is measured CW from North (world Y). Converting
- * between a CCW-from-East angle and a CW-from-North angle is a reflection
- * around the 45 deg axis (equidistant from East and North), not a plain
- * negation around 0/north -- confirmed on hardware: rotating the hull left
- * showed up as a RIGHT turn in the raw yaw, and the one static heading that
- * happened to read correctly was near 56 deg (close to this 45 deg axis, the
- * gap being plausible mounting/measurement offset), not near 0/180. */
+ * Y=North, Z=Up -- identity mapping per CEVA BNO08X Datasheet v1.17 sec 4).
+ * Compass heading is measured CW from North (world Y). Converting between a
+ * CCW-from-East angle and a CW-from-North angle is a reflection around the
+ * 45 deg axis (equidistant from East and North), not a plain negation
+ * around 0/north -- confirmed on hardware: rotating the hull left showed up
+ * as a RIGHT turn in the raw yaw.
+ *
+ * No mounting-derived nudge beyond the theoretical 45 deg: the mount is
+ * confirmed clean. The X arrow points to the bow within ~1 deg, and a bench
+ * check on 2026-09-04 (raw Rotation Vector quaternion logged flat, axis-
+ * diagram side up, via the ESP_LOGI in bno085.c: i~=-0.94, j~=-0.34,
+ * k~=-0.015, w~=0.02) showed the sensor's Y/Z axes are physically inverted
+ * relative to the BNO08X datasheet reference (Figure 4-1) -- but decomposed
+ * as roll/pitch/yaw (ZYX Euler) that reading is roll~=-178 deg, pitch~=-2.5
+ * deg, yaw~=40-44 deg: a rotation almost entirely about the sensor's OWN X
+ * axis. quat_to_yaw_deg10's yaw output depends only on yaw and pitch, never
+ * roll (rotating about X cannot move X), so this near-180 deg roll is
+ * mathematically invisible to it -- it does NOT need compensating here, and
+ * folding it into this axis constant was the earlier, wrong model.
+ * Physically re-mounting is not an option right now (the IMU is installed
+ * in the motor housing with wires connected) -- but per the above, none is
+ * needed for yaw/heading correctness.
+ *
+ * A single on-water compass comparison (2026-09-03, imu_calib=3/3 at the
+ * time) measured a 6.3 deg deficit (telemetry 61.8 vs a real compass 55.5)
+ * and that was mistakenly folded in here as a "mounting offset" (giving
+ * 50.4 deg) -- reverted. With the mount confirmed clean, that deficit isn't
+ * geometric: the same 2026-09-04 bench log showed yaw drifting ~4 deg over
+ * 3 stationary minutes while roll/pitch held rock-steady, pointing at
+ * mag-calibration convergence (not yet settled at measurement time) rather
+ * than a fixed offset -- and even if it were, a flat correction fit to ONE
+ * heading would only be correct at that heading if the true cause is
+ * heading-dependent magnetic deviation (hard/soft iron from the nearby
+ * motor/battery), which this axis constant cannot model. Investigate that
+ * deficit on its own terms (let calib fully converge before comparing;
+ * check with motor on vs off) rather than re-baking it in here. See
+ * docs/dev-brainstorms/2026-09-04-imu-mount-offset-requirements.md. */
 #define COMPASS_MIRROR_AXIS_DEG10 450
 
 uint16_t yaw_to_compass_heading_deg10(uint16_t yaw_deg10)

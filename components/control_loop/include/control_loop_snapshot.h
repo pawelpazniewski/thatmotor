@@ -55,6 +55,8 @@ typedef struct {
      * task's shared state for the panel. Never feeds rc_valid/loop_step/sm_inputs. */
     bool imu_ok;               /* fresh rotation-vector data is flowing */
     uint16_t imu_heading_deg10;/* yaw / heading in degrees * 10, [0, 3599] */
+    uint16_t imu_raw_yaw_deg10;/* pre-conversion quat_to_yaw_deg10() output,
+                                 * for mounting-offset calibration diagnostics */
     uint8_t imu_calib;         /* SH-2 accuracy / calibration status, 0..3 */
     /* Spot-lock (CH3 GPS position hold) telemetry. State 0=off, 1=active,
      * 2=paused. err/bearing are meaningful while active/paused. */

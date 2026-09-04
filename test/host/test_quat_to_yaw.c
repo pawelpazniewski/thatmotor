@@ -65,10 +65,12 @@ void test_result_always_in_range_for_negative_atan2(void)
 
 void test_compass_mirror_zero_yaw_is_ninety(void)
 {
-    /* Arrange/Act: yaw=0 (facing world East, math convention) is compass 90
-     * deg -- kills both the identity mutant (would give 0) and the earlier,
-     * wrong 0-axis mirror (would also give 0, since 0 is that mirror's fixed
-     * point). */
+    /* Arrange/Act: yaw=0 (facing world East, math convention) reflects to
+     * compass 90 deg -- kills both the identity mutant (would give 0) and a
+     * stale calibrated-offset axis (e.g. the reverted 50.4 deg, which would
+     * give 100.8, not 90). Oracle-rewrite 2026-09-04: mount confirmed clean
+     * (see quat_to_yaw.c COMPASS_MIRROR_AXIS_DEG10 comment) -- 45 deg is the
+     * axis again, not the mounting-offset-derived 50.4 deg used briefly. */
     uint16_t deg10 = yaw_to_compass_heading_deg10(0);
 
     /* Assert */
@@ -77,8 +79,9 @@ void test_compass_mirror_zero_yaw_is_ninety(void)
 
 void test_compass_mirror_ninety_yaw_is_zero(void)
 {
-    /* Arrange/Act: yaw=90 deg (facing world North, math convention) is
-     * compass 0 -- kills the earlier 0-axis mirror (would give 270, not 0). */
+    /* Arrange/Act: yaw at 2x the mirror axis reflects to compass 0 -- kills
+     * a stale axis value (e.g. the reverted 50.4 deg, which would give
+     * 3592/-8, not 0). */
     uint16_t deg10 = yaw_to_compass_heading_deg10(900);
 
     /* Assert */
@@ -88,7 +91,8 @@ void test_compass_mirror_ninety_yaw_is_zero(void)
 void test_compass_mirror_axis_is_its_own_fixed_point(void)
 {
     /* Arrange/Act: 45 deg is the reflection axis, so it maps to itself --
-     * kills a mutant that reflects around any other axis (e.g. 0). */
+     * kills a mutant that reflects around any other axis (e.g. the reverted
+     * 50.4 deg mounting-offset value). */
     uint16_t deg10 = yaw_to_compass_heading_deg10(450);
 
     /* Assert */
@@ -97,17 +101,20 @@ void test_compass_mirror_axis_is_its_own_fixed_point(void)
 
 void test_compass_mirror_reverses_rotation_sense(void)
 {
-    /* Arrange: two yaw readings 10 deg apart (a CCW math-yaw increase, the
-     * raw sensor's own convention). Act */
-    uint16_t low = yaw_to_compass_heading_deg10(1000);
-    uint16_t high = yaw_to_compass_heading_deg10(1100);
+    /* Arrange: two yaw readings 10 deg apart, both well below the doubled
+     * axis (900) so neither wraps -- isolates the direction check from the
+     * wrap branch (covered separately below). Act */
+    uint16_t compass_at_low_yaw = yaw_to_compass_heading_deg10(100);
+    uint16_t compass_at_high_yaw = yaw_to_compass_heading_deg10(200);
 
-    /* Assert: compass heading must move the OPPOSITE way (DECREASE) -- this
-     * is the exact on-hardware symptom: turning the hull one way showed up as
-     * the other way in the raw yaw. An unmirrored (or non-reflecting) pass-
-     * through would make `high` >= `low`, failing this. */
-    TEST_ASSERT_TRUE(high < low);
-    TEST_ASSERT_EQUAL_UINT16(100, (uint16_t)(low - high));
+    /* Assert: compass heading must move the OPPOSITE way (DECREASE) as yaw
+     * increases -- this is the exact on-hardware symptom: turning the hull
+     * one way showed up as the other way in the raw yaw. An unmirrored (or
+     * non-reflecting) pass-through would make it INCREASE instead, failing
+     * this. */
+    TEST_ASSERT_TRUE(compass_at_high_yaw < compass_at_low_yaw);
+    TEST_ASSERT_EQUAL_UINT16(100,
+                             (uint16_t)(compass_at_low_yaw - compass_at_high_yaw));
 }
 
 void test_compass_mirror_result_always_in_range(void)

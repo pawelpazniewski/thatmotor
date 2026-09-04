@@ -132,7 +132,8 @@ static uint32_t hal_get_time_us(sh2_Hal_t *self)
     return (uint32_t)esp_timer_get_time();
 }
 
-static void store_state(bool ok, uint16_t heading_deg10, uint8_t calib)
+static void store_state(bool ok, uint16_t heading_deg10, uint16_t raw_yaw_deg10,
+                        uint8_t calib)
 {
     if (xSemaphoreTake(s_mutex, portMAX_DELAY) != pdTRUE) {
         return;
@@ -140,6 +141,7 @@ static void store_state(bool ok, uint16_t heading_deg10, uint8_t calib)
     s_state.ok = ok;
     if (ok) {
         s_state.heading_deg10 = heading_deg10;
+        s_state.raw_yaw_deg10 = raw_yaw_deg10;
         s_state.calib = calib;
     }
     xSemaphoreGive(s_mutex);
@@ -161,8 +163,19 @@ static void sensor_cb(void *cookie, sh2_SensorEvent_t *event)
     int16_t qj = (int16_t)lroundf(value.un.rotationVector.j * IMU_Q14_SCALE);
     int16_t qk = (int16_t)lroundf(value.un.rotationVector.k * IMU_Q14_SCALE);
     int16_t qr = (int16_t)lroundf(value.un.rotationVector.real * IMU_Q14_SCALE);
-    uint16_t heading = yaw_to_compass_heading_deg10(quat_to_yaw_deg10(qi, qj, qk, qr));
-    store_state(true, heading, value.status & IMU_ACCURACY_MASK);
+    /* Diagnostic only, throttled to ~1 Hz (CONFIG_LOG_MAXIMUM_LEVEL is INFO,
+     * so ESP_LOGD is compiled out): with the board lying flat, i and j near 0
+     * confirm the mount's Z axis is truly up (a pure Z-axis rotation
+     * quaternion has zero i/j) -- see
+     * docs/dev-brainstorms/2026-09-04-imu-mount-offset-requirements.md R1/R2. */
+    static int s_quat_log_divider;
+    if (++s_quat_log_divider >= 50) {
+        s_quat_log_divider = 0;
+        ESP_LOGI(TAG, "raw quat (Q14) i=%d j=%d k=%d w=%d", qi, qj, qk, qr);
+    }
+    uint16_t raw_yaw = quat_to_yaw_deg10(qi, qj, qk, qr);
+    uint16_t heading = yaw_to_compass_heading_deg10(raw_yaw);
+    store_state(true, heading, raw_yaw, value.status & IMU_ACCURACY_MASK);
     s_last_report_ms = now_ms();
 }
 
@@ -176,8 +189,20 @@ static esp_err_t enable_rotation_vector(void)
                : ESP_FAIL;
 }
 
-/* SH-2 async event callback: on a sensor reset the report config is lost, so
- * flag the reader task to re-enable it (must NOT call sh2_* re-entrantly). */
+/* Enable the SH-2 Motion Engine's own dynamic calibration for all three
+ * fused sensors so the Rotation Vector's accuracy (imu_calib) can actually
+ * climb above 0 -- without this call the hub never runs the on-chip
+ * calibrator, no matter how much the boat is rotated by hand. */
+static esp_err_t enable_calibration(void)
+{
+    return sh2_setCalConfig(SH2_CAL_ACCEL | SH2_CAL_GYRO | SH2_CAL_MAG) == SH2_OK
+               ? ESP_OK
+               : ESP_FAIL;
+}
+
+/* SH-2 async event callback: on a sensor reset the report/cal config is
+ * lost, so flag the reader task to re-enable it (must NOT call sh2_*
+ * re-entrantly). */
 static void event_cb(void *cookie, sh2_AsyncEvent_t *event)
 {
     (void)cookie;
@@ -194,10 +219,11 @@ static void imu_task(void *arg)
         if (s_need_reconfig) {
             s_need_reconfig = false;
             enable_rotation_vector();
+            enable_calibration();
         }
         sh2_service();
         if (now_ms() - s_last_report_ms > IMU_STALE_AFTER_MS) {
-            store_state(false, 0, 0); /* stale: panel flag only, NOT failsafe */
+            store_state(false, 0, 0, 0); /* stale: panel flag only, NOT failsafe */
         }
         vTaskDelay(pdMS_TO_TICKS(IMU_SERVICE_PERIOD_MS));
     }
@@ -267,6 +293,12 @@ esp_err_t imu_start(void)
         return ESP_FAIL;
     }
     sh2_setSensorCallback(sensor_cb, NULL);
+
+    err = enable_calibration();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "enable calibration failed");
+        return err;
+    }
 
     err = enable_rotation_vector();
     if (err != ESP_OK) {

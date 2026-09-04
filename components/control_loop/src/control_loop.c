@@ -495,6 +495,7 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     imu_get_state(&m);
     s_snapshot.imu_ok = m.ok;
     s_snapshot.imu_heading_deg10 = m.heading_deg10;
+    s_snapshot.imu_raw_yaw_deg10 = m.raw_yaw_deg10;
     s_snapshot.imu_calib = m.calib;
     /* Spot-lock telemetry from this cycle's loop outputs (ints only). */
     s_snapshot.spot_lock_state = out->telemetry.spot_lock_substate;
