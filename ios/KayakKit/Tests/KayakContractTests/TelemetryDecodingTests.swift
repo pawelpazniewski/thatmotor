@@ -54,7 +54,7 @@ struct TelemetryDecodingTests {
     @Test("pełna ramka z nowymi polami → wszystkie zdekodowane (≠ 0)")
     func decodesNewFields() throws {
         let t = try decode("""
-        {"state":1,"arm_reason":0,"rc_valid":true,"gps_fix":true,"gps_sats":9,
+        {"fw_version":"1.0.0","state":1,"arm_reason":0,"rc_valid":true,"gps_fix":true,"gps_sats":9,
         "gps_lat_e7":522297000,"gps_lon_e7":210122000,"gps_speed_cms":150,
         "imu_ok":true,"imu_heading_deg10":1234,"spot_lock_state":1,
         "goto_state":0,"goto_target_lat_e7":0,"goto_target_lon_e7":0,
@@ -62,6 +62,7 @@ struct TelemetryDecodingTests {
         "app_link_fresh":true,"imu_calib":3,"spot_lock_err_m":7,
         "spot_lock_bearing_deg10":905,"servo_trim_us":120}
         """)
+        #expect(t.fwVersion == "1.0.0")
         #expect(t.imuCalib == 3)
         #expect(t.spotLockErrM == 7)
         #expect(t.spotLockBearingDeg10 == 905)
@@ -69,10 +70,11 @@ struct TelemetryDecodingTests {
         #expect(abs(t.spotLockBearingDegrees - 90.5) < 1e-9)   // deg10 → deg
     }
 
-    @Test("ramka bez nowych pól (stary firmware) → dekoder nie rzuca, pola = 0")
+    @Test("ramka bez nowych pól (stary firmware) → dekoder nie rzuca, pola = 0/puste")
     func toleratesMissingNewFields() throws {
-        // armedFrame nie zawiera imu_calib/spot_lock_*/servo_trim_us
+        // armedFrame nie zawiera fw_version/imu_calib/spot_lock_*/servo_trim_us
         let t = try decode(armedFrame)
+        #expect(t.fwVersion == "")
         #expect(t.imuCalib == 0)
         #expect(t.spotLockErrM == 0)
         #expect(t.spotLockBearingDeg10 == 0)

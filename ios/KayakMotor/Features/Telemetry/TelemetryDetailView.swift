@@ -23,6 +23,7 @@ struct TelemetryDetailView: View {
                 gotoSection
                 linkSection
                 trimSection
+                firmwareSection
             }
             .navigationTitle("Telemetria")
             .navigationBarTitleDisplayMode(.inline)
@@ -100,6 +101,15 @@ struct TelemetryDetailView: View {
         Section("Łącze / RC") {
             valueRow("RC poprawny") { TelemetryDisplay.boolText($0.rcValid) }
             valueRow("Link świeży") { TelemetryDisplay.boolText($0.appLinkFresh) }
+        }
+    }
+
+    /// Wersja firmware faktycznie działającego na płytce (PROJECT_VER, patrz
+    /// CMakeLists.txt) — żeby wiedzieć co jest sflashowane bez podpinania się
+    /// pod port szeregowy.
+    private var firmwareSection: some View {
+        Section("Firmware") {
+            valueRow("Wersja") { $0.fwVersion.isEmpty ? "—" : $0.fwVersion }
         }
     }
 

@@ -32,6 +32,7 @@ public enum HoldState: Int, Sendable {
 /// Jedna ramka telemetrii WS (`GET /ws`, ~10 Hz). Dekoduje TYLKO pola
 /// konsumowane przez apkę; nadmiarowe pola firmware są ignorowane.
 public struct Telemetry: Decodable, Sendable {
+    public let fwVersion: String
     public let state: SystemState
     public let armReason: ArmReason
     public let rcValid: Bool
@@ -56,6 +57,7 @@ public struct Telemetry: Decodable, Sendable {
     public let servoTrimUs: Int
 
     private enum CodingKeys: String, CodingKey {
+        case fw_version
         case state, arm_reason, rc_valid, gps_fix, gps_sats
         case gps_lat_e7, gps_lon_e7, gps_speed_cms
         case imu_ok, imu_heading_deg10
@@ -67,6 +69,9 @@ public struct Telemetry: Decodable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Tolerancja starszego firmware (brak klucza → pusty string, jak inne
+        // pola dodane po fakcie poniżej).
+        fwVersion = try c.decodeIfPresent(String.self, forKey: .fw_version) ?? ""
         state = SystemState(rawValue: try c.decode(Int.self, forKey: .state)) ?? .unknown
         armReason = ArmReason(rawValue: try c.decode(Int.self, forKey: .arm_reason)) ?? .unknown
         rcValid = try c.decode(Bool.self, forKey: .rc_valid)
