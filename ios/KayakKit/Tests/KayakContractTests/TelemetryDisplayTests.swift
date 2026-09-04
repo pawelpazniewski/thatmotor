@@ -45,10 +45,11 @@ struct TelemetryDisplayTests {
 
     // Moc wyroczni: mutacja isTrimEnabled na „zawsze true" MUSI failować
     // na którymś z pozostałych stanów.
-    @Test("isTrimEnabled tylko dla DISARMED")
-    func trimEnabledOnlyDisarmed() {
+    @Test("isTrimEnabled dla DISARMED i ARMED")
+    func trimEnabledDisarmedAndArmed() {
         #expect(TelemetryDisplay.isTrimEnabled(state: .disarmed) == true)
-        for state: SystemState in [.armed, .failsafe, .escCalibration, .deploy, .unknown] {
+        #expect(TelemetryDisplay.isTrimEnabled(state: .armed) == true)
+        for state: SystemState in [.failsafe, .escCalibration, .deploy, .unknown] {
             #expect(TelemetryDisplay.isTrimEnabled(state: state) == false)
         }
     }
@@ -125,5 +126,26 @@ struct TelemetryDisplayTests {
             gotoState: .paused, gotoErrM: 55, gotoBearingDeg10: 100,
             spotLockState: .active, spotLockErrM: 999, spotLockBearingDeg10: 3599)
         #expect(text == "55 m · 10°")
+    }
+
+    @Test("calibratedHeadingDegrees: zero offset to identyczność")
+    func calibratedHeadingZeroOffsetIsIdentity() {
+        #expect(TelemetryDisplay.calibratedHeadingDegrees(50.8, offsetDegrees: 0) == 50.8)
+    }
+
+    @Test("calibratedHeadingDegrees: dodaje offset wprost, bez zawijania")
+    func calibratedHeadingAddsOffset() {
+        #expect(TelemetryDisplay.calibratedHeadingDegrees(50.8, offsetDegrees: 10) == 60.8)
+        #expect(TelemetryDisplay.calibratedHeadingDegrees(50.8, offsetDegrees: -10) == 40.8)
+    }
+
+    @Test("calibratedHeadingDegrees: zawija powyżej 360 (moc wyroczni: identyczność by nie złapała braku zawijania)")
+    func calibratedHeadingWrapsAboveRange() {
+        #expect(TelemetryDisplay.calibratedHeadingDegrees(350, offsetDegrees: 20) == 10)
+    }
+
+    @Test("calibratedHeadingDegrees: zawija poniżej 0 (moc wyroczni: dodatni offset by nie złapał brakującego +360)")
+    func calibratedHeadingWrapsBelowRange() {
+        #expect(TelemetryDisplay.calibratedHeadingDegrees(5, offsetDegrees: -10) == 355)
     }
 }

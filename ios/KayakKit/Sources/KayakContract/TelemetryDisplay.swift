@@ -107,9 +107,21 @@ public enum TelemetryDisplay {
         link == .connected
     }
 
-    /// Czy regulacja trimu jest dozwolona — firmware stosuje trim WYŁĄCZNIE po
-    /// rozbrojeniu, więc UI aktywuje sekcję tylko dla `.disarmed`.
+    /// Czy regulacja trimu jest dozwolona — firmware stosuje trim (RAM,
+    /// natychmiast) w DISARMED i ARMED, więc UI aktywuje sekcję dla obu tych
+    /// stanów (ARMED: korekta neutralu na bieżąco w trakcie pływania).
     public static func isTrimEnabled(state: SystemState) -> Bool {
-        state == .disarmed
+        state == .disarmed || state == .armed
+    }
+
+    /// Kurs po zastosowaniu LOKALNEGO offsetu kompasu (dostrajanego ręcznie
+    /// przy wizualnej weryfikacji na mapie — patrz oś dzioba w `LakeMapView`),
+    /// znormalizowany do [0, 360). Offset jest wyłącznie kosmetyczny/per-
+    /// urządzenie: NIE dotyka firmware ani realnego sterowania (spot-lock/goto
+    /// liczą kurs sam firmware, z surowej telemetrii IMU).
+    public static func calibratedHeadingDegrees(_ headingDegrees: Double,
+                                                offsetDegrees: Double) -> Double {
+        let raw = (headingDegrees + offsetDegrees).truncatingRemainder(dividingBy: 360)
+        return raw < 0 ? raw + 360 : raw
     }
 }

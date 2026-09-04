@@ -22,19 +22,35 @@ struct BoatRenderState: Equatable {
 /// Aktualizacja markerów przez podmianę `MLNShapeSource.shape` (bufor GPU). Zero sieci.
 /// Most między przyciskami SwiftUI a `MLNMapView` do sterowania zoomem. Trzyma
 /// słabą referencję do mapy (ustawianą w `makeUIView`), by nie tworzyć retain cycle.
-@MainActor
+///
+/// `isFollowing`: czy kamera ma automatycznie podążać za łódką. Ręczny gest
+/// (przeciągnięcie/pinch) na mapie wyłącza podążanie -- inaczej auto-recenter
+/// co 1s w `Coordinator.updateBoat` „wyrywał" widok spod ręki, uniemożliwiając
+/// swobodne przesuwanie mapy. Wraca po `recenter(boat:)` (przycisk „Wróć do
+/// mojej pozycji").
+@MainActor @Observable
 final class MapCameraController {
     fileprivate weak var mapView: MLNMapView?
+    private(set) var isFollowing = true
 
     func zoomIn() { step(by: 1) }
     func zoomOut() { step(by: -1) }
 
     /// Wyśrodkuj widok na „Tobie": łódka (fix z telemetrii) jeśli dostępna, inaczej
     /// pozycja telefonu (GPS). Zachowuje bieżący zoom. Nic nie robi bez żadnej pozycji.
+    /// Przywraca też auto-podążanie za łódką (wyłączone wcześniejszym gestem).
     func recenter(boat: CLLocationCoordinate2D?) {
         guard let mapView else { return }
         guard let target = boat ?? mapView.userLocation?.location?.coordinate else { return }
+        isFollowing = true
         mapView.setCenter(target, animated: true)
+    }
+
+    /// Wywoływane przez `Coordinator`, gdy region mapy zmienił się z powodu
+    /// gestu użytkownika (patrz `regionWillChangeWith(reason:)`), nie naszego
+    /// wywołania API.
+    fileprivate func pauseFollowing() {
+        isFollowing = false
     }
 
     private func step(by delta: Double) {
@@ -47,7 +63,6 @@ struct LakeMapView: UIViewRepresentable {
     var boat: BoatRenderState
     var target: CLLocationCoordinate2D?
     var camera: MapCameraController
-    var followsBoat: Bool = true
     /// Tap w mapę: (współrzędna, czy punkt leży na wodzie).
     var onTap: (CLLocationCoordinate2D, Bool) -> Void = { _, _ in }
 
@@ -79,7 +94,8 @@ struct LakeMapView: UIViewRepresentable {
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
         context.coordinator.onTap = onTap
-        context.coordinator.updateBoat(boat, on: mapView, follow: followsBoat)
+        context.coordinator.camera = camera
+        context.coordinator.updateBoat(boat, on: mapView, follow: camera.isFollowing)
         context.coordinator.updateTarget(target, boat: boat.coordinate, on: mapView)
     }
 
@@ -87,6 +103,10 @@ struct LakeMapView: UIViewRepresentable {
         private static let boatSourceID = "boat-src"
         private static let targetSourceID = "target-src"
         private static let routeSourceID = "route-src"
+        private static let headingAxisSourceID = "heading-axis-src"
+        /// Długość rysowanej osi dzioba — wydłużona (x3 od pierwszej wersji: 40m
+        /// było za krótkie, by dostrzec na wodzie).
+        private static let headingAxisLengthMetres = 120.0
         private static let boatIconName = "boat-icon"
         private static let targetIconName = "target-icon"
         private static let targetLabelSourceID = "target-label-src"
@@ -101,8 +121,27 @@ struct LakeMapView: UIViewRepresentable {
         private var labelTargetCoord: CLLocationCoordinate2D?
         private var labelBoatCoord: CLLocationCoordinate2D?
         private var lastDistanceText: String?
+        private var lastLabelShapeCoord: CLLocationCoordinate2D?
         /// Tap w mapę: (współrzędna, czy punkt leży na wodzie).
         var onTap: (CLLocationCoordinate2D, Bool) -> Void = { _, _ in }
+        weak var camera: MapCameraController?
+
+        /// Region mapy zaczął się zmieniać -- jeśli powód NIE zawiera `.programmatic`
+        /// (czyli nie jest to nasze własne `setCenter`/`setZoomLevel`), to gest
+        /// użytkownika (pan/pinch/rotate) -- wyłącz auto-podążanie, żeby nie fightować
+        /// z ręcznym przesuwaniem mapy.
+        func mapView(_ mapView: MLNMapView, regionWillChangeWith reason: MLNCameraChangeReason,
+                    animated: Bool) {
+            guard !reason.contains(.programmatic) else { return }
+            // MLNMapViewDelegate callbacks always land on the main thread (UIKit
+            // contract), but the protocol conformance itself is nonisolated, so
+            // hop explicitly rather than mark this witness @MainActor (which
+            // Swift 6 rejects as a mixed-isolation conformance). Capture the
+            // (MainActor-isolated, weakly-held) controller directly, not `self`
+            // (this NSObject-derived Coordinator isn't Sendable).
+            let target = camera
+            Task { @MainActor in target?.pauseFollowing() }
+        }
 
         @MainActor @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard let mapView = recognizer.view as? MLNMapView else { return }
@@ -120,6 +159,7 @@ struct LakeMapView: UIViewRepresentable {
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             addBasemap(to: style)
             addRouteLine(to: style)
+            addHeadingAxisLine(to: style)
             addBoatLayer(to: style)
             addTargetLayer(to: style)
         }
@@ -199,6 +239,19 @@ struct LakeMapView: UIViewRepresentable {
             style.addLayer(line)
         }
 
+        /// Krótka, ciągła linia od łódki w kierunku `heading` z telemetrii (oś
+        /// dzioba) — do weryfikacji kompasu na oko: gdy dziób celuje w cel/punkt
+        /// orientacyjny, ta linia powinna pokrywać się z żółtą linią łódka→cel.
+        /// Styl (ciągła, czarna) celowo różny od trasy (przerywana, żółta).
+        private func addHeadingAxisLine(to style: MLNStyle) {
+            let source = MLNShapeSource(identifier: Self.headingAxisSourceID, shape: nil, options: nil)
+            style.addSource(source)
+            let line = MLNLineStyleLayer(identifier: "heading-axis-line", source: source)
+            line.lineColor = NSExpression(forConstantValue: UIColor.black)
+            line.lineWidth = NSExpression(forConstantValue: 2)
+            style.addLayer(line)
+        }
+
         private func addBoatLayer(to style: MLNStyle) {
             style.setImage(Self.markerImage(systemName: "location.north.fill", color: .systemYellow),
                            forName: Self.boatIconName)
@@ -247,6 +300,14 @@ struct LakeMapView: UIViewRepresentable {
             feature.coordinate = coordinate
             feature.attributes = ["heading": boat.headingDegrees]
             source.shape = feature
+
+            if let axisSource = style.source(withIdentifier: Self.headingAxisSourceID) as? MLNShapeSource {
+                let tip = GeoDistance.destination(fromLat: coordinate.latitude, fromLon: coordinate.longitude,
+                                                  bearingDegrees: boat.headingDegrees,
+                                                  distanceMetres: Self.headingAxisLengthMetres)
+                var coords = [coordinate, CLLocationCoordinate2D(latitude: tip.lat, longitude: tip.lon)]
+                axisSource.shape = MLNPolylineFeature(coordinates: &coords, count: 2)
+            }
 
             labelBoatCoord = coordinate
             refreshDistanceLabel(on: mapView)
@@ -297,6 +358,7 @@ struct LakeMapView: UIViewRepresentable {
             guard let target = labelTargetCoord, let boat = labelBoatCoord else {
                 labelSource.shape = nil
                 lastDistanceText = nil
+                lastLabelShapeCoord = nil
                 return
             }
             let metres = GeoDistance.metres(fromLat: boat.latitude, fromLon: boat.longitude,
@@ -306,9 +368,13 @@ struct LakeMapView: UIViewRepresentable {
                 style.setImage(Self.distanceLabelImage(text), forName: Self.targetLabelIconName)
                 lastDistanceText = text
             }
-            let feature = MLNPointFeature()
-            feature.coordinate = target
-            labelSource.shape = feature
+            if target.latitude != lastLabelShapeCoord?.latitude ||
+                target.longitude != lastLabelShapeCoord?.longitude {
+                let feature = MLNPointFeature()
+                feature.coordinate = target
+                labelSource.shape = feature
+                lastLabelShapeCoord = target
+            }
         }
 
         /// Renderuje dystans jako pigułkę (biały tekst na ciemnym tle) — brak

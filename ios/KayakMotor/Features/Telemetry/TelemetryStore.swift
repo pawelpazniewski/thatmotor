@@ -18,8 +18,17 @@ final class TelemetryStore {
     private var streamTask: Task<Void, Never>?
     private var tickTask: Task<Void, Never>?
 
+    /// Lokalny, ręczny offset kompasu (stopnie) do wizualnej weryfikacji/dostrojenia
+    /// kierunku na mapie (oś dzioba w `LakeMapView`, "Kurs" w szczegółach) — NIE
+    /// dotyka firmware ani sterowania. Trwały per-urządzenie (`UserDefaults`).
+    var compassOffsetDegrees: Double {
+        didSet { UserDefaults.standard.set(compassOffsetDegrees, forKey: Self.compassOffsetKey) }
+    }
+    private static let compassOffsetKey = "compassOffsetDegrees"
+
     init(socket: TelemetrySocket = TelemetrySocket()) {
         self.socket = socket
+        self.compassOffsetDegrees = UserDefaults.standard.double(forKey: Self.compassOffsetKey)
     }
 
     func start() {
@@ -74,7 +83,8 @@ final class TelemetryStore {
         linkState = machine.state
     }
 
-    /// Stan łodzi do renderu — nil pozycja, gdy brak świeżego fixu.
+    /// Stan łodzi do renderu — nil pozycja, gdy brak świeżego fixu. Kurs po
+    /// zastosowaniu `compassOffsetDegrees` (patrz jego dokumentacja).
     var boat: BoatRenderState {
         guard let t = latest, t.gpsFix else {
             return BoatRenderState(coordinate: nil, headingDegrees: 0)
@@ -83,7 +93,8 @@ final class TelemetryStore {
             coordinate: CLLocationCoordinate2D(
                 latitude: Coordinate.fromE7(t.gpsLatE7),
                 longitude: Coordinate.fromE7(t.gpsLonE7)),
-            headingDegrees: t.headingDegrees)
+            headingDegrees: TelemetryDisplay.calibratedHeadingDegrees(
+                t.headingDegrees, offsetDegrees: compassOffsetDegrees))
     }
 
     /// Powód, gdy goto nie może wystartować (nil = gotowe). `nil` też bez telemetrii.

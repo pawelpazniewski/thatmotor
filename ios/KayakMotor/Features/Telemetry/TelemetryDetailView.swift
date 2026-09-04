@@ -46,10 +46,33 @@ struct TelemetryDetailView: View {
     }
 
     private var compassSection: some View {
-        Section("Kompas") {
-            valueRow("Kurs") { degreesText($0.headingDegrees) }
+        Section {
+            valueRow("Kurs") {
+                degreesText(TelemetryDisplay.calibratedHeadingDegrees(
+                    $0.headingDegrees, offsetDegrees: store.compassOffsetDegrees))
+            }
             valueRow("Kalibracja IMU") { "\($0.imuCalib)/3" }
             valueRow("Czujnik OK") { TelemetryDisplay.boolText($0.imuOk) }
+            compassOffsetRow
+        } header: {
+            Text("Kompas")
+        } footer: {
+            Text("Offset koryguje TYLKO widok (oś dzioba na mapie, „Kurs” tutaj) — nie zmienia sterowania łodzi.")
+        }
+    }
+
+    /// Dostrojenie kursu na oko względem osi dzioba na mapie (patrz `LakeMapView`)
+    /// — krok 1°, zakres ±30° wystarcza na realne błędy montażu/kalibracji.
+    private var compassOffsetRow: some View {
+        Stepper(value: Binding(
+            get: { store.compassOffsetDegrees },
+            set: { store.compassOffsetDegrees = $0 }
+        ), in: -30...30, step: 1) {
+            HStack {
+                Text("Offset kompasu").foregroundStyle(.secondary)
+                Spacer()
+                Text(String(format: "%+.0f°", store.compassOffsetDegrees)).monospacedDigit()
+            }
         }
     }
 

@@ -37,4 +37,44 @@ struct GeoDistanceTests {
         #expect(GeoDistance.shortLabel(metres: 1000) == "1.0 km")
         #expect(GeoDistance.shortLabel(metres: 1250) == "1.2 km")
     }
+
+    @Test("Namiar 0° (północ) przesuwa TYLKO szerokość, w górę")
+    func destinationBearingZeroMovesLatOnly() {
+        let d = GeoDistance.destination(fromLat: 52.0, fromLon: 21.0,
+                                        bearingDegrees: 0, distanceMetres: 111_195)
+        // ~1 deg lat na tym promieniu — mylony znak/oś zawaliłby to, nie tylko
+        // przesunięcie w niewłaściwą stronę.
+        #expect(abs(d.lat - 53.0) < 0.01)
+        #expect(abs(d.lon - 21.0) < 0.01)
+    }
+
+    @Test("Namiar 180° (południe) przesuwa szerokość w dół")
+    func destinationBearingSouthDecreasesLat() {
+        let d = GeoDistance.destination(fromLat: 52.0, fromLon: 21.0,
+                                        bearingDegrees: 180, distanceMetres: 111_195)
+        #expect(abs(d.lat - 51.0) < 0.01)
+        #expect(abs(d.lon - 21.0) < 0.01)
+    }
+
+    @Test("Namiar 90° (wschód) na równiku przesuwa TYLKO długość, w prawo")
+    func destinationBearingEastOnEquatorMovesLonOnly() {
+        // Na równiku 1 deg lon ≈ ten sam dystans co 1 deg lat gdzie indziej
+        // (cos(lat)=1) -- odróżnia formułę namiaru od zwykłego haversine offsetu.
+        let d = GeoDistance.destination(fromLat: 0, fromLon: 0,
+                                        bearingDegrees: 90, distanceMetres: 111_195)
+        #expect(abs(d.lat - 0.0) < 0.01)
+        #expect(abs(d.lon - 1.0) < 0.01)
+    }
+
+    @Test("Spójność: dystans do wyliczonego punktu docelowego ≈ zadany dystans")
+    func destinationRoundTripsThroughMetres() {
+        let start = (lat: 52.4, lon: 21.6)
+        let bearing = 37.0
+        let distance = 250.0
+        let d = GeoDistance.destination(fromLat: start.lat, fromLon: start.lon,
+                                        bearingDegrees: bearing, distanceMetres: distance)
+        let back = GeoDistance.metres(fromLat: start.lat, fromLon: start.lon,
+                                      toLat: d.lat, toLon: d.lon)
+        #expect(abs(back - distance) < 0.5)
+    }
 }

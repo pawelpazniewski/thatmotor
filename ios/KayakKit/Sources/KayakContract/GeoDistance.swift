@@ -29,7 +29,30 @@ public enum GeoDistance {
         return String(format: "%.1f km", metres / 1000)
     }
 
+    /// Punkt docelowy po wyjściu z (lat, lon) danym namiarem (stopnie, CW od
+    /// północy) na zadany dystans w metrach (formuła sferyczna namiaru
+    /// wprost — movable-type.co.uk/scripts/latlong.html). Do rysowania krótkiej
+    /// linii osi łódki na mapie (weryfikacja kompasu względem realnego punktu).
+    public static func destination(fromLat lat1: Double, fromLon lon1: Double,
+                                   bearingDegrees: Double,
+                                   distanceMetres: Double) -> (lat: Double, lon: Double) {
+        let delta = distanceMetres / earthRadiusMetres
+        let theta = radians(bearingDegrees)
+        let phi1 = radians(lat1)
+        let lambda1 = radians(lon1)
+
+        let phi2 = asin(sin(phi1) * cos(delta) + cos(phi1) * sin(delta) * cos(theta))
+        let lambda2 = lambda1 + atan2(sin(theta) * sin(delta) * cos(phi1),
+                                      cos(delta) - sin(phi1) * sin(phi2))
+
+        return (lat: degrees(phi2), lon: degrees(lambda2))
+    }
+
     private static func radians(_ degrees: Double) -> Double {
         degrees * .pi / 180
+    }
+
+    private static func degrees(_ radians: Double) -> Double {
+        radians * 180 / .pi
     }
 }
