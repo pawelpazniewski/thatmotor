@@ -111,7 +111,14 @@ static esp_err_t configure_channel(mcpwm_cap_timer_handle_t timer,
     /* Capture both edges: rising starts the pulse/sets the period reference,
      * falling closes the pulse width. No internal pull configured: the RC
      * receiver drives the lines actively, so we leave the S3 I/O pins floating
-     * from the controller side. */
+     * from the controller side. A weak internal pull-down was tried here to
+     * make a disconnected/floating line settle low instead of picking up
+     * noise, but it regressed RC-loss failsafe on this receiver (which goes
+     * high-Z on signal loss rather than holding a driven neutral): the pull-down
+     * turned the floating line into something that read as plausible RC frames
+     * instead of the clearly-implausible noise channel_valid used to reject, so
+     * failsafe stopped tripping on transmitter-off. Reverted; do not re-add
+     * without re-validating actual TX-off failsafe entry on hardware. */
     mcpwm_capture_channel_config_t cfg = {
         .gpio_num = RC_CAP_GPIO_MAP[channel],
         .prescale = RC_CAP_PRESCALE,
