@@ -60,6 +60,7 @@ static spot_lock_outputs make_idle_output(spot_lock_substate substate)
         .err_m = 0,
         .bearing_deg10 = 0,
         .arrived = false,
+        .manual_override = false,
     };
     return out;
 }
@@ -231,12 +232,38 @@ static spot_lock_outputs compute_active_output(const spot_lock_inputs *in,
     return out;
 }
 
-/** Force the OFF sub-state with no engaged source. */
+/** Force the OFF sub-state with no engaged source. Also clears the throttle
+ * override hold counter: leaving OFF always starts that gesture fresh. */
 static spot_lock_outputs make_off(spot_lock_state *st)
 {
     st->substate = SPOT_LOCK_OFF;
     st->target_source = SPOT_LOCK_SRC_NONE;
+    st->throttle_override_frames = 0;
     return make_idle_output(SPOT_LOCK_OFF);
+}
+
+/**
+ * Deliberate manual-abort gesture (R4 revision): throttle held at 100%
+ * deflection, either direction, for throttle_override_hold_frames consecutive
+ * cycles. Replaces the old instant "any stick off neutral" override (R4), which
+ * tripped on an incidental bump of the transmitter. The hold must be
+ * continuous -- letting go at any point resets the counter to 0, so this cannot
+ * be accumulated across separate taps.
+ *
+ * @return true on the exact cycle the hold just reached the threshold.
+ */
+static bool throttle_override_fires(const spot_lock_inputs *in,
+                                    const spot_lock_params *p,
+                                    spot_lock_state *st)
+{
+    if (!in->throttle_full_deflect) {
+        st->throttle_override_frames = 0;
+        return false;
+    }
+    if (st->throttle_override_frames < UINT16_MAX) {
+        st->throttle_override_frames++;
+    }
+    return st->throttle_override_frames >= p->throttle_override_hold_frames;
 }
 
 /**
@@ -263,15 +290,17 @@ static spot_lock_outputs hold_or_pause(const spot_lock_inputs *in,
 /**
  * CH3 hold branch (SRC_HOLD). On transition into hold - a fresh CH3 request or
  * preempting a running goto - snapshot "here and now" as the target; this
- * requires a rising edge and a real, fresh fix. A held CH3 keeps its existing
- * snapshot. Link freshness never gates SRC_HOLD.
+ * requires a rising edge, sticks near neutral (R3/R4 entry gate), and a real,
+ * fresh fix. A held CH3 keeps its existing snapshot regardless of the sticks.
+ * Link freshness never gates SRC_HOLD.
  */
 static spot_lock_outputs run_ch3_hold(const spot_lock_inputs *in,
                                       const spot_lock_params *p,
                                       spot_lock_state *st)
 {
     if (st->target_source != SPOT_LOCK_SRC_HOLD) {
-        if (!in->ch3_edge_on || !in->gps_fresh || !in->gps_has_fix) {
+        if (!in->ch3_edge_on || !in->sticks_neutral || !in->gps_fresh ||
+            !in->gps_has_fix) {
             return make_off(st);
         }
         st->ref_lat_e7 = in->lat_e7;
@@ -285,29 +314,44 @@ spot_lock_outputs spot_lock_step(const spot_lock_inputs *in,
                                  const spot_lock_params *p,
                                  spot_lock_state *st)
 {
-    /* 1. Manual override / disarm wins unconditionally (R4/R6). */
-    if (!in->armed || !in->sticks_neutral) {
+    /* 1. Disarm/failsafe wins unconditionally and instantly (R6). */
+    if (!in->armed) {
         return make_off(st);
     }
 
-    /* 2. CH3 physically preempts goto: hold "here and now" (R4). */
+    /* 1b. Deliberate manual-abort gesture (R4 revision): throttle held at 100%
+     * deflection for throttle_override_hold_frames consecutive cycles. See
+     * throttle_override_fires for the continuous-hold semantics. */
+    if (throttle_override_fires(in, p, st)) {
+        spot_lock_outputs out = make_off(st);
+        out.manual_override = true;
+        return out;
+    }
+
+    /* 2. CH3 physically preempts goto: hold "here and now" (R4). Entry (not
+     * continuation) still requires sticks near neutral. */
     if (in->ch3_on) {
         return run_ch3_hold(in, p, st);
     }
 
     /* 3. App-driven goto: a latched external target that PERSISTS across app-link
      * loss (R3/R4) - a stale link never pauses it (hold_or_pause has no link gate);
-     * the RC (stick override / CH3 preempt / disarm) is the sole failsafe. comms_fresh
-     * is NOT a link failsafe here: it is the retarget-in-flight / re-latch gate.
-     * The reference is (re)latched from the input ONLY on entry into SRC_GOTO or
-     * while the link is fresh (R1: a fresh link tracks a newly commanded goto
-     * point). While the link is stale (comms_fresh == false) the core RETAINS the
-     * last good target and does NOT overwrite ref_* from the input - so retention
-     * across a link gap is a property of this pure core, not an implicit contract
-     * on the upstream latch (guards null-island if the loop zeroes goto_* on link
-     * loss). Only the SENSOR domain (GPS/IMU, in hold_or_pause) pauses goto. */
+     * the RC (throttle-hold override / CH3 preempt / disarm) is the sole failsafe.
+     * comms_fresh is NOT a link failsafe here: it is the retarget-in-flight /
+     * re-latch gate. Entry (not continuation) requires sticks near neutral, same
+     * as SRC_HOLD entry. The reference is (re)latched from the input ONLY on
+     * entry into SRC_GOTO or while the link is fresh (R1: a fresh link tracks a
+     * newly commanded goto point). While the link is stale (comms_fresh == false)
+     * the core RETAINS the last good target and does NOT overwrite ref_* from the
+     * input - so retention across a link gap is a property of this pure core, not
+     * an implicit contract on the upstream latch (guards null-island if the loop
+     * zeroes goto_* on link loss). Only the SENSOR domain (GPS/IMU, in
+     * hold_or_pause) pauses goto. */
     if (in->goto_engage) {
         bool is_entering_goto = st->target_source != SPOT_LOCK_SRC_GOTO;
+        if (is_entering_goto && !in->sticks_neutral) {
+            return make_off(st);
+        }
         if (is_entering_goto || in->comms_fresh) {
             st->ref_lat_e7 = in->goto_lat_e7;
             st->ref_lon_e7 = in->goto_lon_e7;

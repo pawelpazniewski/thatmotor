@@ -316,13 +316,20 @@ static void maybe_commit_params(void)
     ESP_LOGI(TAG, "params committed to NVS");
 }
 
-/* Apply the panel's live servo-trim controls, DISARMED only (SI-6: the loop is
- * the single writer of s_params). Step Left/Right nudge servo_trim_us by one
- * click and stage a debounced NVS commit; Save forces an immediate commit on the
- * next eligible cycle. Outside DISARMED every trim event is ignored. */
+/* Apply the panel's live servo-trim controls, DISARMED or ARMED (SI-6: the loop
+ * is the single writer of s_params). ARMED is allowed so the operator can
+ * correct the servo neutral on the water while driving; the RAM-only nudge
+ * takes effect immediately (servo_chain applies servo_trim_us every cycle
+ * regardless of mode). Step Left/Right nudge servo_trim_us by one click and
+ * stage a debounced NVS commit; Save forces an immediate commit on the next
+ * eligible cycle. The NVS write itself stays DISARMED-only (maybe_commit_params
+ * re-checks loop_should_apply_pending independently), so a trim taken while
+ * ARMED only persists to flash once the unit returns to DISARMED -- the RT loop
+ * never blocks on flash I/O while armed. Outside DISARMED/ARMED every trim
+ * event is ignored. */
 static void apply_trim_events(const control_loop_ui_events *ev)
 {
-    if (!loop_should_apply_pending(s_loop.state)) {
+    if (!loop_trim_allowed(s_loop.state)) {
         return;
     }
     if (ev->trim_left || ev->trim_right) {
@@ -493,6 +500,14 @@ static void publish_snapshot(const loop_inputs *in, const loop_outputs *out)
     s_snapshot.spot_lock_state = out->telemetry.spot_lock_substate;
     s_snapshot.spot_lock_err_m = out->telemetry.spot_lock_err_m;
     s_snapshot.spot_lock_bearing_deg10 = out->telemetry.spot_lock_bearing_deg10;
+    s_snapshot.spot_lock_attempt_seq = out->telemetry.spot_lock_attempt_seq;
+    s_snapshot.spot_lock_attempt_ok = out->telemetry.spot_lock_attempt_ok;
+    s_snapshot.spot_lock_attempt_armed = out->telemetry.spot_lock_attempt_armed;
+    s_snapshot.spot_lock_attempt_sticks_neutral =
+        out->telemetry.spot_lock_attempt_sticks_neutral;
+    s_snapshot.spot_lock_attempt_gps_fresh =
+        out->telemetry.spot_lock_attempt_gps_fresh;
+    s_snapshot.spot_lock_attempt_gps_fix = out->telemetry.spot_lock_attempt_gps_fix;
     /* App-driven goto telemetry: substate/err/bearing/arrived from this cycle's
      * loop outputs (non-zero only while SRC_GOTO owns the target); the target is
      * the staged external point; app_link_fresh mirrors the comms watchdog

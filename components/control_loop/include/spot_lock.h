@@ -59,7 +59,16 @@ typedef struct {
     bool armed;          /* sm.state == ARMED (override allowed only here) */
     bool ch3_on;         /* CH3 debounced level: spot-lock requested */
     bool ch3_edge_on;    /* CH3 rising edge this cycle (entry intent) */
-    bool sticks_neutral; /* both CH1/CH2 within their neutral deadband (R3/R4) */
+    bool sticks_neutral; /* both CH1/CH2 within their neutral deadband: gates
+                          * ENTRY into an engaged source only (R3/R4). Does NOT
+                          * abort an already-engaged session -- see
+                          * throttle_full_deflect for that (R4 revision). */
+    bool throttle_full_deflect; /* CH2 at 100% deflection, either direction, THIS
+                          * cycle (R4 revision). The manual-abort gesture for an
+                          * already-engaged session: spot_lock_step ends it only
+                          * once this holds for throttle_override_hold_frames
+                          * consecutive cycles, so an incidental bump of the
+                          * transmitter no longer drops an active hold/goto. */
     bool gps_fresh;      /* GPS freshness predicate (R5) */
     bool gps_has_fix;    /* real fix quality (>0): guards the seed-fresh window
                           * so entry cannot occur on freshness alone (R3) */
@@ -85,6 +94,10 @@ typedef struct {
     uint16_t goto_slowdown_distance_m; /* goto cruise-decel slowdown distance (m) */
     uint16_t goto_cruise_norm;    /* goto cruise ceiling, normalized
                                    * (= max_throttle_fwd_pct % of full scale) */
+    uint16_t throttle_override_hold_frames; /* consecutive cycles
+                                   * throttle_full_deflect must hold to abort an
+                                   * engaged session (R4 revision, 3 s of control
+                                   * cycles at the caller's rate) */
 } spot_lock_params;
 
 /** Carry-over state owned by the loop, updated in place each cycle. */
@@ -93,6 +106,10 @@ typedef struct {
     spot_lock_target_source target_source; /* which source owns the target */
     int32_t ref_lat_e7;                   /* target latitude (snapshot or goto) */
     int32_t ref_lon_e7;                   /* target longitude (snapshot or goto) */
+    uint16_t throttle_override_frames;    /* consecutive cycles
+                                           * throttle_full_deflect has held so
+                                           * far; resets to 0 the instant it lets
+                                           * go (the hold must be continuous) */
 } spot_lock_state;
 
 /** Decision outputs for one cycle. */
@@ -103,22 +120,42 @@ typedef struct {
     uint16_t err_m;              /* position error in metres (telemetry) */
     uint16_t bearing_deg10;      /* bearing to target, deg*10 (telemetry) */
     bool arrived;                /* err_m <= deadband_m while ACTIVE (telemetry) */
+    bool manual_override;        /* true only on the cycle the throttle-hold
+                                  * gesture (R4 revision) just forced OFF; false
+                                  * for every other transition to OFF (disarm,
+                                  * no source engaged, blocked entry). The
+                                  * integration layer uses this -- not
+                                  * !sticks_neutral -- to decide whether the
+                                  * app-side goto latch must be cleared for
+                                  * good. */
 } spot_lock_outputs;
 
 /**
  * Run one spot-lock decision cycle (pure, deterministic).
  *
  * Source arbitration in ARMED (physical CH3 preempts app-driven goto):
- *   1. ANY -> OFF when !armed || !sticks_neutral (manual override, R4/R6).
- *   2. ch3_on -> SRC_HOLD: on entry (edge + fresh real fix) snapshot the
- *      current position as the target; a running goto is preempted here (R4).
+ *   1. ANY -> OFF when !armed (disarm/failsafe, the sole INSTANT override, R6).
+ *   1b. ANY -> OFF once throttle_full_deflect has held throttle_override_hold_
+ *      frames consecutive cycles (R4 revision, the deliberate manual-abort
+ *      gesture: 100% throttle deflection held ~3 s). Releasing the stick before
+ *      the hold completes resets the counter to 0 -- the hold must be
+ *      continuous, not cumulative. This REPLACES the old instant "any stick off
+ *      neutral" override: an incidental bump of the transmitter (picking it up,
+ *      brushing a stick) no longer drops an engaged session. Steering (CH1) has
+ *      no override role at all now, at any deflection.
+ *   2. ch3_on -> SRC_HOLD: on entry (edge + sticks_neutral + fresh real fix)
+ *      snapshot the current position as the target; a running goto is preempted
+ *      here (R4). sticks_neutral still gates ENTRY (unchanged) -- only
+ *      continuation of an engaged session no longer depends on it.
  *   3. goto_engage && !ch3_on -> SRC_GOTO: target is the external goto point.
- *      ref_* is (re)latched from goto_* only on entry into SRC_GOTO or while the
- *      link is fresh (R1: a fresh link tracks a newly commanded point). A stale
- *      app link does NOT pause goto (R3/R4): it is a latched intent, only the
- *      RC failsafe ends it. While the link is stale the core RETAINS the last
- *      good ref_* and never overwrites it from the input, so target retention
- *      across a link gap does not depend on the upstream latch.
+ *      Entry (first cycle owning SRC_GOTO) additionally requires sticks_neutral,
+ *      same as SRC_HOLD entry. ref_* is (re)latched from goto_* only on entry
+ *      into SRC_GOTO or while the link is fresh (R1: a fresh link tracks a newly
+ *      commanded point). A stale app link does NOT pause goto (R3/R4): it is a
+ *      latched intent, only the RC failsafe/throttle-hold ends it. While the
+ *      link is stale the core RETAINS the last good ref_* and never overwrites
+ *      it from the input, so target retention across a link gap does not depend
+ *      on the upstream latch.
  *   4. otherwise -> OFF.
  *
  * Within an engaged source:

@@ -35,6 +35,11 @@ bool loop_should_apply_pending(sm_state state)
     return state == SM_STATE_DISARMED;
 }
 
+bool loop_trim_allowed(sm_state state)
+{
+    return state == SM_STATE_DISARMED || state == SM_STATE_ARMED;
+}
+
 void loop_state_init(loop_state *state, const settings_params *params,
                      uint16_t debounce_threshold)
 {
@@ -48,6 +53,13 @@ void loop_state_init(loop_state *state, const settings_params *params,
     state->spot_lock.target_source = SPOT_LOCK_SRC_NONE;
     state->spot_lock.ref_lat_e7 = 0;
     state->spot_lock.ref_lon_e7 = 0;
+    state->spot_lock.throttle_override_frames = 0;
+    state->spot_lock_attempt_seq = 0;
+    state->spot_lock_attempt_ok = false;
+    state->spot_lock_attempt_armed = false;
+    state->spot_lock_attempt_sticks_neutral = false;
+    state->spot_lock_attempt_gps_fresh = false;
+    state->spot_lock_attempt_gps_fix = false;
 }
 
 /* Debounced RC validity for this cycle: both control channels valid this frame,
@@ -185,14 +197,24 @@ static uint32_t resolve_esc(const loop_inputs *in, const settings_params *params
 /* Percent thrust cap -> normalized command full-scale (100% == full-scale). */
 #define SPOT_LOCK_PERCENT_FULL 100
 
-/* Both control sticks within their neutral bands this cycle (R3/R4): the shared
- * neutrality domain for spot-lock entry and abort. */
+/* Both control sticks within their neutral bands this cycle (R3/R4): the
+ * spot-lock/goto ENTRY gate only. Continuing an already-engaged session no
+ * longer depends on this -- see SPOT_LOCK_THROTTLE_OVERRIDE_HOLD_FRAMES. */
 static bool sticks_within_neutral(const loop_inputs *in,
                                   const settings_params *params)
 {
     return throttle_is_neutral(in->ch2.width_us, params) &&
            steer_is_neutral(in->ch1.width_us, params);
 }
+
+/* Deliberate throttle-hold manual-abort gesture (R4 revision): CH2 held at 100%
+ * deflection this many consecutive cycles cancels an engaged spot-lock/goto
+ * session. Replaces the old instant "any stick off neutral" override, which
+ * tripped on an incidental bump of the transmitter. 3 s of control cycles at
+ * the fixed CONTROL_LOOP_PERIOD_MS rate. */
+#define SPOT_LOCK_THROTTLE_OVERRIDE_HOLD_MS 3000U
+#define SPOT_LOCK_THROTTLE_OVERRIDE_HOLD_FRAMES \
+    (SPOT_LOCK_THROTTLE_OVERRIDE_HOLD_MS / CONTROL_LOOP_PERIOD_MS)
 
 /* Map the per-cycle loop inputs onto the pure spot_lock inputs. armed is always
  * true here: this is only built inside the ARMED branch, where failsafe
@@ -205,6 +227,7 @@ static spot_lock_inputs build_spot_lock_inputs(const loop_inputs *in,
         .ch3_on = in->spot_lock_switch_on,
         .ch3_edge_on = in->spot_lock_switch_edge_on,
         .sticks_neutral = sticks_within_neutral(in, params),
+        .throttle_full_deflect = throttle_is_full_deflect(in->ch2.width_us, params),
         .gps_fresh = in->gps_fresh,
         .gps_has_fix = in->gps_has_fix,
         .imu_ok = in->imu_ok,
@@ -235,6 +258,7 @@ static spot_lock_params build_spot_lock_params(const settings_params *params)
         .goto_cruise_norm = (uint16_t)((int32_t)SPOT_LOCK_CMD_FULL_SCALE *
                             (int32_t)params->max_throttle_fwd_pct /
                             SPOT_LOCK_PERCENT_FULL),
+        .throttle_override_hold_frames = SPOT_LOCK_THROTTLE_OVERRIDE_HOLD_FRAMES,
     };
     return slp;
 }
@@ -265,21 +289,46 @@ static bool spot_lock_drives(spot_lock_substate s)
     return s == SPOT_LOCK_ACTIVE || s == SPOT_LOCK_PAUSED;
 }
 
-/* Whether the goto engage latch must be permanently cleared this cycle. Only
- * a manual stick override (!sticks_neutral) or a physical CH3 preempt (ch3_on)
- * ends goto for good: neither may auto-resume when the condition clears (a fresh
- * app goto command is required, R4/R6). A link/GPS/IMU pause deliberately does
- * NOT clear the latch, so a transient loss resumes the same target. Evaluated
- * ONLY in the ARMED branch (goto never runs outside ARMED), so a FAILSAFE never
- * clears the latch through this path. */
-static bool goto_latch_should_clear(const loop_inputs *in,
+/* Latch the CH3 entry-attempt telemetry on the rising edge (diagnostic, R12-
+ * style): outside ARMED resolve_spot_lock never even runs spot_lock_step, so
+ * "not armed" has to be captured here or it is lost. ok mirrors whether this
+ * same edge actually parked the target in SRC_HOLD (drive_spot_lock already
+ * covers ACTIVE and PAUSED). Only updated on the edge cycle; every other cycle
+ * just re-mirrors the last one into telemetry. */
+static void latch_spot_lock_attempt(loop_state *state, const loop_inputs *in,
                                     const settings_params *params,
-                                    sm_state resolved_state)
+                                    sm_state resolved_state, bool drive_spot_lock)
+{
+    if (!in->spot_lock_switch_edge_on) {
+        return;
+    }
+    state->spot_lock_attempt_seq++;
+    state->spot_lock_attempt_armed = resolved_state == SM_STATE_ARMED;
+    state->spot_lock_attempt_sticks_neutral = sticks_within_neutral(in, params);
+    state->spot_lock_attempt_gps_fresh = in->gps_fresh;
+    state->spot_lock_attempt_gps_fix = in->gps_has_fix;
+    state->spot_lock_attempt_ok =
+        state->spot_lock.target_source == SPOT_LOCK_SRC_HOLD && drive_spot_lock;
+}
+
+/* Whether the goto engage latch must be permanently cleared this cycle. Only
+ * the throttle-hold manual-abort gesture (sl.manual_override, R4 revision) or a
+ * physical CH3 preempt (ch3_on) ends goto for good: neither may auto-resume
+ * when the condition clears (a fresh app goto command is required, R4/R6). A
+ * link/GPS/IMU pause deliberately does NOT clear the latch, so a transient loss
+ * resumes the same target. Reads sl.manual_override (spot_lock_step's own
+ * decision for this cycle) rather than recomputing the gesture from raw
+ * inputs, so the two never drift out of sync. Evaluated ONLY in the ARMED
+ * branch (goto never runs outside ARMED), so a FAILSAFE never clears the latch
+ * through this path. */
+static bool goto_latch_should_clear(const loop_inputs *in,
+                                    sm_state resolved_state,
+                                    spot_lock_outputs sl)
 {
     if (resolved_state != SM_STATE_ARMED || !in->goto_engage) {
         return false;
     }
-    return !sticks_within_neutral(in, params) || in->spot_lock_switch_on;
+    return sl.manual_override || in->spot_lock_switch_on;
 }
 
 loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
@@ -294,8 +343,11 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
      * (or any non-ARMED) result bypasses it entirely and failsafe always wins. */
     spot_lock_outputs sl = resolve_spot_lock(in, params, sm.state,
                                              &state->spot_lock);
-    bool goto_latch_clear = goto_latch_should_clear(in, params, sm.state);
+
     bool drive_spot_lock = spot_lock_drives(sl.substate);
+    latch_spot_lock_attempt(state, in, params, sm.state, drive_spot_lock);
+
+    bool goto_latch_clear = goto_latch_should_clear(in, sm.state, sl);
     throttle_target_mode throttle_mode =
         drive_spot_lock ? THROTTLE_TARGET_SPOT_LOCK : sm.throttle_target;
     servo_target_mode servo_mode =
@@ -327,6 +379,13 @@ loop_outputs loop_step(const loop_inputs *in, const loop_validity_cfg *cfg,
             .spot_lock_substate = (uint8_t)sl.substate,
             .spot_lock_err_m = sl.err_m,
             .spot_lock_bearing_deg10 = sl.bearing_deg10,
+            .spot_lock_attempt_seq = state->spot_lock_attempt_seq,
+            .spot_lock_attempt_ok = state->spot_lock_attempt_ok,
+            .spot_lock_attempt_armed = state->spot_lock_attempt_armed,
+            .spot_lock_attempt_sticks_neutral =
+                state->spot_lock_attempt_sticks_neutral,
+            .spot_lock_attempt_gps_fresh = state->spot_lock_attempt_gps_fresh,
+            .spot_lock_attempt_gps_fix = state->spot_lock_attempt_gps_fix,
             .goto_substate =
                 goto_owns_target ? (uint8_t)sl.substate : (uint8_t)SPOT_LOCK_OFF,
             .goto_err_m = goto_owns_target ? sl.err_m : 0U,

@@ -147,15 +147,32 @@ bool throttle_is_neutral(uint32_t raw_ch2_us, const settings_params *params);
  * Whether the steering stick is within its neutral band this cycle.
  *
  * Applies the SAME normalize + steering-deadband steps the servo chain uses, so
- * the spot-lock entry/abort gate (R3/R4) and the chain agree on what "centered"
- * means. With the default steer_deadband_us of 0 any deflection counts as
- * non-neutral (a strict abort). Independent of the reverse flag.
+ * the spot-lock entry gate (R3/R4) and the chain agree on what "centered" means.
+ * With the default steer_deadband_us of 0 any deflection counts as non-neutral.
+ * Independent of the reverse flag.
  *
  * @param raw_ch1_us  Raw CH1 pulse width in microseconds.
  * @param params      Active control parameters (must be non-NULL).
  * @return true when the post-deadband steering command is exactly centered.
  */
 bool steer_is_neutral(uint32_t raw_ch1_us, const settings_params *params);
+
+/**
+ * Whether the throttle stick sits at 100% deflection this cycle, either
+ * direction (full forward or full reverse).
+ *
+ * The spot-lock/goto manual-abort gesture (R4 revision): the raw pulse is at or
+ * beyond the calibrated rc_min_us/rc_max_us endpoint, the same clamp boundary
+ * normalize_us saturates to +/-full-scale at. A momentary deflection does not by
+ * itself abort anything -- the caller (spot_lock_step) requires this to hold for
+ * several consecutive cycles, so an incidental bump of the stick (not driven all
+ * the way to the endpoint and held there) is not this gesture.
+ *
+ * @param raw_ch2_us  Raw CH2 pulse width in microseconds.
+ * @param params      Active control parameters (must be non-NULL).
+ * @return true when the raw pulse is at or beyond either calibrated endpoint.
+ */
+bool throttle_is_full_deflect(uint32_t raw_ch2_us, const settings_params *params);
 
 #ifdef __cplusplus
 }

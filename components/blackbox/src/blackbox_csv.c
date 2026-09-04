@@ -63,3 +63,35 @@ size_t blackbox_csv_row(const blackbox_session_header *header,
         (unsigned)header->servo_gain);
     return written_or_zero(printed, out_len);
 }
+
+static const char CSV_ATTEMPT_HEADER[] =
+    "attempt_seq,t_ms,sm_state,ok,armed,sticks_neutral,gps_fresh,gps_fix,"
+    "ch1_us,ch2_us,ch3_us";
+
+size_t blackbox_csv_attempt_header(char *out, size_t out_len)
+{
+    if (out == NULL) {
+        return 0U;
+    }
+    int printed = snprintf(out, out_len, "%s", CSV_ATTEMPT_HEADER);
+    return written_or_zero(printed, out_len);
+}
+
+size_t blackbox_csv_attempt_row(const blackbox_attempt *attempt, char *out,
+                                size_t out_len)
+{
+    if (attempt == NULL || out == NULL) {
+        return 0U;
+    }
+    int printed =
+        snprintf(out, out_len, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",
+                 (unsigned)attempt->attempt_seq, (unsigned)attempt->t_ms,
+                 (unsigned)attempt->sm_state, (unsigned)(attempt->ok ? 1U : 0U),
+                 (unsigned)(attempt->armed ? 1U : 0U),
+                 (unsigned)(attempt->sticks_neutral ? 1U : 0U),
+                 (unsigned)(attempt->gps_fresh ? 1U : 0U),
+                 (unsigned)(attempt->gps_fix ? 1U : 0U),
+                 (unsigned)attempt->ch1_us, (unsigned)attempt->ch2_us,
+                 (unsigned)attempt->ch3_us);
+    return written_or_zero(printed, out_len);
+}

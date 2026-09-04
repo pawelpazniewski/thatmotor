@@ -169,6 +169,23 @@ static void write_header(const blackbox_session_header *h, uint8_t *out,
     put_u32(out, pos, h->start_ms);
 }
 
+static void write_attempt(const blackbox_attempt *a, uint8_t *out, size_t *pos)
+{
+    put_u32(out, pos, a->attempt_seq);
+    put_u32(out, pos, a->t_ms);
+    put_u8(out, pos, a->sm_state);
+    uint8_t flags = 0;
+    flags |= a->ok ? BLACKBOX_ATTEMPT_FLAG_OK : 0U;
+    flags |= a->armed ? BLACKBOX_ATTEMPT_FLAG_ARMED : 0U;
+    flags |= a->sticks_neutral ? BLACKBOX_ATTEMPT_FLAG_STICKS_NEUTRAL : 0U;
+    flags |= a->gps_fresh ? BLACKBOX_ATTEMPT_FLAG_GPS_FRESH : 0U;
+    flags |= a->gps_fix ? BLACKBOX_ATTEMPT_FLAG_GPS_FIX : 0U;
+    put_u8(out, pos, flags);
+    put_u16(out, pos, a->ch1_us);
+    put_u16(out, pos, a->ch2_us);
+    put_u16(out, pos, a->ch3_us);
+}
+
 /* ---- payload readers ---- */
 
 static void read_sample(const uint8_t *buf, size_t *pos, blackbox_sample *s)
@@ -216,6 +233,22 @@ static void read_header(const uint8_t *buf, size_t *pos,
     h->start_ms = get_u32(buf, pos);
 }
 
+static void read_attempt(const uint8_t *buf, size_t *pos, blackbox_attempt *a)
+{
+    a->attempt_seq = get_u32(buf, pos);
+    a->t_ms = get_u32(buf, pos);
+    a->sm_state = get_u8(buf, pos);
+    uint8_t flags = get_u8(buf, pos);
+    a->ok = (flags & BLACKBOX_ATTEMPT_FLAG_OK) != 0U;
+    a->armed = (flags & BLACKBOX_ATTEMPT_FLAG_ARMED) != 0U;
+    a->sticks_neutral = (flags & BLACKBOX_ATTEMPT_FLAG_STICKS_NEUTRAL) != 0U;
+    a->gps_fresh = (flags & BLACKBOX_ATTEMPT_FLAG_GPS_FRESH) != 0U;
+    a->gps_fix = (flags & BLACKBOX_ATTEMPT_FLAG_GPS_FIX) != 0U;
+    a->ch1_us = get_u16(buf, pos);
+    a->ch2_us = get_u16(buf, pos);
+    a->ch3_us = get_u16(buf, pos);
+}
+
 /* ---- public encode ---- */
 
 blackbox_record_result blackbox_record_encode_sample(
@@ -244,6 +277,21 @@ blackbox_record_result blackbox_record_encode_header(
     }
     size_t pos = begin_record(out, BLACKBOX_TYPE_HEADER);
     write_header(header, out, &pos);
+    finish_record(out);
+    return BLACKBOX_REC_OK;
+}
+
+blackbox_record_result blackbox_record_encode_attempt(
+    const blackbox_attempt *attempt, uint8_t *out, size_t out_len)
+{
+    if (attempt == NULL || out == NULL) {
+        return BLACKBOX_REC_ERR_ARG;
+    }
+    if (out_len < BLACKBOX_RECORD_SIZE) {
+        return BLACKBOX_REC_ERR_LENGTH;
+    }
+    size_t pos = begin_record(out, BLACKBOX_TYPE_ATTEMPT);
+    write_attempt(attempt, out, &pos);
     finish_record(out);
     return BLACKBOX_REC_OK;
 }
@@ -322,5 +370,24 @@ blackbox_record_result blackbox_record_decode_header(
     }
     size_t pos = REC_PAYLOAD;
     read_header(buf, &pos, out);
+    return BLACKBOX_REC_OK;
+}
+
+blackbox_record_result blackbox_record_decode_attempt(
+    const uint8_t *buf, size_t len, blackbox_attempt *out)
+{
+    if (out == NULL) {
+        return BLACKBOX_REC_ERR_ARG;
+    }
+    blackbox_record_type type;
+    blackbox_record_result framing = validate_framing(buf, len, &type);
+    if (framing != BLACKBOX_REC_OK) {
+        return framing;
+    }
+    if (type != BLACKBOX_TYPE_ATTEMPT) {
+        return BLACKBOX_REC_ERR_TYPE;
+    }
+    size_t pos = REC_PAYLOAD;
+    read_attempt(buf, &pos, out);
     return BLACKBOX_REC_OK;
 }

@@ -156,6 +156,11 @@ bool throttle_is_neutral(uint32_t raw_ch2_us, const settings_params *params)
     return after_deadband == 0;
 }
 
+bool throttle_is_full_deflect(uint32_t raw_ch2_us, const settings_params *params)
+{
+    return raw_ch2_us <= params->rc_min_us || raw_ch2_us >= params->rc_max_us;
+}
+
 uint32_t throttle_chain_step(uint32_t raw_ch2_us, throttle_target_mode mode,
                              int32_t spot_lock_cmd,
                              const settings_params *params,

@@ -9,13 +9,19 @@ extern "C" {
 #endif
 
 /**
- * Pure (framework-agnostic) codec for spot-lock blackbox records. Two record
+ * Pure (framework-agnostic) codec for spot-lock blackbox records. Three record
  * kinds share one fixed BLACKBOX_RECORD_SIZE slot so the ring can address them
  * by a single monotonic sequence number:
  *
  *   - a session header (written on the OFF -> non-OFF edge), carrying the
- *     session id, target position and the active regulator settings, and
- *   - a sample (written while spot-lock runs), carrying the per-cycle telemetry.
+ *     session id, target position and the active regulator settings,
+ *   - a sample (written while spot-lock runs), carrying the per-cycle telemetry,
+ *     and
+ *   - an attempt (written on a CH3 entry edge that did NOT start a session),
+ *     carrying which entry gate(s) were open/closed. A successful entry is
+ *     already visible as a header+sample pair, so this exists purely to make a
+ *     REJECTED entry visible too -- previously a failed CH3 press left no trace
+ *     at all.
  *
  * On-flash layout of every record (deterministic, little-endian, zero-padded):
  *
@@ -30,6 +36,11 @@ extern "C" {
  * No ESP-IDF dependency (no esp_ or driver includes), so the whole codec is
  * host-testable. Mirrors the settings blob_codec style (versioned + CRC) and the
  * resolve_provenance failure taxonomy (empty / corrupt / schema / valid).
+ *
+ * BLACKBOX_TYPE_ATTEMPT is a new type value, not a layout change to HEADER or
+ * SAMPLE, so it does NOT bump BLACKBOX_RECORD_SCHEMA: existing sessions already
+ * on flash stay decodable after this firmware update. Only bump schema for a
+ * layout change to an EXISTING type.
  */
 
 /* Wire magic: chosen so an erased flash slot (0xFFFF) is never mistaken for a
@@ -50,10 +61,18 @@ extern "C" {
 #define BLACKBOX_FLAG_GOTO_OWNS 0x20U  /* SRC_GOTO owns the target this cycle */
 #define BLACKBOX_FLAG_ARRIVED 0x40U    /* within the deadband (arrived) */
 
+/* Attempt flag bits packed into the attempt `flags` byte. */
+#define BLACKBOX_ATTEMPT_FLAG_OK 0x01U             /* entered HOLD */
+#define BLACKBOX_ATTEMPT_FLAG_ARMED 0x02U          /* control state was ARMED */
+#define BLACKBOX_ATTEMPT_FLAG_STICKS_NEUTRAL 0x04U /* both sticks near neutral */
+#define BLACKBOX_ATTEMPT_FLAG_GPS_FRESH 0x08U      /* GPS freshness window open */
+#define BLACKBOX_ATTEMPT_FLAG_GPS_FIX 0x10U        /* GPS had a usable fix */
+
 /** Record discriminator stored in the `type` framing byte. */
 typedef enum {
-    BLACKBOX_TYPE_SAMPLE = 1, /* per-cycle spot-lock telemetry sample */
-    BLACKBOX_TYPE_HEADER = 2, /* session header (id + target + settings) */
+    BLACKBOX_TYPE_SAMPLE = 1,   /* per-cycle spot-lock telemetry sample */
+    BLACKBOX_TYPE_HEADER = 2,   /* session header (id + target + settings) */
+    BLACKBOX_TYPE_ATTEMPT = 3,  /* CH3 entry attempt that did not start a session */
 } blackbox_record_type;
 
 /**
@@ -139,6 +158,27 @@ typedef struct {
 } blackbox_session_header;
 
 /**
+ * One CH3 entry attempt that did NOT open a session (a successful entry is
+ * already covered by the header+sample pair written for it). Captures which of
+ * the entry gates (armed / sticks neutral / GPS fresh / GPS fix) held at the
+ * moment of the CH3 rising edge, so a rejected press is diagnosable after the
+ * fact instead of leaving no trace.
+ */
+typedef struct {
+    uint32_t attempt_seq;    /* monotonic attempt id (loop_state-owned) */
+    uint32_t t_ms;           /* uptime clock at the attempt, ms */
+    uint8_t sm_state;        /* control state (sm_state enum) at the attempt */
+    bool ok;                 /* true: this attempt did enter HOLD */
+    bool armed;              /* control state was ARMED at the attempt */
+    bool sticks_neutral;     /* both sticks were near neutral at the attempt */
+    bool gps_fresh;          /* GPS freshness window was open at the attempt */
+    bool gps_fix;            /* GPS had a usable fix at the attempt */
+    uint16_t ch1_us;         /* steering raw pulse at the attempt, us */
+    uint16_t ch2_us;         /* throttle raw pulse at the attempt, us */
+    uint16_t ch3_us;         /* CH3 raw pulse at the attempt, us */
+} blackbox_attempt;
+
+/**
  * IEEE 802.3 (zlib) CRC32 of a byte range. Reflected, poly 0xEDB88320, init and
  * final XOR 0xFFFFFFFF. Exposed so tests can re-stamp a mutated record.
  */
@@ -167,6 +207,18 @@ blackbox_record_result blackbox_record_encode_header(
     const blackbox_session_header *header, uint8_t *out, size_t out_len);
 
 /**
+ * Serialise a rejected/accepted entry attempt into a BLACKBOX_RECORD_SIZE
+ * buffer.
+ *
+ * @param attempt  Source attempt (must be non-NULL).
+ * @param out      Destination buffer (must be non-NULL).
+ * @param out_len  Capacity of out; must be >= BLACKBOX_RECORD_SIZE.
+ * @return BLACKBOX_REC_OK, or ERR_ARG / ERR_LENGTH.
+ */
+blackbox_record_result blackbox_record_encode_attempt(
+    const blackbox_attempt *attempt, uint8_t *out, size_t out_len);
+
+/**
  * Classify a slot: validate framing (length, empty, magic, CRC, schema) and
  * report the record type. Does not decode the payload.
  *
@@ -192,6 +244,13 @@ blackbox_record_result blackbox_record_decode_sample(const uint8_t *buf,
  */
 blackbox_record_result blackbox_record_decode_header(
     const uint8_t *buf, size_t len, blackbox_session_header *out);
+
+/**
+ * Validate framing and decode an attempt. Rejects with ERR_TYPE if the slot is
+ * a header or sample. *out is written only on BLACKBOX_REC_OK.
+ */
+blackbox_record_result blackbox_record_decode_attempt(
+    const uint8_t *buf, size_t len, blackbox_attempt *out);
 
 #ifdef __cplusplus
 }

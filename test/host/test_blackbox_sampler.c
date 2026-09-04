@@ -16,6 +16,8 @@ static blackbox_sampler_in tick(uint8_t prev, uint8_t cur)
         .last_err_m = 100U,
         .event = false,
         .off_tail_left = 0U,
+        .attempt_seq = 0U,
+        .last_attempt_seq = 0U,
     };
     return in;
 }
@@ -128,6 +130,61 @@ static void test_off_tail_drains_then_goes_idle(void)
     TEST_ASSERT_EQUAL_UINT16(0U, idle.off_tail_left);
 }
 
+/* ---- rejected CH3 entry attempts ---- */
+
+static void test_off_new_attempt_logs_once_tail_drained(void)
+{
+    /* Fully settled OFF (no session, no tail owed) with a new attempt_seq since
+     * the last one acted on -> log it. A naive "always IDLE when OFF->OFF" would
+     * fail here: a rejected CH3 press would leave no trace at all. */
+    blackbox_sampler_in in = tick(BLACKBOX_SPOT_LOCK_OFF, BLACKBOX_SPOT_LOCK_OFF);
+    in.attempt_seq = 5U;
+    in.last_attempt_seq = 4U;
+    blackbox_sampler_out out = blackbox_sampler_step(&in);
+    TEST_ASSERT_EQUAL_INT(BLACKBOX_ACTION_LOG_ATTEMPT, out.action);
+    TEST_ASSERT_EQUAL_UINT32(5U, out.last_attempt_seq);
+}
+
+static void test_off_same_attempt_seq_stays_idle(void)
+{
+    /* No new attempt since the last one acted on -> nothing to log. The oracle
+     * power here: without the seq comparison, EVERY OFF->OFF tick with an idle
+     * attempt_seq of 0 would look "new" against a naive prior of anything else. */
+    blackbox_sampler_in in = tick(BLACKBOX_SPOT_LOCK_OFF, BLACKBOX_SPOT_LOCK_OFF);
+    in.attempt_seq = 5U;
+    in.last_attempt_seq = 5U;
+    blackbox_sampler_out out = blackbox_sampler_step(&in);
+    TEST_ASSERT_EQUAL_INT(BLACKBOX_ACTION_IDLE, out.action);
+    TEST_ASSERT_EQUAL_UINT32(5U, out.last_attempt_seq);
+}
+
+static void test_tail_draining_takes_priority_over_attempt(void)
+{
+    /* A tail sample still owed wins over logging a coincident new attempt: the
+     * tail budget must still count down (last_attempt_seq still latches so the
+     * attempt is not re-queued once the tail drains). */
+    blackbox_sampler_in in = tick(BLACKBOX_SPOT_LOCK_OFF, BLACKBOX_SPOT_LOCK_OFF);
+    in.off_tail_left = 1U;
+    in.attempt_seq = 9U;
+    in.last_attempt_seq = 8U;
+    blackbox_sampler_out out = blackbox_sampler_step(&in);
+    TEST_ASSERT_EQUAL_INT(BLACKBOX_ACTION_SAMPLE_TAIL, out.action);
+    TEST_ASSERT_EQUAL_UINT16(0U, out.off_tail_left);
+    TEST_ASSERT_EQUAL_UINT32(9U, out.last_attempt_seq);
+}
+
+static void test_running_session_ignores_attempt_seq_change(void)
+{
+    /* A CH3 preempt of an active session is already visible via the sample the
+     * running-session branch writes; an attempt_seq bump alone must not also
+     * emit a separate LOG_ATTEMPT while a session is running. */
+    blackbox_sampler_in in = tick(BLACKBOX_SPOT_LOCK_ACTIVE, BLACKBOX_SPOT_LOCK_ACTIVE);
+    in.attempt_seq = 3U;
+    in.last_attempt_seq = 2U;
+    blackbox_sampler_out out = blackbox_sampler_step(&in);
+    TEST_ASSERT_EQUAL_INT(BLACKBOX_ACTION_IDLE, out.action);
+}
+
 /* ---- geometry consistency (capacity derives from region/record, Unit 1) ---- */
 
 static void test_capacity_consistent_with_geometry(void)
@@ -150,5 +207,9 @@ void run_blackbox_sampler_tests(void)
     RUN_TEST(test_pause_and_resume_always_sampled);
     RUN_TEST(test_drop_to_off_begins_tail);
     RUN_TEST(test_off_tail_drains_then_goes_idle);
+    RUN_TEST(test_off_new_attempt_logs_once_tail_drained);
+    RUN_TEST(test_off_same_attempt_seq_stays_idle);
+    RUN_TEST(test_tail_draining_takes_priority_over_attempt);
+    RUN_TEST(test_running_session_ignores_attempt_seq_change);
     RUN_TEST(test_capacity_consistent_with_geometry);
 }

@@ -61,6 +61,17 @@ typedef struct {
     uint8_t spot_lock_state;        /* spot_lock_substate this cycle (0/1/2) */
     uint16_t spot_lock_err_m;       /* position error to target, metres */
     uint16_t spot_lock_bearing_deg10;/* bearing to target, degrees * 10 */
+    /* Most recent CH3 entry attempt (diagnostic, OUTSIDE failsafe/control): a
+     * successful attempt is already visible via spot_lock_state/the blackbox
+     * session, this exists so a REJECTED entry is diagnosable too. seq bumps on
+     * every CH3 rising edge (armed or not); the other fields snapshot the entry
+     * gate at that same edge and hold until the next one. */
+    uint32_t spot_lock_attempt_seq;        /* monotonic CH3 entry-attempt id */
+    bool spot_lock_attempt_ok;             /* most recent attempt entered HOLD */
+    bool spot_lock_attempt_armed;          /* control state was ARMED at it */
+    bool spot_lock_attempt_sticks_neutral; /* both sticks were neutral at it */
+    bool spot_lock_attempt_gps_fresh;      /* GPS freshness window open at it */
+    bool spot_lock_attempt_gps_fix;        /* GPS had a usable fix at it */
     /* App-driven goto telemetry (R8). goto_state 0=off, 1=active, 2=paused, and
      * is non-zero ONLY while SRC_GOTO owns the target (a CH3 hold reads off).
      * err/bearing/arrived are meaningful while goto active/paused; the target is

@@ -89,6 +89,15 @@ typedef struct {
     int32_t servo_slew;    /* slewed servo pulse width (us) */
     calib_step calib_step; /* current ESC calibration step (when in calib) */
     spot_lock_state spot_lock; /* spot-lock sub-state + target snapshot */
+    /* Most recent CH3 entry attempt, latched on each spot_lock_switch_edge_on
+     * (armed or not) and held until the next one; mirrored into telemetry
+     * unchanged every cycle in between. See loop_telemetry for field meaning. */
+    uint32_t spot_lock_attempt_seq;
+    bool spot_lock_attempt_ok;
+    bool spot_lock_attempt_armed;
+    bool spot_lock_attempt_sticks_neutral;
+    bool spot_lock_attempt_gps_fresh;
+    bool spot_lock_attempt_gps_fix;
 } loop_state;
 
 /** Telemetry snapshot produced each cycle (read-only view for the web panel). */
@@ -101,6 +110,17 @@ typedef struct {
     uint8_t spot_lock_substate;      /* spot_lock_substate this cycle (0/1/2) */
     uint16_t spot_lock_err_m;        /* position error to target, metres */
     uint16_t spot_lock_bearing_deg10;/* bearing to target, degrees * 10 */
+    /* Most recent CH3 entry attempt (diagnostic): seq bumps on every CH3 rising
+     * edge (armed or not, R12-style -- outside rc_valid/failsafe); the other
+     * fields snapshot the entry gate at that same edge and hold until the next
+     * one. A successful attempt is already visible via spot_lock_substate/the
+     * blackbox session; this exists so a REJECTED one is diagnosable too. */
+    uint32_t spot_lock_attempt_seq;
+    bool spot_lock_attempt_ok;
+    bool spot_lock_attempt_armed;
+    bool spot_lock_attempt_sticks_neutral;
+    bool spot_lock_attempt_gps_fresh;
+    bool spot_lock_attempt_gps_fix;
     /* App-driven goto telemetry (R8). Distinct from the shared spot_lock_* view:
      * these are non-zero ONLY while SRC_GOTO owns the target this cycle (a CH3
      * hold reads goto_substate = off), so the app sees goto activity specifically.
@@ -117,10 +137,11 @@ typedef struct {
     uint32_t servo_us;
     loop_telemetry telemetry;
     /* Signal to the orchestration layer that the goto engage latch must be
-     * cleared this cycle: a manual stick override or a physical CH3 preempt
-     * permanently ends goto (no auto-resume; a fresh app goto command is
-     * required). A link/GPS pause does NOT set this, so a transient link loss
-     * keeps the latch and resumes. Computed only inside the ARMED branch. */
+     * cleared this cycle: the throttle-hold manual-abort gesture (100%
+     * deflection held ~3 s, R4 revision) or a physical CH3 preempt permanently
+     * ends goto (no auto-resume; a fresh app goto command is required). A
+     * link/GPS pause does NOT set this, so a transient link loss keeps the
+     * latch and resumes. Computed only inside the ARMED branch. */
     bool goto_latch_clear;
 } loop_outputs;
 
@@ -171,6 +192,19 @@ uint32_t calib_clamp_esc(uint32_t esc_us, PwmWindow window);
  * @return true only when state is DISARMED.
  */
 bool loop_should_apply_pending(sm_state state);
+
+/**
+ * Whether the live servo neutral trim (step left/right, RAM-only) may be
+ * applied this cycle: DISARMED (docked adjustment) or ARMED (on-water
+ * correction while driving). NVS persistence is a separate, stricter gate
+ * (loop_should_apply_pending / R17): a trim nudge taken here while ARMED still
+ * only commits to flash once the unit returns to DISARMED, so the RT loop
+ * never blocks on flash I/O while armed.
+ *
+ * @param state  Current control state.
+ * @return true when state is DISARMED or ARMED.
+ */
+bool loop_trim_allowed(sm_state state);
 
 #ifdef __cplusplus
 }

@@ -9,6 +9,11 @@
 /* ESC neutral the throttle chain maps command 0 onto (default esc_neutral_us). */
 #define ESC_NEUTRAL_US 1500U
 
+/* Mirrors SPOT_LOCK_THROTTLE_OVERRIDE_HOLD_MS/FRAMES in loop_step.c (private
+ * there, R4 revision): 3 s of control cycles at the fixed CONTROL_LOOP_PERIOD_MS
+ * rate is the throttle-hold manual-abort gesture's threshold. */
+#define THROTTLE_OVERRIDE_HOLD_FRAMES (3000U / CONTROL_LOOP_PERIOD_MS)
+
 static loop_validity_cfg make_cfg(void)
 {
     rc_channel_cfg ch = {
@@ -409,6 +414,17 @@ static void test_pending_applies_only_in_disarmed(void)
     TEST_ASSERT_FALSE(loop_should_apply_pending(SM_STATE_ESC_CALIBRATION));
 }
 
+static void test_trim_allowed_in_disarmed_and_armed(void)
+{
+    /* The live trim gate: DISARMED (docked) and ARMED (on-water correction)
+     * both allow the RAM-only nudge; every other state refuses it. */
+    TEST_ASSERT_TRUE(loop_trim_allowed(SM_STATE_DISARMED));
+    TEST_ASSERT_TRUE(loop_trim_allowed(SM_STATE_ARMED));
+    TEST_ASSERT_FALSE(loop_trim_allowed(SM_STATE_FAILSAFE));
+    TEST_ASSERT_FALSE(loop_trim_allowed(SM_STATE_ESC_CALIBRATION));
+    TEST_ASSERT_FALSE(loop_trim_allowed(SM_STATE_DEPLOY));
+}
+
 /* Build a spot-lock-ready input set: neutral sticks (so manual would be
  * neutral/center), valid fresh RC, and a fresh GPS fix + IMU heading at the
  * given position. ch3 level/edge control entry and abort. */
@@ -533,7 +549,7 @@ static void test_spot_lock_ch3_off_returns_to_manual(void)
     TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
 }
 
-static void test_spot_lock_stick_aborts_immediately(void)
+static void test_spot_lock_steering_nudge_does_not_abort(void)
 {
     /* Arrange: spot-lock active and drifted (forward thrust engaged). */
     settings_params params;
@@ -550,23 +566,60 @@ static void test_spot_lock_stick_aborts_immediately(void)
     }
     TEST_ASSERT_GREATER_THAN_UINT32(ESC_NEUTRAL_US, out.esc_us); /* was forward */
 
-    /* Act: operator nudges the STEERING stick off-center (throttle still
-     * neutral); CH3 stays on. The stick deflection aborts spot-lock at once. */
+    /* Act: operator nudges the STEERING stick hard over (throttle still
+     * neutral); CH3 stays on. R4 revision: steering has no override role at
+     * all now, so this must keep driving. Oracle: the old !sticks_neutral
+     * override would flip this to OFF on the very next cycle. */
     loop_inputs nudge =
         spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
-    nudge.ch1 = sample_at(2000U); /* hard steer */
-    out = loop_step(&nudge, &cfg, &params, &state);
-    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
-
-    /* Assert: manual resumes -> throttle eases to neutral (stick neutral) and the
-     * servo follows the steering stick off center. */
+    nudge.ch1 = sample_at(2000U); /* hard steer, sustained */
     for (int i = 0; i < 400; i++) {
         out = loop_step(&nudge, &cfg, &params, &state);
     }
-    uint32_t center = ((uint32_t)params.servo_min_us +
-                       (uint32_t)params.servo_max_us) / 2U;
-    TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
-    TEST_ASSERT_NOT_EQUAL(center, out.servo_us);
+
+    /* Assert: still ACTIVE, still driving. */
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_GREATER_THAN_UINT32(ESC_NEUTRAL_US, out.esc_us);
+}
+
+static void test_spot_lock_full_throttle_hold_aborts_after_3s(void)
+{
+    /* Arrange: spot-lock active and drifted (forward thrust engaged). */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_enter_spot_lock(&state, &cfg, &params);
+    loop_inputs hold =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
+    for (int i = 0; i < 400; i++) {
+        loop_step(&hold, &cfg, &params, &state);
+    }
+
+    /* Act: operator drives the THROTTLE stick to its 100% endpoint and holds
+     * it there; CH3 stays on. Below the 3 s threshold it must keep driving. */
+    loop_inputs pinned =
+        spot_lock_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, true, false);
+    pinned.ch2 = sample_at(params.rc_max_us); /* throttle pinned at 100% */
+    loop_outputs out = {0};
+    for (int i = 0; i < THROTTLE_OVERRIDE_HOLD_FRAMES - 1; i++) {
+        out = loop_step(&pinned, &cfg, &params, &state);
+        TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    }
+
+    /* Act: the threshold-th consecutive held cycle. */
+    out = loop_step(&pinned, &cfg, &params, &state);
+
+    /* Assert: aborted on this exact cycle. */
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+
+    /* Assert: manual resumes -> the pinned throttle now drives the ESC directly
+     * (no longer neutral), proving spot-lock released the actuators. */
+    for (int i = 0; i < 400; i++) {
+        out = loop_step(&pinned, &cfg, &params, &state);
+    }
+    TEST_ASSERT_GREATER_THAN_UINT32(ESC_NEUTRAL_US, out.esc_us);
 }
 
 static void test_spot_lock_pauses_on_gps_loss(void)
@@ -602,6 +655,123 @@ static void test_spot_lock_pauses_on_gps_loss(void)
     TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_PAUSED, out.telemetry.spot_lock_substate);
     TEST_ASSERT_EQUAL_UINT32(ESC_NEUTRAL_US, out.esc_us);
     TEST_ASSERT_EQUAL_UINT32(center, out.servo_us);
+}
+
+/* ---- CH3 entry-attempt telemetry (diagnostic, R12-style: outside failsafe) ---- */
+
+static void test_spot_lock_attempt_ok_on_successful_entry(void)
+{
+    /* A CH3 edge that DOES enter HOLD must latch ok=true with every gate open,
+     * and attempt_seq must bump to 1 on the very first attempt. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm(&state, &cfg, &params);
+
+    loop_inputs enter = spot_lock_inputs_at(0, 0, 0, true, true);
+    loop_outputs out = loop_step(&enter, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_UINT32(1U, out.telemetry.spot_lock_attempt_seq);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_attempt_ok);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_attempt_armed);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_attempt_sticks_neutral);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_attempt_gps_fresh);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_attempt_gps_fix);
+}
+
+static void test_spot_lock_attempt_rejected_no_gps_fix(void)
+{
+    /* CH3 edge, armed, sticks neutral, but no GPS fix -> entry gate rejects it.
+     * The attempt must still be counted and its reason visible. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm(&state, &cfg, &params);
+
+    loop_inputs enter = spot_lock_inputs_at(0, 0, 0, true, true);
+    enter.gps_has_fix = false;
+    loop_outputs out = loop_step(&enter, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_UINT32(1U, out.telemetry.spot_lock_attempt_seq);
+    TEST_ASSERT_FALSE(out.telemetry.spot_lock_attempt_ok);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_attempt_armed);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_attempt_sticks_neutral);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_attempt_gps_fresh);
+    TEST_ASSERT_FALSE(out.telemetry.spot_lock_attempt_gps_fix);
+}
+
+static void test_spot_lock_attempt_rejected_sticks_not_neutral(void)
+{
+    /* CH3 edge with the throttle stick well off neutral -> rejected on the
+     * sticks gate specifically, other gates still reported open. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm(&state, &cfg, &params);
+
+    loop_inputs enter = spot_lock_inputs_at(0, 0, 0, true, true);
+    enter.ch2 = sample_at(1900U);
+    loop_outputs out = loop_step(&enter, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_FALSE(out.telemetry.spot_lock_attempt_ok);
+    TEST_ASSERT_TRUE(out.telemetry.spot_lock_attempt_armed);
+    TEST_ASSERT_FALSE(out.telemetry.spot_lock_attempt_sticks_neutral);
+}
+
+static void test_spot_lock_attempt_rejected_while_disarmed(void)
+{
+    /* A CH3 edge while DISARMED must still be counted and reported: outside
+     * ARMED, resolve_spot_lock never even calls spot_lock_step, so "not armed"
+     * would otherwise be silently lost -- exactly the gap this closes. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+
+    loop_inputs in = make_inputs(1500U, 1500U, false);
+    in.spot_lock_switch_on = true;
+    in.spot_lock_switch_edge_on = true;
+    in.gps_fresh = true;
+    in.gps_has_fix = true;
+    loop_outputs out = loop_step(&in, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.telemetry.state);
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_EQUAL_UINT32(1U, out.telemetry.spot_lock_attempt_seq);
+    TEST_ASSERT_FALSE(out.telemetry.spot_lock_attempt_ok);
+    TEST_ASSERT_FALSE(out.telemetry.spot_lock_attempt_armed);
+}
+
+static void test_spot_lock_attempt_seq_unchanged_without_edge(void)
+{
+    /* No CH3 edge this cycle -> attempt_seq and the latched gate fields hold at
+     * their previous values instead of resetting. */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm(&state, &cfg, &params);
+
+    loop_inputs enter = spot_lock_inputs_at(0, 0, 0, true, true);
+    loop_outputs first = loop_step(&enter, &cfg, &params, &state);
+    TEST_ASSERT_EQUAL_UINT32(1U, first.telemetry.spot_lock_attempt_seq);
+
+    loop_inputs hold = spot_lock_inputs_at(0, 0, 0, true, false);
+    loop_outputs second = loop_step(&hold, &cfg, &params, &state);
+
+    TEST_ASSERT_EQUAL_UINT32(1U, second.telemetry.spot_lock_attempt_seq);
+    TEST_ASSERT_TRUE(second.telemetry.spot_lock_attempt_ok);
 }
 
 static void test_spot_lock_output_passes_hard_clamp(void)
@@ -815,7 +985,7 @@ static void test_goto_pauses_on_gps_loss_latch_retained(void)
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, state.spot_lock.target_source);
 }
 
-static void test_goto_stick_override_clears_latch(void)
+static void test_goto_steering_nudge_does_not_clear_latch(void)
 {
     /* Arrange: goto ACTIVE and drifted (forward thrust engaged). */
     settings_params params;
@@ -826,15 +996,47 @@ static void test_goto_stick_override_clears_latch(void)
     arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
                         HEADING_SOUTH_DEG10);
 
-    /* Act: operator nudges the steering stick off-center (throttle neutral). */
+    /* Act: operator nudges the steering stick hard over (throttle neutral).
+     * R4 revision: steering has no override role now. */
     loop_inputs nudge =
         goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
     nudge.ch1 = sample_at(2000U); /* hard steer */
     loop_outputs out = loop_step(&nudge, &cfg, &params, &state);
 
+    /* Assert: goto keeps driving, latch untouched. Oracle: the old
+     * !sticks_neutral override would abort and clear the latch here. */
+    TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_ACTIVE, out.telemetry.spot_lock_substate);
+    TEST_ASSERT_FALSE(out.goto_latch_clear);
+}
+
+static void test_goto_full_throttle_hold_clears_latch_after_3s(void)
+{
+    /* Arrange: goto ACTIVE and drifted (forward thrust engaged). */
+    settings_params params;
+    settings_load_defaults(&params);
+    loop_validity_cfg cfg = make_cfg();
+    loop_state state;
+    loop_state_init(&state, &params, RC_DEBOUNCE_DEFAULT_THRESHOLD);
+    arm_and_engage_goto(&state, &cfg, &params, DRIFT_NORTH_LAT_E7,
+                        HEADING_SOUTH_DEG10);
+
+    /* Act: operator drives the throttle stick to its 100% endpoint and holds
+     * it there for the full 3 s threshold. */
+    loop_inputs pinned =
+        goto_inputs_at(DRIFT_NORTH_LAT_E7, 0, HEADING_SOUTH_DEG10, 0, 0);
+    pinned.ch2 = sample_at(params.rc_max_us);
+    loop_outputs out = {0};
+    for (int i = 0; i < THROTTLE_OVERRIDE_HOLD_FRAMES - 1; i++) {
+        out = loop_step(&pinned, &cfg, &params, &state);
+        TEST_ASSERT_FALSE(out.goto_latch_clear);
+    }
+
+    /* Act: the threshold-th consecutive held cycle. */
+    out = loop_step(&pinned, &cfg, &params, &state);
+
     /* Assert: goto aborts to OFF AND the latch is cleared (no auto-resume when
-     * the stick returns to neutral). Oracle: if the latch survived the override,
-     * goto_latch_clear would be false. */
+     * the stick returns to neutral). Oracle: if the latch survived the
+     * override, goto_latch_clear would be false. */
     TEST_ASSERT_EQUAL_UINT8(SPOT_LOCK_OFF, out.telemetry.spot_lock_substate);
     TEST_ASSERT_TRUE(out.goto_latch_clear);
 }
@@ -1002,17 +1204,25 @@ void run_loop_step_tests(void)
     RUN_TEST(test_calibration_entry_frame_ignores_event_starts_at_neutral);
     RUN_TEST(test_calibration_reentry_reinitialises_step_to_neutral);
     RUN_TEST(test_pending_applies_only_in_disarmed);
+    RUN_TEST(test_trim_allowed_in_disarmed_and_armed);
     RUN_TEST(test_spot_lock_holds_with_computed_throttle);
     RUN_TEST(test_failsafe_beats_spot_lock);
     RUN_TEST(test_spot_lock_ch3_off_returns_to_manual);
-    RUN_TEST(test_spot_lock_stick_aborts_immediately);
+    RUN_TEST(test_spot_lock_steering_nudge_does_not_abort);
+    RUN_TEST(test_spot_lock_full_throttle_hold_aborts_after_3s);
     RUN_TEST(test_spot_lock_pauses_on_gps_loss);
+    RUN_TEST(test_spot_lock_attempt_ok_on_successful_entry);
+    RUN_TEST(test_spot_lock_attempt_rejected_no_gps_fix);
+    RUN_TEST(test_spot_lock_attempt_rejected_sticks_not_neutral);
+    RUN_TEST(test_spot_lock_attempt_rejected_while_disarmed);
+    RUN_TEST(test_spot_lock_attempt_seq_unchanged_without_edge);
     RUN_TEST(test_spot_lock_output_passes_hard_clamp);
     RUN_TEST(test_goto_engages_and_computes_throttle);
     RUN_TEST(test_goto_rc_loss_failsafe_wins);
     RUN_TEST(test_goto_persists_on_comms_loss_latch_retained);
     RUN_TEST(test_goto_pauses_on_gps_loss_latch_retained);
-    RUN_TEST(test_goto_stick_override_clears_latch);
+    RUN_TEST(test_goto_steering_nudge_does_not_clear_latch);
+    RUN_TEST(test_goto_full_throttle_hold_clears_latch_after_3s);
     RUN_TEST(test_goto_ch3_preempt_holds_here_and_clears_latch);
     RUN_TEST(test_goto_cancel_returns_off);
     RUN_TEST(test_goto_output_passes_hard_clamp);

@@ -18,6 +18,12 @@
 #define THROTTLE_GAIN_PER_M 50
 #define SERVO_GAIN_PER_DEG 20
 
+/* Throttle-hold manual-abort gesture (R4 revision): small so the dedicated
+ * override tests below don't need dozens of spot_lock_step calls to reach the
+ * threshold. The real integration layer uses ~150 frames (3 s @ 20 ms); the
+ * pure core only cares about the frame COUNT, never real time. */
+#define THROTTLE_OVERRIDE_HOLD_FRAMES 3
+
 /* Goto cruise-decel profile tuning: cruise at 600 (normalized) beyond 20 m, then
  * ramp linearly down to the deadband edge. Chosen so the mid-zone value differs
  * from BOTH cruise (removed ramp) and the SRC_HOLD gain x dist profile. */
@@ -33,6 +39,7 @@ static spot_lock_params make_params(void)
         .servo_gain_per_deg = SERVO_GAIN_PER_DEG,
         .goto_slowdown_distance_m = GOTO_SLOWDOWN_M,
         .goto_cruise_norm = GOTO_CRUISE_NORM,
+        .throttle_override_hold_frames = THROTTLE_OVERRIDE_HOLD_FRAMES,
     };
     return p;
 }
@@ -49,6 +56,7 @@ static spot_lock_inputs make_base_inputs(void)
         .ch3_on = true,
         .ch3_edge_on = true,
         .sticks_neutral = true,
+        .throttle_full_deflect = false,
         .gps_fresh = true,
         .gps_has_fix = true,
         .imu_ok = true,
@@ -461,10 +469,13 @@ void test_abort_on_ch3_off(void)
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_OFF, out.substate);
 }
 
-void test_abort_on_stick_out_of_deadband(void)
+void test_stick_deflection_alone_does_not_abort(void)
 {
-    /* Arrange: ACTIVE, a stick moved out of its neutral band (no extra
-     * threshold - same neutral domain as the manual path, R4). */
+    /* Arrange: ACTIVE, a stick moved out of its neutral band but NOT the
+     * throttle-hold gesture (throttle_full_deflect stays false). R4 revision:
+     * an incidental stick bump (e.g. picking up the transmitter) must no longer
+     * drop an engaged hold. Oracle: restoring the old !sticks_neutral override
+     * would flip this to OFF. */
     spot_lock_params p = make_params();
     spot_lock_inputs in = make_base_inputs();
     in.ch3_edge_on = false;
@@ -474,8 +485,69 @@ void test_abort_on_stick_out_of_deadband(void)
     /* Act */
     spot_lock_outputs out = spot_lock_step(&in, &p, &st);
 
-    /* Assert: immediate OFF. */
+    /* Assert: still ACTIVE, no override fired. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    TEST_ASSERT_FALSE(out.manual_override);
+}
+
+void test_full_throttle_hold_aborts_after_threshold_frames(void)
+{
+    /* Arrange: ACTIVE, throttle pinned at 100% deflection every cycle. Below
+     * the threshold it must keep driving; the threshold-th consecutive cycle
+     * must abort (OFF, source cleared, manual_override reported). */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_base_inputs();
+    in.ch3_edge_on = false;
+    in.throttle_full_deflect = true;
+    spot_lock_state st = make_active_state();
+
+    /* Act: (threshold - 1) held cycles must NOT abort yet. */
+    spot_lock_outputs out = {0};
+    for (int i = 0; i < THROTTLE_OVERRIDE_HOLD_FRAMES - 1; i++) {
+        out = spot_lock_step(&in, &p, &st);
+        TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+        TEST_ASSERT_FALSE(out.manual_override);
+    }
+
+    /* Act: the threshold-th consecutive held cycle. */
+    out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: aborted, source cleared, this exact cycle flagged. */
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_OFF, out.substate);
+    TEST_ASSERT_TRUE(out.manual_override);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_NONE, st.target_source);
+}
+
+void test_full_throttle_release_before_threshold_resets_hold(void)
+{
+    /* Arrange: ACTIVE, throttle held at 100% for most of the threshold, then
+     * released for one cycle. The hold must be CONTINUOUS - releasing resets
+     * the counter, so a further (threshold - 1) held cycles afterward must
+     * still NOT abort (oracle: a cumulative, non-resetting counter would). */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_base_inputs();
+    in.ch3_edge_on = false;
+    in.throttle_full_deflect = true;
+    spot_lock_state st = make_active_state();
+
+    for (int i = 0; i < THROTTLE_OVERRIDE_HOLD_FRAMES - 1; i++) {
+        spot_lock_step(&in, &p, &st);
+    }
+
+    /* Act: release for one cycle (throttle back to neutral). */
+    in.throttle_full_deflect = false;
+    spot_lock_outputs released = spot_lock_step(&in, &p, &st);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, released.substate);
+
+    /* Act: hold again, one cycle short of the threshold. */
+    in.throttle_full_deflect = true;
+    spot_lock_outputs out = {0};
+    for (int i = 0; i < THROTTLE_OVERRIDE_HOLD_FRAMES - 1; i++) {
+        out = spot_lock_step(&in, &p, &st);
+    }
+
+    /* Assert: still ACTIVE - the earlier partial hold did not carry over. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
 }
 
 void test_step_is_deterministic(void)
@@ -633,10 +705,11 @@ void test_comms_gate_does_not_pause_ch3_hold(void)
     TEST_ASSERT_TRUE(out.throttle_cmd > 0);
 }
 
-void test_goto_override_on_stick_deflection(void)
+void test_goto_stick_deflection_alone_does_not_abort(void)
 {
-    /* Arrange: goto ACTIVE, a stick leaves its neutral band. Manual override
-     * wins structurally -> OFF and source cleared. */
+    /* Arrange: goto ACTIVE, a stick leaves its neutral band but throttle never
+     * reaches 100% deflection. R4 revision: this must no longer end goto.
+     * Oracle: the old !sticks_neutral override would flip this to OFF. */
     spot_lock_params p = make_params();
     spot_lock_inputs in = make_goto_inputs();
     in.sticks_neutral = false;
@@ -645,8 +718,33 @@ void test_goto_override_on_stick_deflection(void)
     /* Act */
     spot_lock_outputs out = spot_lock_step(&in, &p, &st);
 
-    /* Assert: OFF, no engaged source. */
+    /* Assert: still ACTIVE on the same source. */
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_GOTO, st.target_source);
+    TEST_ASSERT_FALSE(out.manual_override);
+}
+
+void test_goto_full_throttle_hold_aborts_after_threshold_frames(void)
+{
+    /* Arrange: goto ACTIVE, throttle pinned at 100% deflection every cycle.
+     * Same continuous-hold gesture as SRC_HOLD (R4 revision), verified here for
+     * SRC_GOTO specifically since it shares the same override branch. */
+    spot_lock_params p = make_params();
+    spot_lock_inputs in = make_goto_inputs();
+    in.throttle_full_deflect = true;
+    spot_lock_state st = make_active_goto_state();
+
+    spot_lock_outputs out = {0};
+    for (int i = 0; i < THROTTLE_OVERRIDE_HOLD_FRAMES - 1; i++) {
+        out = spot_lock_step(&in, &p, &st);
+        TEST_ASSERT_EQUAL_INT(SPOT_LOCK_ACTIVE, out.substate);
+    }
+
+    out = spot_lock_step(&in, &p, &st);
+
+    /* Assert: aborted, source cleared, this exact cycle flagged. */
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_OFF, out.substate);
+    TEST_ASSERT_TRUE(out.manual_override);
     TEST_ASSERT_EQUAL_INT(SPOT_LOCK_SRC_NONE, st.target_source);
 }
 
@@ -986,14 +1084,17 @@ void run_spot_lock_tests(void)
     RUN_TEST(test_pause_on_imu_loss);
     RUN_TEST(test_pause_on_fix_loss_then_resume_keeps_target);
     RUN_TEST(test_abort_on_ch3_off);
-    RUN_TEST(test_abort_on_stick_out_of_deadband);
+    RUN_TEST(test_stick_deflection_alone_does_not_abort);
+    RUN_TEST(test_full_throttle_hold_aborts_after_threshold_frames);
+    RUN_TEST(test_full_throttle_release_before_threshold_resets_hold);
     RUN_TEST(test_step_is_deterministic);
     RUN_TEST(test_goto_engages_active_with_external_target);
     RUN_TEST(test_ch3_preempts_active_goto_and_snapshots_here_and_now);
     RUN_TEST(test_goto_persists_through_comms_loss_with_valid_fix);
     RUN_TEST(test_goto_pauses_on_gps_loss_keeps_target);
     RUN_TEST(test_comms_gate_does_not_pause_ch3_hold);
-    RUN_TEST(test_goto_override_on_stick_deflection);
+    RUN_TEST(test_goto_stick_deflection_alone_does_not_abort);
+    RUN_TEST(test_goto_full_throttle_hold_aborts_after_threshold_frames);
     RUN_TEST(test_goto_retains_target_ignoring_zeroed_input_on_stale_link);
     RUN_TEST(test_goto_fresh_link_tracks_new_target);
     RUN_TEST(test_goto_arrived_flag_tracks_deadband);

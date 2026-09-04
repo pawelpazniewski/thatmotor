@@ -62,10 +62,17 @@ static sm_state next_from_disarmed(const sm_inputs *inputs)
     return SM_STATE_DISARMED;
 }
 
-/* DEPLOY (manual motor raise): the motor is forced off, so RC loss does NOT
- * drop to FAILSAFE. The ONLY exit is an explicit stow request -> DISARMED. */
+/* DEPLOY (manual motor raise): RC loss ALWAYS drops to FAILSAFE, same as every
+ * other state -- losing RC must never leave the unit parked in a state that
+ * ignores it (a stuck/noisy CH4 arm/disarm/deploy line could otherwise land
+ * the unit in DEPLOY and trap it there with zero RC authority, since DEPLOY's
+ * only other exit -- stow_request -- comes from that same channel). Otherwise
+ * the only exit is an explicit stow request -> DISARMED. */
 static sm_state next_from_deploy(const sm_inputs *inputs)
 {
+    if (!inputs->rc_valid) {
+        return SM_STATE_FAILSAFE;
+    }
     if (inputs->stow_request) {
         return SM_STATE_DISARMED;
     }
@@ -132,10 +139,12 @@ static throttle_target_mode throttle_target_for(sm_state state)
     return THROTTLE_TARGET_NEUTRAL;
 }
 
-/* Servo rule. DEPLOY pins the servo at deploy_servo_us regardless of RC (the
- * motor is off, so holding the raised position is the safe behaviour even with
- * RC lost). Otherwise the rule is independent of arming: RC valid -> track CH1,
- * else center. */
+/* Servo rule. `state` is the ALREADY-RESOLVED next state (see sm_step), so
+ * DEPLOY here always implies RC is currently valid: RC loss moves next_state
+ * to FAILSAFE first (next_from_deploy), so the DEPLOY branch below never runs
+ * with RC lost. It pins the servo at deploy_servo_us while parked in DEPLOY.
+ * Otherwise the rule is independent of arming: RC valid -> track CH1, else
+ * center. */
 static servo_target_mode servo_target_for(sm_state state, const sm_inputs *inputs)
 {
     if (state == SM_STATE_DEPLOY) {

@@ -59,8 +59,29 @@ static void dump_slot(const uint8_t *record, size_t len, void *ctx)
     }
 }
 
-/* `spotlog dump`: print the CSV header, then stream every valid record as a
- * denormalised CSV row. Read-only; runs off the control path. */
+/* One raw slot for the attempts pass: print only BLACKBOX_TYPE_ATTEMPT records
+ * (a second read_all pass, so the sample table above stays a single well-formed
+ * shape instead of interleaving a second, unrelated row shape into it). */
+static void dump_attempt_slot(const uint8_t *record, size_t len, void *ctx)
+{
+    (void)ctx;
+    blackbox_record_type type;
+    if (blackbox_record_classify(record, len, &type) != BLACKBOX_REC_OK ||
+        type != BLACKBOX_TYPE_ATTEMPT) {
+        return;
+    }
+    blackbox_attempt attempt;
+    if (blackbox_record_decode_attempt(record, len, &attempt) != BLACKBOX_REC_OK) {
+        return;
+    }
+    char row[BLACKBOX_CSV_LINE_MAX];
+    if (blackbox_csv_attempt_row(&attempt, row, sizeof(row)) > 0U) {
+        printf("%s\n", row);
+    }
+}
+
+/* `spotlog dump`: print the sample CSV table, then a second CSV table of
+ * rejected CH3 entry attempts. Read-only; runs off the control path. */
 static int cmd_spotlog(int argc, char **argv)
 {
     if (argc < 2 || strcmp(argv[1], "dump") != 0) {
@@ -77,6 +98,16 @@ static int cmd_spotlog(int argc, char **argv)
     blackbox_status status = blackbox_read_all(dump_slot, &state);
     if (status != BLACKBOX_OK) {
         printf("spotlog dump: read failed (status %d)\n", status);
+        return 1;
+    }
+
+    printf("\n");
+    if (blackbox_csv_attempt_header(header, sizeof(header)) > 0U) {
+        printf("%s\n", header);
+    }
+    status = blackbox_read_all(dump_attempt_slot, NULL);
+    if (status != BLACKBOX_OK) {
+        printf("spotlog dump: attempt read failed (status %d)\n", status);
         return 1;
     }
     return 0;
@@ -207,7 +238,6 @@ esp_err_t usb_console_start(void)
     if (err != ESP_OK) {
         return err;
     }
-
     ESP_LOGI(TAG, "USB console up (prio %d): spotlog dump, params get/set",
              USB_CONSOLE_TASK_PRIO);
     return esp_console_start_repl(repl);

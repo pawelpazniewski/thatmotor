@@ -26,7 +26,8 @@ static bool sample_due(const blackbox_sampler_in *in)
 
 blackbox_sampler_out blackbox_sampler_step(const blackbox_sampler_in *in)
 {
-    blackbox_sampler_out out = {BLACKBOX_ACTION_IDLE, in->off_tail_left};
+    blackbox_sampler_out out = {BLACKBOX_ACTION_IDLE, in->off_tail_left,
+                                in->attempt_seq};
     bool prev_off = is_off(in->prev_substate);
     bool cur_off = is_off(in->cur_substate);
 
@@ -55,10 +56,17 @@ blackbox_sampler_out blackbox_sampler_step(const blackbox_sampler_in *in)
         out.off_tail_left = BLACKBOX_OFF_TAIL_SAMPLES - 1U;
         return out;
     }
-    /* OFF -> OFF: keep draining the tail budget, then fall silent. */
+    /* OFF -> OFF: keep draining the tail budget, then a rejected CH3 entry
+     * attempt (new attempt_seq since the last one acted on), then fall silent.
+     * out.last_attempt_seq is already latched to in->attempt_seq above, so this
+     * fires at most once per attempt regardless of which branch runs later. */
     if (in->off_tail_left > 0U) {
         out.action = BLACKBOX_ACTION_SAMPLE_TAIL;
         out.off_tail_left = (uint16_t)(in->off_tail_left - 1U);
+        return out;
+    }
+    if (in->attempt_seq != in->last_attempt_seq) {
+        out.action = BLACKBOX_ACTION_LOG_ATTEMPT;
     }
     return out;
 }

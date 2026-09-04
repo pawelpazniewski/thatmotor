@@ -42,6 +42,7 @@ static uint16_t s_ms_since_sample;  /* elapsed since the last written record */
 static uint16_t s_last_err_m;       /* position error at the last written sample */
 static uint16_t s_off_tail_left;    /* post-OFF tail samples still owed */
 static uint8_t s_tail_end_reason;   /* reason latched at the drop, reused per tail */
+static uint32_t s_last_attempt_seq; /* last spot_lock_attempt_seq acted on */
 
 /* Monotonic milliseconds (esp_timer is monotonic). */
 static uint32_t now_ms(void)
@@ -129,6 +130,22 @@ static void fill_sample(const control_loop_snapshot *s, uint8_t source,
     o->arrived = s->goto_arrived;
 }
 
+/* Build an attempt record from the snapshot's latched entry-gate fields. */
+static void fill_attempt(const control_loop_snapshot *s, blackbox_attempt *o)
+{
+    o->attempt_seq = s->spot_lock_attempt_seq;
+    o->t_ms = now_ms();
+    o->sm_state = (uint8_t)s->state;
+    o->ok = s->spot_lock_attempt_ok;
+    o->armed = s->spot_lock_attempt_armed;
+    o->sticks_neutral = s->spot_lock_attempt_sticks_neutral;
+    o->gps_fresh = s->spot_lock_attempt_gps_fresh;
+    o->gps_fix = s->spot_lock_attempt_gps_fix;
+    o->ch1_us = (uint16_t)s->ch1_us;
+    o->ch2_us = (uint16_t)s->ch2_us;
+    o->ch3_us = (uint16_t)s->ch3_us;
+}
+
 /* Encode + append, logging (never crashing) on a flash error. Best-effort: a
  * lost record must not take down the observer. */
 static void append_or_warn(blackbox_status status, const char *what)
@@ -173,6 +190,20 @@ static void write_sample(const control_loop_snapshot *snap, uint8_t source,
     append_or_warn(blackbox_append(record, sizeof(record)), "sample");
 }
 
+static void write_attempt(const control_loop_snapshot *snap)
+{
+    blackbox_attempt attempt;
+    fill_attempt(snap, &attempt);
+
+    uint8_t record[BLACKBOX_RECORD_SIZE];
+    if (blackbox_record_encode_attempt(&attempt, record, sizeof(record)) !=
+        BLACKBOX_REC_OK) {
+        ESP_LOGW(TAG, "attempt encode failed");
+        return;
+    }
+    append_or_warn(blackbox_append(record, sizeof(record)), "attempt");
+}
+
 /* One tick: peek the snapshot, run the pure sampler, and act. Keeps the
  * prev-tick context updated so the next tick sees the true transition. */
 static void recorder_tick(void)
@@ -195,6 +226,8 @@ static void recorder_tick(void)
         .last_err_m = s_last_err_m,
         .event = event,
         .off_tail_left = s_off_tail_left,
+        .attempt_seq = snap.spot_lock_attempt_seq,
+        .last_attempt_seq = s_last_attempt_seq,
     };
     blackbox_sampler_out out = blackbox_sampler_step(&in);
 
@@ -220,6 +253,10 @@ static void recorder_tick(void)
         write_sample(&snap, s_prev_source, s_tail_end_reason);
         wrote = true;
         break;
+    case BLACKBOX_ACTION_LOG_ATTEMPT:
+        write_attempt(&snap);
+        wrote = true;
+        break;
     case BLACKBOX_ACTION_IDLE:
     default:
         break;
@@ -232,6 +269,7 @@ static void recorder_tick(void)
         s_ms_since_sample = (uint16_t)(s_ms_since_sample + BLACKBOX_TICK_MS);
     }
     s_off_tail_left = out.off_tail_left;
+    s_last_attempt_seq = out.last_attempt_seq;
     s_prev_substate = cur_substate;
     s_prev_source = cur_source;
     s_prev_sm_state = (uint8_t)snap.state;
@@ -247,6 +285,7 @@ static void recorder_task(void *arg)
     s_last_err_m = 0U;
     s_off_tail_left = 0U;
     s_tail_end_reason = BLACKBOX_END_NONE;
+    s_last_attempt_seq = 0U;
     for (;;) {
         recorder_tick();
         vTaskDelay(pdMS_TO_TICKS(BLACKBOX_TICK_MS));

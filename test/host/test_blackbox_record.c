@@ -67,6 +67,23 @@ static blackbox_session_header make_header(void)
     return h;
 }
 
+static blackbox_attempt make_attempt(void)
+{
+    blackbox_attempt a;
+    a.attempt_seq = 42U;
+    a.t_ms = 1234567U;
+    a.sm_state = 2U; /* e.g. ARMED */
+    a.ok = false;
+    a.armed = true;
+    a.sticks_neutral = false;
+    a.gps_fresh = true;
+    a.gps_fix = false;
+    a.ch1_us = 1490U;
+    a.ch2_us = 1900U;
+    a.ch3_us = 1900U;
+    return a;
+}
+
 /* ---- round-trip ---- */
 
 static void test_sample_round_trip_preserves_every_field(void)
@@ -168,29 +185,106 @@ static void test_header_round_trip_preserves_every_field(void)
     TEST_ASSERT_EQUAL_UINT32(in.start_ms, out.start_ms);
 }
 
+static void test_attempt_round_trip_preserves_every_field(void)
+{
+    /* Arrange */
+    blackbox_attempt in = make_attempt();
+    uint8_t buf[BLACKBOX_RECORD_SIZE];
+
+    /* Act */
+    TEST_ASSERT_EQUAL_INT(
+        BLACKBOX_REC_OK,
+        blackbox_record_encode_attempt(&in, buf, sizeof(buf)));
+    blackbox_attempt out;
+    blackbox_record_result decoded =
+        blackbox_record_decode_attempt(buf, sizeof(buf), &out);
+
+    /* Assert */
+    TEST_ASSERT_EQUAL_INT(BLACKBOX_REC_OK, decoded);
+    TEST_ASSERT_EQUAL_UINT32(in.attempt_seq, out.attempt_seq);
+    TEST_ASSERT_EQUAL_UINT32(in.t_ms, out.t_ms);
+    TEST_ASSERT_EQUAL_UINT8(in.sm_state, out.sm_state);
+    TEST_ASSERT_EQUAL_INT(in.ok, out.ok);
+    TEST_ASSERT_EQUAL_INT(in.armed, out.armed);
+    TEST_ASSERT_EQUAL_INT(in.sticks_neutral, out.sticks_neutral);
+    TEST_ASSERT_EQUAL_INT(in.gps_fresh, out.gps_fresh);
+    TEST_ASSERT_EQUAL_INT(in.gps_fix, out.gps_fix);
+    TEST_ASSERT_EQUAL_UINT16(in.ch1_us, out.ch1_us);
+    TEST_ASSERT_EQUAL_UINT16(in.ch2_us, out.ch2_us);
+    TEST_ASSERT_EQUAL_UINT16(in.ch3_us, out.ch3_us);
+}
+
+static void test_attempt_flags_true_round_trip(void)
+{
+    /* Arrange: every packed flag set must decode back to true, not false (the
+     * sample suite already covers all-false; this covers the other pole). */
+    blackbox_attempt in = make_attempt();
+    in.ok = true;
+    in.armed = true;
+    in.sticks_neutral = true;
+    in.gps_fresh = true;
+    in.gps_fix = true;
+    uint8_t buf[BLACKBOX_RECORD_SIZE];
+
+    /* Act */
+    blackbox_record_encode_attempt(&in, buf, sizeof(buf));
+    blackbox_attempt out;
+    blackbox_record_decode_attempt(buf, sizeof(buf), &out);
+
+    /* Assert */
+    TEST_ASSERT_TRUE(out.ok);
+    TEST_ASSERT_TRUE(out.armed);
+    TEST_ASSERT_TRUE(out.sticks_neutral);
+    TEST_ASSERT_TRUE(out.gps_fresh);
+    TEST_ASSERT_TRUE(out.gps_fix);
+}
+
+static void test_decode_attempt_rejects_sample_slot(void)
+{
+    /* Arrange: a valid sample slot fed to the attempt decoder. */
+    blackbox_sample s = make_sample();
+    uint8_t buf[BLACKBOX_RECORD_SIZE];
+    blackbox_record_encode_sample(&s, buf, sizeof(buf));
+
+    /* Act */
+    blackbox_attempt out;
+    blackbox_record_result decoded =
+        blackbox_record_decode_attempt(buf, sizeof(buf), &out);
+
+    /* Assert: type mismatch, not silently decoded as an attempt. */
+    TEST_ASSERT_EQUAL_INT(BLACKBOX_REC_ERR_TYPE, decoded);
+}
+
 /* ---- classification / type discrimination ---- */
 
 static void test_classify_reports_record_type(void)
 {
-    /* Arrange: a header slot and a sample slot. */
+    /* Arrange: a header slot, a sample slot, and an attempt slot. */
     blackbox_session_header h = make_header();
     blackbox_sample s = make_sample();
+    blackbox_attempt a = make_attempt();
     uint8_t hbuf[BLACKBOX_RECORD_SIZE];
     uint8_t sbuf[BLACKBOX_RECORD_SIZE];
+    uint8_t abuf[BLACKBOX_RECORD_SIZE];
     blackbox_record_encode_header(&h, hbuf, sizeof(hbuf));
     blackbox_record_encode_sample(&s, sbuf, sizeof(sbuf));
+    blackbox_record_encode_attempt(&a, abuf, sizeof(abuf));
 
     /* Act */
     blackbox_record_type ht;
     blackbox_record_type st;
+    blackbox_record_type at;
     blackbox_record_result hr = blackbox_record_classify(hbuf, sizeof(hbuf), &ht);
     blackbox_record_result sr = blackbox_record_classify(sbuf, sizeof(sbuf), &st);
+    blackbox_record_result ar = blackbox_record_classify(abuf, sizeof(abuf), &at);
 
     /* Assert */
     TEST_ASSERT_EQUAL_INT(BLACKBOX_REC_OK, hr);
     TEST_ASSERT_EQUAL_INT(BLACKBOX_TYPE_HEADER, ht);
     TEST_ASSERT_EQUAL_INT(BLACKBOX_REC_OK, sr);
     TEST_ASSERT_EQUAL_INT(BLACKBOX_TYPE_SAMPLE, st);
+    TEST_ASSERT_EQUAL_INT(BLACKBOX_REC_OK, ar);
+    TEST_ASSERT_EQUAL_INT(BLACKBOX_TYPE_ATTEMPT, at);
 }
 
 static void test_decode_sample_rejects_header_slot(void)
@@ -327,6 +421,19 @@ static void test_null_args_are_rejected(void)
     TEST_ASSERT_EQUAL_INT(
         BLACKBOX_REC_ERR_ARG,
         blackbox_record_decode_sample(buf, sizeof(buf), NULL));
+
+    blackbox_attempt a = make_attempt();
+    uint8_t abuf[BLACKBOX_RECORD_SIZE];
+    blackbox_record_encode_attempt(&a, abuf, sizeof(abuf));
+    TEST_ASSERT_EQUAL_INT(
+        BLACKBOX_REC_ERR_ARG,
+        blackbox_record_encode_attempt(NULL, abuf, sizeof(abuf)));
+    TEST_ASSERT_EQUAL_INT(
+        BLACKBOX_REC_ERR_ARG,
+        blackbox_record_encode_attempt(&a, NULL, sizeof(abuf)));
+    TEST_ASSERT_EQUAL_INT(
+        BLACKBOX_REC_ERR_ARG,
+        blackbox_record_decode_attempt(abuf, sizeof(abuf), NULL));
 }
 
 void run_blackbox_record_tests(void)
@@ -335,6 +442,9 @@ void run_blackbox_record_tests(void)
     RUN_TEST(test_sample_round_trip_preserves_every_field);
     RUN_TEST(test_sample_flags_false_round_trip);
     RUN_TEST(test_header_round_trip_preserves_every_field);
+    RUN_TEST(test_attempt_round_trip_preserves_every_field);
+    RUN_TEST(test_attempt_flags_true_round_trip);
+    RUN_TEST(test_decode_attempt_rejects_sample_slot);
     RUN_TEST(test_classify_reports_record_type);
     RUN_TEST(test_decode_sample_rejects_header_slot);
     RUN_TEST(test_erased_sector_is_empty_not_data);

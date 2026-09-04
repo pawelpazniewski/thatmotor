@@ -156,6 +156,84 @@ static void test_session_rows_share_id_and_settings(void)
     }
 }
 
+/* ---- attempt section: its own header/row pair ---- */
+
+static blackbox_attempt make_attempt(void)
+{
+    blackbox_attempt a = {
+        .attempt_seq = 3U,
+        .t_ms = 55000U,
+        .sm_state = 1U,
+        .ok = false,
+        .armed = true,
+        .sticks_neutral = false,
+        .gps_fresh = true,
+        .gps_fix = false,
+        .ch1_us = 1490U,
+        .ch2_us = 1510U,
+        .ch3_us = 1900U,
+    };
+    return a;
+}
+
+static void test_attempt_row_exact_column_order_and_values(void)
+{
+    blackbox_attempt a = make_attempt();
+
+    char row[BLACKBOX_CSV_LINE_MAX];
+    size_t n = blackbox_csv_attempt_row(&a, row, sizeof(row));
+
+    const char *expected = "3,55000,1,0,1,0,1,0,1490,1510,1900";
+    TEST_ASSERT_EQUAL_STRING(expected, row);
+    TEST_ASSERT_EQUAL_UINT(strlen(expected), n);
+}
+
+static void test_attempt_row_rejects_too_small_buffer(void)
+{
+    blackbox_attempt a = make_attempt();
+
+    char tiny[4];
+    TEST_ASSERT_EQUAL_UINT(0U, blackbox_csv_attempt_row(&a, tiny, sizeof(tiny)));
+    TEST_ASSERT_EQUAL_UINT(0U, blackbox_csv_attempt_row(NULL, tiny, sizeof(tiny)));
+}
+
+static void test_attempt_header_matches_field_order(void)
+{
+    char hdr[BLACKBOX_CSV_LINE_MAX];
+    size_t n = blackbox_csv_attempt_header(hdr, sizeof(hdr));
+
+    const char *expected =
+        "attempt_seq,t_ms,sm_state,ok,armed,sticks_neutral,gps_fresh,gps_fix,"
+        "ch1_us,ch2_us,ch3_us";
+    TEST_ASSERT_EQUAL_STRING(expected, hdr);
+    TEST_ASSERT_EQUAL_UINT(strlen(expected), n);
+}
+
+static void test_attempt_header_column_count_matches_row_commas(void)
+{
+    char hdr[BLACKBOX_CSV_LINE_MAX];
+    blackbox_csv_attempt_header(hdr, sizeof(hdr));
+
+    blackbox_attempt a = make_attempt();
+    char row[BLACKBOX_CSV_LINE_MAX];
+    blackbox_csv_attempt_row(&a, row, sizeof(row));
+
+    unsigned hdr_commas = 0U;
+    for (const char *p = hdr; *p; ++p) {
+        if (*p == ',') {
+            hdr_commas++;
+        }
+    }
+    unsigned row_commas = 0U;
+    for (const char *p = row; *p; ++p) {
+        if (*p == ',') {
+            row_commas++;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT(BLACKBOX_CSV_ATTEMPT_COLUMN_COUNT - 1U, hdr_commas);
+    TEST_ASSERT_EQUAL_UINT(hdr_commas, row_commas);
+}
+
 void run_blackbox_csv_tests(void)
 {
     RUN_TEST(test_row_exact_column_order_and_values);
@@ -163,4 +241,8 @@ void run_blackbox_csv_tests(void)
     RUN_TEST(test_header_matches_field_order);
     RUN_TEST(test_header_column_count_matches_row_commas);
     RUN_TEST(test_session_rows_share_id_and_settings);
+    RUN_TEST(test_attempt_row_exact_column_order_and_values);
+    RUN_TEST(test_attempt_row_rejects_too_small_buffer);
+    RUN_TEST(test_attempt_header_matches_field_order);
+    RUN_TEST(test_attempt_header_column_count_matches_row_commas);
 }

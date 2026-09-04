@@ -360,10 +360,11 @@ static void test_deploy_stow_request_exits_to_disarmed(void)
     TEST_ASSERT_EQUAL(SM_STATE_DISARMED, out.state);
 }
 
-static void test_deploy_rc_loss_without_stow_stays_deploy(void)
+static void test_deploy_rc_loss_without_stow_drops_to_failsafe(void)
 {
-    /* Oracle: losing RC in DEPLOY must NOT drop to FAILSAFE; the motor is off, so
-     * DEPLOY is already safe and the raised position is held. */
+    /* Oracle: RC loss ALWAYS drops to FAILSAFE, DEPLOY included -- otherwise a
+     * noisy/stuck arm-disarm-deploy line could trap the unit in DEPLOY with zero
+     * RC authority (its only other exit, stow_request, rides that same line). */
     sm_inputs in = armable_inputs();
     in.ui_arm_request = false;
     in.rc_valid = false;     /* RC lost */
@@ -372,17 +373,16 @@ static void test_deploy_rc_loss_without_stow_stays_deploy(void)
     /* Act */
     sm_outputs out = sm_step(SM_STATE_DEPLOY, &in);
 
-    /* Assert: stays in DEPLOY, NOT FAILSAFE. */
-    TEST_ASSERT_EQUAL(SM_STATE_DEPLOY, out.state);
+    /* Assert: drops to FAILSAFE, NOT held in DEPLOY. */
+    TEST_ASSERT_EQUAL(SM_STATE_FAILSAFE, out.state);
 }
 
-static void test_deploy_motor_off_and_servo_deploy(void)
+static void test_deploy_motor_off_and_servo_deploy_while_rc_valid(void)
 {
     /* Oracle: throttle is ALWAYS neutral (motor off) in DEPLOY, and the servo
-     * target is DEPLOY (hold deploy_servo_us), even with RC lost. */
+     * target is DEPLOY (hold deploy_servo_us) while RC is still valid. */
     sm_inputs in = armable_inputs();
     in.ui_arm_request = false;
-    in.rc_valid = false; /* prove servo stays DEPLOY regardless of RC */
 
     /* Act */
     sm_outputs out = sm_step(SM_STATE_DEPLOY, &in);
@@ -391,6 +391,23 @@ static void test_deploy_motor_off_and_servo_deploy(void)
     TEST_ASSERT_EQUAL(SM_STATE_DEPLOY, out.state);
     TEST_ASSERT_EQUAL(THROTTLE_TARGET_NEUTRAL, out.throttle_target);
     TEST_ASSERT_EQUAL(SERVO_TARGET_DEPLOY, out.servo_target);
+}
+
+static void test_deploy_rc_loss_centers_servo_via_failsafe(void)
+{
+    /* Oracle: once RC loss drops DEPLOY to FAILSAFE (this cycle), the servo
+     * follows the resolved FAILSAFE rule (center), not the DEPLOY pin. */
+    sm_inputs in = armable_inputs();
+    in.ui_arm_request = false;
+    in.rc_valid = false;
+
+    /* Act */
+    sm_outputs out = sm_step(SM_STATE_DEPLOY, &in);
+
+    /* Assert */
+    TEST_ASSERT_EQUAL(SM_STATE_FAILSAFE, out.state);
+    TEST_ASSERT_EQUAL(THROTTLE_TARGET_NEUTRAL, out.throttle_target);
+    TEST_ASSERT_EQUAL(SERVO_TARGET_CENTER, out.servo_target);
 }
 
 static void test_armed_instant_disarm_request(void)
@@ -438,7 +455,8 @@ void run_state_machine_tests(void)
     RUN_TEST(test_disarmed_deploy_request_enters_deploy);
     RUN_TEST(test_armed_deploy_request_does_not_enter_deploy);
     RUN_TEST(test_deploy_stow_request_exits_to_disarmed);
-    RUN_TEST(test_deploy_rc_loss_without_stow_stays_deploy);
-    RUN_TEST(test_deploy_motor_off_and_servo_deploy);
+    RUN_TEST(test_deploy_rc_loss_without_stow_drops_to_failsafe);
+    RUN_TEST(test_deploy_motor_off_and_servo_deploy_while_rc_valid);
+    RUN_TEST(test_deploy_rc_loss_centers_servo_via_failsafe);
     RUN_TEST(test_armed_instant_disarm_request);
 }

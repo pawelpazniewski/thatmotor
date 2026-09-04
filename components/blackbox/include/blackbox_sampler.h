@@ -31,6 +31,16 @@ extern "C" {
  * samples (carrying the end reason and the post-override drift) before logging
  * stops. Bounded, so manual driving does not fill the ring.
  *
+ * Entry attempts (new): a CH3 rising edge that fails the entry gate leaves
+ * substate at OFF the whole time, so the transition logic above never fires for
+ * it -- previously a rejected press left no trace at all. The recorder carries a
+ * monotonic `attempt_seq` (bumped by loop_step on every CH3 edge, success or
+ * not) alongside `last_attempt_seq` (the value last acted on); once OFF has
+ * fully settled (no session, no tail owed) a new attempt_seq is logged as
+ * BLACKBOX_ACTION_LOG_ATTEMPT. A SUCCESSFUL attempt is already visible as the
+ * header+sample pair START_SESSION writes, so this only ever fires for a
+ * rejected one.
+ *
  * spot_lock substate values mirror control_loop_snapshot.spot_lock_state:
  * 0 = OFF, 1 = ACTIVE, 2 = PAUSED. "non-OFF" means ACTIVE or PAUSED.
  */
@@ -55,6 +65,7 @@ typedef enum {
     BLACKBOX_ACTION_START_SESSION = 1, /* OFF -> non-OFF: header + first sample */
     BLACKBOX_ACTION_SAMPLE = 2,        /* append an in-session sample */
     BLACKBOX_ACTION_SAMPLE_TAIL = 3,   /* append a post-OFF tail sample (drift+reason) */
+    BLACKBOX_ACTION_LOG_ATTEMPT = 4,   /* append a rejected CH3 entry attempt */
 } blackbox_sampler_action;
 
 /** One tick's inputs. All fields are recorder-supplied; the sampler is pure. */
@@ -66,12 +77,15 @@ typedef struct {
     uint16_t last_err_m;     /* error at the last written sample */
     bool event;              /* a discrete change occurred -> force a sample */
     uint16_t off_tail_left;  /* tail samples still owed (recorder-carried state) */
+    uint32_t attempt_seq;      /* current spot_lock_attempt_seq from the snapshot */
+    uint32_t last_attempt_seq; /* attempt_seq already acted on (recorder-carried) */
 } blackbox_sampler_in;
 
-/** One tick's decision plus the tail counter to carry into the next tick. */
+/** One tick's decision plus the carry-state for the next tick. */
 typedef struct {
     blackbox_sampler_action action;
-    uint16_t off_tail_left;  /* store back; feed as in.off_tail_left next tick */
+    uint16_t off_tail_left;    /* store back; feed as in.off_tail_left next tick */
+    uint32_t last_attempt_seq; /* store back; feed as in.last_attempt_seq next tick */
 } blackbox_sampler_out;
 
 /**
